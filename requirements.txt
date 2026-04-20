@@ -1,0 +1,16 @@
+# Core
+pyautogui>=0.9.54
+Pillow>=10.0.0
+numpy>=1.24.0
+mss>=9.0.0
+
+# macOS / Apple Vision (M1 native OCR — best quality)
+pyobjc-framework-Quartz>=10.0
+pyobjc-framework-Vision>=10.0
+pyobjc-framework-AppKit>=10.0
+
+# Fallback OCR (if PyObjC not available)
+# pytesseract>=0.3.10  # also needs: brew install tesseract
+
+# Database
+# sqlite3 is stdlib — no install needed

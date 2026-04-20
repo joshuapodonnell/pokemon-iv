@@ -1,0 +1,141 @@
+{
+  "mirror_region": {
+    "x": 1116,
+    "y": 84,
+    "w": 316,
+    "h": 696
+  },
+  "ui": {
+    "first_pokemon": {
+      "x": 0.18,
+      "y": 0.26
+    },
+    "next_pokemon": {
+      "x": 0.5,
+      "y": 0.18
+    },
+    "swipe_start": {
+      "x": 0.8,
+      "y": 0.5
+    },
+    "swipe_end": {
+      "x": 0.2,
+      "y": 0.5
+    },
+    "appraise_button": {
+      "x": 0.648,
+      "y": 0.77
+    },
+    "menu_button": {
+      "x": 0.842,
+      "y": 0.933
+    },
+    "back_button": {
+      "x": 0.117,
+      "y": 0.197
+    },
+    "appraisal_next": {
+      "x": 0.5,
+      "y": 0.88
+    },
+    "appraisal_done": {
+      "x": 0.5,
+      "y": 0.88
+    },
+    "atk_bar_y": 0.773,
+    "def_bar_y": 0.816,
+    "sta_bar_y": 0.857,
+    "bar_x_start": 0.141,
+    "bar_x_end": 0.457,
+    "name_region": {
+      "x1": 0.141,
+      "y1": 0.431,
+      "x2": 0.872,
+      "y2": 0.469
+    },
+    "cp_region": {
+      "x1": 0.203,
+      "y1": 0.073,
+      "x2": 0.808,
+      "y2": 0.145
+    },
+    "hp_region": {
+      "x1": 0.332,
+      "y1": 0.484,
+      "x2": 0.584,
+      "y2": 0.513
+    },
+    "dust_region": {
+      "x1": 0.4,
+      "y1": 0.72,
+      "x2": 0.75,
+      "y2": 0.76
+    },
+    "pokemon_slots": [
+      {
+        "x": 0.201,
+        "y": 0.286
+      },
+      {
+        "x": 0.502,
+        "y": 0.286
+      },
+      {
+        "x": 0.809,
+        "y": 0.283
+      }
+    ],
+    "list_swipe_start": {
+      "x": 0.5,
+      "y": 0.7
+    },
+    "list_swipe_end": {
+      "x": 0.5,
+      "y": 0.28
+    },
+    "next_arrow": {
+      "x": 0.93,
+      "y": 0.8
+    }
+  },
+  "bar_fill_brightness": 160,
+  "bar_segments": 15,
+  "timing": {
+    "after_tap": 1.5,
+    "after_swipe": 1.2,
+    "after_appraise": 2.0,
+    "between_pokemon": 1.5,
+    "ocr_settle": 0.8
+  },
+  "randomization": {
+    "tap_jitter_px": 4,
+    "timing_sigma": 0.3,
+    "min_delay_factor": 0.5,
+    "max_delay_factor": 3.0,
+    "short_break_every": [
+      50,
+      200
+    ],
+    "short_break_dur": [
+      15,
+      120
+    ],
+    "long_break_every": [
+      400,
+      600
+    ],
+    "long_break_dur": [
+      120,
+      480
+    ],
+    "session_max_min": [
+      45,
+      90
+    ]
+  },
+  "atk_bar_y": 0.693,
+  "def_bar_y": 0.741,
+  "sta_bar_y": 0.811,
+  "bar_x_start": 0.089,
+  "bar_x_end": 0.555
+}

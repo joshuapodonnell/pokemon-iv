@@ -1,0 +1,751 @@
+2026-04-18 15:50:27,149 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 15:50:27,149 [INFO] ==================================================
+2026-04-18 15:50:27,149 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 15:50:27,149 [INFO]   Limit: 5
+2026-04-18 15:50:27,149 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 15:50:27,149 [INFO] ==================================================
+2026-04-18 15:50:27,149 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 15:50:28,154 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 15:50:29,159 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 15:50:33,964 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:50:41,946 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:50:50,489 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:50:59,181 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:51:07,891 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:51:16,147 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:51:23,791 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:51:29,291 [INFO] 
+⏸  Paused by user (Ctrl+C).
+2026-04-18 15:51:29,292 [INFO] ==================================================
+2026-04-18 15:51:29,292 [INFO] Session complete: 0 cataloged, 7 errors, 1.0 min
+2026-04-18 15:51:29,292 [INFO] Database totals: {'total': 0, 'species': 0, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 15:51:29,292 [INFO] ==================================================
+2026-04-18 15:52:00,745 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 15:52:00,746 [INFO] ==================================================
+2026-04-18 15:52:00,746 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 15:52:00,746 [INFO]   Limit: 2
+2026-04-18 15:52:00,746 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 15:52:00,746 [INFO] ==================================================
+2026-04-18 15:52:00,746 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 15:52:01,746 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 15:52:02,751 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 15:52:07,728 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:52:15,863 [WARNING]   [1] OCR failed (name=TAGS, cp=None). Skipping.
+2026-04-18 15:52:16,116 [INFO] 
+⏸  Paused by user (Ctrl+C).
+2026-04-18 15:52:16,117 [INFO] ==================================================
+2026-04-18 15:52:16,117 [INFO] Session complete: 0 cataloged, 2 errors, 0.3 min
+2026-04-18 15:52:16,117 [INFO] Database totals: {'total': 0, 'species': 0, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 15:52:16,117 [INFO] ==================================================
+2026-04-18 15:52:30,897 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 15:52:30,897 [INFO] ==================================================
+2026-04-18 15:52:30,897 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 15:52:30,897 [INFO]   Limit: 2
+2026-04-18 15:52:30,897 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 15:52:30,897 [INFO] ==================================================
+2026-04-18 15:52:30,897 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 15:52:31,902 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 15:52:32,908 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 15:52:37,499 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 15:52:53,016 [ERROR] Unexpected error: unsupported format string passed to NoneType.__format__
+2026-04-18 15:52:53,016 [INFO] ==================================================
+2026-04-18 15:52:53,016 [INFO] Session complete: 0 cataloged, 1 errors, 0.4 min
+2026-04-18 15:52:53,016 [INFO] Database totals: {'total': 1, 'species': 1, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 15:52:53,016 [INFO] ==================================================
+2026-04-18 16:02:51,349 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:02:51,350 [INFO] ==================================================
+2026-04-18 16:02:51,350 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:02:51,350 [INFO]   Limit: 2
+2026-04-18 16:02:51,350 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 16:02:51,350 [INFO] ==================================================
+2026-04-18 16:02:51,350 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 16:02:52,355 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 16:02:53,361 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 16:02:57,837 [WARNING]   [1] OCR failed (name=Seedot, cp=None). Skipping.
+2026-04-18 16:03:05,934 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:03:13,903 [ERROR] Unexpected error: invalid literal for int() with base 10: ''
+2026-04-18 16:03:13,905 [INFO] ==================================================
+2026-04-18 16:03:13,905 [INFO] Session: 0 cataloged, 2 errors, 0.4 min
+2026-04-18 16:03:13,905 [INFO] DB totals: {'total': 1, 'species': 1, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:03:13,905 [INFO] ==================================================
+2026-04-18 16:09:11,241 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:09:11,241 [INFO] ==================================================
+2026-04-18 16:09:11,241 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:09:11,241 [INFO]   Limit: 2
+2026-04-18 16:09:11,241 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 16:09:11,241 [INFO] ==================================================
+2026-04-18 16:09:11,241 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 16:09:12,243 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 16:09:13,248 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 16:09:18,111 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:09:42,313 [INFO]   [1] Struggle Bug    CP:  56 IVs:11/10/9 (66.7%) 2★       | GL: None UL: None
+2026-04-18 16:10:06,900 [INFO]   [2] Struggle Bug    CP:  56 IVs:0/0/0 (0.0%) 0★       | GL: None UL: None
+2026-04-18 16:10:16,053 [INFO] Reached limit of 2. Stopping.
+2026-04-18 16:10:16,054 [INFO] ==================================================
+2026-04-18 16:10:16,055 [INFO] Session: 2 cataloged, 1 errors, 1.1 min
+2026-04-18 16:10:16,055 [INFO] DB totals: {'total': 3, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:10:16,055 [INFO] ==================================================
+2026-04-18 16:12:47,040 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:12:47,040 [INFO] ==================================================
+2026-04-18 16:12:47,041 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:12:47,041 [INFO]   Limit: 2
+2026-04-18 16:12:47,041 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 16:12:47,041 [INFO] ==================================================
+2026-04-18 16:12:47,041 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 16:12:48,046 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 16:12:49,047 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 16:12:54,877 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:13:17,373 [INFO]   [1] Struggle Bug    CP:  95 IVs:11/10/9 (66.7%) 2★       | GL: None UL: None
+2026-04-18 16:13:45,633 [INFO]   [2] Struggle Bug    CP:  95 IVs:11/10/9 (66.7%) 2★       | GL: None UL: None
+2026-04-18 16:13:54,518 [INFO] Reached limit of 2. Stopping.
+2026-04-18 16:13:54,521 [INFO] ==================================================
+2026-04-18 16:13:54,522 [INFO] Session: 2 cataloged, 1 errors, 1.1 min
+2026-04-18 16:13:54,523 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:13:54,523 [INFO] ==================================================
+2026-04-18 16:27:10,796 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:27:10,796 [INFO] ==================================================
+2026-04-18 16:27:10,796 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:27:10,796 [INFO]   Limit: 2
+2026-04-18 16:27:10,796 [INFO]   Ctrl+C to pause gracefully.
+2026-04-18 16:27:10,796 [INFO] ==================================================
+2026-04-18 16:27:10,796 [INFO] Starting in 3s... switch to iPhone Mirroring now!
+2026-04-18 16:27:11,801 [INFO] Starting in 2s... switch to iPhone Mirroring now!
+2026-04-18 16:27:12,802 [INFO] Starting in 1s... switch to iPhone Mirroring now!
+2026-04-18 16:27:18,326 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:27:27,424 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:27:36,907 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:27:46,797 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:27:56,608 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:28:07,883 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:28:18,360 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:28:25,083 [INFO] 
+⏸  Paused by user (Ctrl+C).
+2026-04-18 16:28:25,084 [INFO] ==================================================
+2026-04-18 16:28:25,084 [INFO] Session: 0 cataloged, 7 errors, 1.2 min
+2026-04-18 16:28:25,084 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:28:25,084 [INFO] ==================================================
+2026-04-18 16:32:18,364 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:32:18,364 [INFO] ==================================================
+2026-04-18 16:32:18,364 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:32:18,364 [INFO]   Limit: 2
+2026-04-18 16:32:18,364 [INFO]   Ctrl+C to stop.
+2026-04-18 16:32:18,364 [INFO] ==================================================
+2026-04-18 16:32:18,364 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 16:32:18,364 [INFO] Starting in 3s...
+2026-04-18 16:32:19,369 [INFO] Starting in 2s...
+2026-04-18 16:32:20,374 [INFO] Starting in 1s...
+2026-04-18 16:32:59,157 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:32:59,158 [INFO] ==================================================
+2026-04-18 16:32:59,158 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:32:59,158 [INFO]   Limit: 2
+2026-04-18 16:32:59,158 [INFO]   Ctrl+C to stop.
+2026-04-18 16:32:59,158 [INFO] ==================================================
+2026-04-18 16:32:59,158 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 16:32:59,158 [INFO] Starting in 3s...
+2026-04-18 16:33:00,162 [INFO] Starting in 2s...
+2026-04-18 16:33:01,168 [INFO] Starting in 1s...
+2026-04-18 16:33:18,411 [INFO] Now in appraisal mode — will swipe right between Pokémon.
+2026-04-18 16:33:18,857 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:33:20,917 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:33:23,064 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:33:24,432 [INFO] 
+⏸  Stopped by user.
+2026-04-18 16:33:24,435 [INFO] ==================================================
+2026-04-18 16:33:24,435 [INFO] Session: 0 cataloged, 3 errors, 0.4 min
+2026-04-18 16:33:24,435 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:33:24,435 [INFO] ==================================================
+2026-04-18 16:35:41,041 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:35:41,042 [INFO] ==================================================
+2026-04-18 16:35:41,042 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:35:41,042 [INFO]   Limit: 3
+2026-04-18 16:35:41,043 [INFO]   Ctrl+C to stop.
+2026-04-18 16:35:41,043 [INFO] ==================================================
+2026-04-18 16:35:41,043 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 16:35:41,043 [INFO] Starting in 3s...
+2026-04-18 16:35:42,048 [INFO] Starting in 2s...
+2026-04-18 16:35:43,053 [INFO] Starting in 1s...
+2026-04-18 16:36:57,638 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:36:57,638 [INFO] ==================================================
+2026-04-18 16:36:57,638 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:36:57,638 [INFO]   Limit: 3
+2026-04-18 16:36:57,638 [INFO]   Ctrl+C to stop.
+2026-04-18 16:36:57,638 [INFO] ==================================================
+2026-04-18 16:36:57,638 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 16:36:57,638 [INFO] Starting in 3s...
+2026-04-18 16:36:58,643 [INFO] Starting in 2s...
+2026-04-18 16:36:59,649 [INFO] Starting in 1s...
+2026-04-18 16:37:04,915 [INFO] Screen state: appraisal (attempt 1)
+2026-04-18 16:37:04,916 [INFO] Already in appraisal mode.
+2026-04-18 16:37:04,916 [INFO] Now in appraisal mode — will swipe right between Pokémon.
+2026-04-18 16:37:05,327 [WARNING]   [1] OCR failed (name=None, cp=1). Skipping.
+2026-04-18 16:37:07,426 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:09,477 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:11,595 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:13,626 [WARNING]   [1] OCR failed (name=None, cp=0). Skipping.
+2026-04-18 16:37:15,710 [WARNING]   [1] OCR failed (name=None, cp=0). Skipping.
+2026-04-18 16:37:17,769 [WARNING]   [1] OCR failed (name=None, cp=0). Skipping.
+2026-04-18 16:37:19,281 [INFO] 
+⏸  Stopped by user.
+2026-04-18 16:37:19,284 [INFO] ==================================================
+2026-04-18 16:37:19,284 [INFO] Session: 0 cataloged, 7 errors, 0.4 min
+2026-04-18 16:37:19,284 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:37:19,284 [INFO] ==================================================
+2026-04-18 16:37:28,334 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 16:37:28,334 [INFO] ==================================================
+2026-04-18 16:37:28,335 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 16:37:28,335 [INFO]   Limit: 3
+2026-04-18 16:37:28,335 [INFO]   Ctrl+C to stop.
+2026-04-18 16:37:28,335 [INFO] ==================================================
+2026-04-18 16:37:28,335 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 16:37:28,335 [INFO] Starting in 3s...
+2026-04-18 16:37:29,337 [INFO] Starting in 2s...
+2026-04-18 16:37:30,343 [INFO] Starting in 1s...
+2026-04-18 16:37:37,412 [INFO] Screen state: detail (attempt 1)
+2026-04-18 16:37:41,682 [INFO] Screen state: unknown (attempt 2)
+2026-04-18 16:37:45,834 [INFO] Screen state: unknown (attempt 3)
+2026-04-18 16:37:50,020 [ERROR] Could not enter appraisal mode after 3 attempts
+2026-04-18 16:37:50,021 [INFO] Now in appraisal mode — will swipe right between Pokémon.
+2026-04-18 16:37:50,452 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:52,690 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:54,769 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:56,829 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:37:58,949 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:38:01,101 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 16:38:02,445 [INFO] 
+⏸  Stopped by user.
+2026-04-18 16:38:02,446 [INFO] ==================================================
+2026-04-18 16:38:02,446 [INFO] Session: 0 cataloged, 6 errors, 0.6 min
+2026-04-18 16:38:02,446 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 16:38:02,447 [INFO] ==================================================
+2026-04-18 19:56:35,234 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 19:56:35,235 [INFO] ==================================================
+2026-04-18 19:56:35,235 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 19:56:35,235 [INFO]   Limit: 3
+2026-04-18 19:56:35,235 [INFO]   Ctrl+C to stop.
+2026-04-18 19:56:35,235 [INFO] ==================================================
+2026-04-18 19:56:35,235 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 19:56:35,235 [INFO] Starting in 3s...
+2026-04-18 19:56:36,240 [INFO] Starting in 2s...
+2026-04-18 19:56:37,245 [INFO] Starting in 1s...
+2026-04-18 19:56:42,838 [INFO] Screen state: detail (attempt 1)
+2026-04-18 19:56:46,789 [INFO] Screen state: unknown (attempt 2)
+2026-04-18 19:56:51,352 [INFO] Screen state: detail (attempt 3)
+2026-04-18 19:57:12,482 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 19:57:12,482 [INFO] ==================================================
+2026-04-18 19:57:12,482 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 19:57:12,482 [INFO]   Limit: 3
+2026-04-18 19:57:12,482 [INFO]   Ctrl+C to stop.
+2026-04-18 19:57:12,483 [INFO] ==================================================
+2026-04-18 19:57:12,483 [INFO] Make sure you are on the POKÉMON storage list.
+2026-04-18 19:57:12,483 [INFO] Starting in 3s...
+2026-04-18 19:57:13,488 [INFO] Starting in 2s...
+2026-04-18 19:57:14,493 [INFO] Starting in 1s...
+2026-04-18 19:57:19,972 [INFO] Screen state: detail (attempt 1)
+2026-04-18 19:57:24,239 [INFO] Screen state: unknown (attempt 2)
+2026-04-18 19:57:28,891 [INFO] Screen state: unknown (attempt 3)
+2026-04-18 19:57:33,411 [ERROR] Could not enter appraisal mode after 3 attempts
+2026-04-18 19:57:33,413 [INFO] Now in appraisal mode — will swipe right between Pokémon.
+2026-04-18 19:57:33,986 [WARNING]   [1] OCR failed (name=None, cp=7). Skipping.
+2026-04-18 19:57:36,140 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 19:57:38,168 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 19:57:40,333 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 19:57:42,396 [WARNING]   [1] OCR failed (name=None, cp=7). Skipping.
+2026-04-18 19:57:44,562 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 19:57:46,655 [WARNING]   [1] OCR failed (name=None, cp=10). Skipping.
+2026-04-18 19:57:46,837 [INFO] 
+⏸  Stopped by user.
+2026-04-18 19:57:46,840 [INFO] ==================================================
+2026-04-18 19:57:46,840 [INFO] Session: 0 cataloged, 7 errors, 0.6 min
+2026-04-18 19:57:46,840 [INFO] DB totals: {'total': 5, 'species': 2, 'perfect_iv': 0, 'three_star_plus': 0, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 19:57:46,840 [INFO] ==================================================
+2026-04-18 20:08:59,531 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:08:59,532 [INFO] ==================================================
+2026-04-18 20:08:59,532 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:08:59,532 [INFO]   Limit: 3
+2026-04-18 20:08:59,532 [INFO] ==================================================
+2026-04-18 20:08:59,532 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:08:59,532 [INFO] Starting in 3s...
+2026-04-18 20:09:00,537 [INFO] Starting in 2s...
+2026-04-18 20:09:01,541 [INFO] Starting in 1s...
+2026-04-18 20:09:02,546 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:09:07,034 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:09:10,850 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:09:15,676 [INFO] Dismissing trainer size text...
+2026-04-18 20:09:20,195 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:09:20,797 [WARNING]   [1] OCR failed (name=None, cp=1989). Skipping.
+2026-04-18 20:09:29,839 [INFO]   [1] Groudon i       CP:2307 IVs:13/13/14 (88.9%) 3★     | GL: None UL: None
+2026-04-18 20:09:38,414 [INFO]   [2] Groudon i       CP:2307 IVs:13/13/14 (88.9%) 3★     | GL: None UL: None
+2026-04-18 20:09:45,675 [INFO] 
+⏸  Stopped by user.
+2026-04-18 20:09:45,676 [INFO] ==================================================
+2026-04-18 20:09:45,676 [INFO] Session: 2 cataloged, 1 errors, 0.8 min
+2026-04-18 20:09:45,676 [INFO] DB totals: {'total': 7, 'species': 3, 'perfect_iv': 0, 'three_star_plus': 2, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:09:45,676 [INFO] ==================================================
+2026-04-18 20:09:56,651 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:09:56,652 [INFO] ==================================================
+2026-04-18 20:09:56,652 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:09:56,652 [INFO]   Limit: 3
+2026-04-18 20:09:56,652 [INFO] ==================================================
+2026-04-18 20:09:56,652 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:09:56,652 [INFO] Starting in 3s...
+2026-04-18 20:09:57,656 [INFO] Starting in 2s...
+2026-04-18 20:09:58,661 [INFO] Starting in 1s...
+2026-04-18 20:09:59,667 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:10:04,021 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:10:07,381 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:10:11,465 [INFO] Dismissing trainer size text...
+2026-04-18 20:10:16,012 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:10:16,572 [WARNING]   [1] OCR failed (name=None, cp=1989). Skipping.
+2026-04-18 20:10:25,132 [INFO]   [1] Groudon i       CP:2307 IVs:13/13/14 (88.9%) 3★     | GL: None UL: None
+2026-04-18 20:10:28,889 [INFO] 
+⏸  Stopped by user.
+2026-04-18 20:10:28,889 [INFO] ==================================================
+2026-04-18 20:10:28,889 [INFO] Session: 1 cataloged, 1 errors, 0.5 min
+2026-04-18 20:10:28,889 [INFO] DB totals: {'total': 8, 'species': 3, 'perfect_iv': 0, 'three_star_plus': 3, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:10:28,889 [INFO] ==================================================
+2026-04-18 20:12:57,059 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:12:57,059 [INFO] ==================================================
+2026-04-18 20:12:57,059 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:12:57,059 [INFO]   Limit: 5
+2026-04-18 20:12:57,059 [INFO] ==================================================
+2026-04-18 20:12:57,059 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:12:57,059 [INFO] Starting in 3s...
+2026-04-18 20:12:58,064 [INFO] Starting in 2s...
+2026-04-18 20:12:59,069 [INFO] Starting in 1s...
+2026-04-18 20:13:00,073 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:13:03,681 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:13:08,219 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:13:12,621 [INFO] Dismissing trainer size text...
+2026-04-18 20:13:16,173 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:13:16,712 [WARNING]   [1] OCR failed (name=None, cp=1989). Skipping.
+2026-04-18 20:13:20,243 [WARNING]   [1] OCR failed (name=Groudon i, cp=None). Skipping.
+2026-04-18 20:13:24,218 [WARNING]   [1] OCR failed (name=Groudon i, cp=None). Skipping.
+2026-04-18 20:13:28,584 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:13:32,393 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:13:36,384 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:13:40,294 [WARNING]   [1] OCR failed (name=Charjabug, cp=None). Skipping.
+2026-04-18 20:13:44,394 [WARNING]   [1] OCR failed (name=Delibirdi, cp=None). Skipping.
+2026-04-18 20:13:48,234 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:13:52,368 [WARNING]   [1] OCR failed (name=None, cp=475). Skipping.
+2026-04-18 20:13:56,084 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:14:00,190 [WARNING]   [1] OCR failed (name=None, cp=None). Skipping.
+2026-04-18 20:14:04,449 [WARNING]   [1] OCR failed (name=None, cp=1890). Skipping.
+2026-04-18 20:14:08,447 [WARNING]   [1] OCR failed (name=Carbink., cp=None). Skipping.
+2026-04-18 20:14:08,607 [INFO] 
+⏸  Stopped by user.
+2026-04-18 20:14:08,608 [INFO] ==================================================
+2026-04-18 20:14:08,608 [INFO] Session: 0 cataloged, 14 errors, 1.2 min
+2026-04-18 20:14:08,608 [INFO] DB totals: {'total': 8, 'species': 3, 'perfect_iv': 0, 'three_star_plus': 3, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:14:08,608 [INFO] ==================================================
+2026-04-18 20:26:34,302 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:26:34,304 [INFO] ==================================================
+2026-04-18 20:26:34,304 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:26:34,304 [INFO]   Limit: 5
+2026-04-18 20:26:34,304 [INFO] ==================================================
+2026-04-18 20:26:34,304 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:26:34,304 [INFO] Starting in 3s...
+2026-04-18 20:26:35,309 [INFO] Starting in 2s...
+2026-04-18 20:26:36,314 [INFO] Starting in 1s...
+2026-04-18 20:26:37,316 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:26:42,331 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:26:46,011 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:26:50,259 [INFO] Dismissing trainer size text...
+2026-04-18 20:26:54,223 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:26:54,823 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 20:26:54,958 [INFO]   [1] Unknown         CP:1989 IVs:8/12/11 (68.9%) 2★     | GL: None UL: None
+2026-04-18 20:26:58,863 [INFO]   [2] Groudon i       CP:2307 IVs:8/12/7 (60.0%) 1★     | GL: None UL: None
+2026-04-18 20:27:02,732 [INFO]   [3] Groudon i       CP:2298 IVs:8/12/11 (68.9%) 2★     | GL: None UL: None
+2026-04-18 20:27:06,939 [INFO]   [4] Charmander i    CP: 306 IVs:8/12/11 (68.9%) 2★     | GL: None UL: None
+2026-04-18 20:27:10,364 [WARNING]   [5] Name OCR failed (cp=694) — using 'Unknown'
+2026-04-18 20:27:10,437 [INFO]   [5] Unknown         CP: 694 IVs:8/12/11 (68.9%) 2★     | GL: None UL: None
+2026-04-18 20:27:14,574 [INFO] Reached limit of 5. Stopping.
+2026-04-18 20:27:14,575 [INFO] ==================================================
+2026-04-18 20:27:14,575 [INFO] Session: 5 cataloged, 0 errors, 0.7 min
+2026-04-18 20:27:14,575 [INFO] DB totals: {'total': 13, 'species': 5, 'perfect_iv': 0, 'three_star_plus': 3, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:27:14,575 [INFO] ==================================================
+2026-04-18 20:35:12,410 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:35:12,411 [INFO] ==================================================
+2026-04-18 20:35:12,411 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:35:12,411 [INFO]   Limit: 5
+2026-04-18 20:35:12,411 [INFO] ==================================================
+2026-04-18 20:35:12,411 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:35:12,411 [INFO] Starting in 3s...
+2026-04-18 20:35:13,413 [INFO] Starting in 2s...
+2026-04-18 20:35:14,418 [INFO] Starting in 1s...
+2026-04-18 20:35:15,420 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:35:19,614 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:35:23,694 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:35:28,041 [INFO] Dismissing trainer size text...
+2026-04-18 20:35:33,082 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:35:33,685 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 20:35:33,819 [INFO]   [1] Unknown         CP:1989 IVs:15/15/15 (100.0%) 100% ✨ | GL: None UL: None
+2026-04-18 20:35:37,496 [INFO]   [2] Groudon i       CP:2307 IVs:15/15/0 (66.7%) 2★     | GL: None UL: None
+2026-04-18 20:35:41,677 [INFO]   [3] Groudon i       CP:2298 IVs:15/15/15 (100.0%) 100% ✨ | GL: None UL: None
+2026-04-18 20:35:46,003 [INFO]   [4] Charmander i    CP: 306 IVs:15/15/15 (100.0%) 100% ✨ | GL: None UL: None
+2026-04-18 20:35:49,376 [WARNING]   [5] Name OCR failed (cp=694) — using 'Unknown'
+2026-04-18 20:35:49,450 [INFO]   [5] Unknown         CP: 694 IVs:15/15/15 (100.0%) 100% ✨ | GL: None UL: None
+2026-04-18 20:35:53,474 [INFO] Reached limit of 5. Stopping.
+2026-04-18 20:35:53,476 [INFO] ==================================================
+2026-04-18 20:35:53,476 [INFO] Session: 5 cataloged, 0 errors, 0.7 min
+2026-04-18 20:35:53,476 [INFO] DB totals: {'total': 18, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:35:53,477 [INFO] ==================================================
+2026-04-18 20:41:57,655 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:41:57,657 [INFO] ==================================================
+2026-04-18 20:41:57,657 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:41:57,657 [INFO]   Limit: 3
+2026-04-18 20:41:57,657 [INFO] ==================================================
+2026-04-18 20:41:57,657 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:41:57,657 [INFO] Starting in 3s...
+2026-04-18 20:41:58,662 [INFO] Starting in 2s...
+2026-04-18 20:41:59,668 [INFO] Starting in 1s...
+2026-04-18 20:42:00,672 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:42:05,001 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:42:08,584 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:42:13,736 [INFO] Dismissing trainer size text...
+2026-04-18 20:42:17,868 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:42:18,607 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 20:42:18,745 [INFO]   [1] Unknown         CP:1989 IVs:9/13/12 (75.6%) 2★     | GL: None UL: None
+2026-04-18 20:42:22,929 [INFO]   [2] Groudon i       CP:2307 IVs:11/11/13 (77.8%) 2★     | GL: None UL: None
+2026-04-18 20:42:26,827 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/9 (73.3%) 2★     | GL: None UL: None
+2026-04-18 20:42:30,842 [INFO] Reached limit of 3. Stopping.
+2026-04-18 20:42:30,843 [INFO] ==================================================
+2026-04-18 20:42:30,843 [INFO] Session: 3 cataloged, 0 errors, 0.6 min
+2026-04-18 20:42:30,843 [INFO] DB totals: {'total': 21, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:42:30,843 [INFO] ==================================================
+2026-04-18 20:50:11,830 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:50:11,831 [INFO] ==================================================
+2026-04-18 20:50:11,831 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:50:11,831 [INFO]   Limit: 3
+2026-04-18 20:50:11,831 [INFO] ==================================================
+2026-04-18 20:50:11,831 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:50:11,831 [INFO] Starting in 3s...
+2026-04-18 20:50:12,836 [INFO] Starting in 2s...
+2026-04-18 20:50:13,841 [INFO] Starting in 1s...
+2026-04-18 20:50:14,846 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:50:19,516 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:50:24,156 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:50:28,763 [INFO] Dismissing trainer size text...
+2026-04-18 20:50:33,176 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:50:33,762 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 20:50:33,899 [INFO]   [1] Unknown         CP:1989 IVs:10/13/12 (77.8%) 2★     | GL: None UL: None
+2026-04-18 20:50:38,273 [INFO]   [2] Groudon i       CP:2307 IVs:12/11/13 (80.0%) 2★     | GL: None UL: None
+2026-04-18 20:50:42,574 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/9 (73.3%) 2★     | GL: None UL: None
+2026-04-18 20:50:46,108 [INFO] Reached limit of 3. Stopping.
+2026-04-18 20:50:46,109 [INFO] ==================================================
+2026-04-18 20:50:46,109 [INFO] Session: 3 cataloged, 0 errors, 0.6 min
+2026-04-18 20:50:46,109 [INFO] DB totals: {'total': 24, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:50:46,109 [INFO] ==================================================
+2026-04-18 20:52:22,223 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:52:22,224 [INFO] ==================================================
+2026-04-18 20:52:22,224 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:52:22,225 [INFO]   Limit: 3
+2026-04-18 20:52:22,225 [INFO] ==================================================
+2026-04-18 20:52:22,225 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:52:22,225 [INFO] Starting in 3s...
+2026-04-18 20:52:23,230 [INFO] Starting in 2s...
+2026-04-18 20:52:24,235 [INFO] Starting in 1s...
+2026-04-18 20:52:25,236 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:52:29,502 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:52:33,467 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:52:37,571 [INFO] Dismissing trainer size text...
+2026-04-18 20:52:54,336 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 20:52:54,336 [INFO] ==================================================
+2026-04-18 20:52:54,336 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 20:52:54,336 [INFO]   Limit: 3
+2026-04-18 20:52:54,336 [INFO] ==================================================
+2026-04-18 20:52:54,336 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 20:52:54,336 [INFO] Starting in 3s...
+2026-04-18 20:52:55,341 [INFO] Starting in 2s...
+2026-04-18 20:52:56,347 [INFO] Starting in 1s...
+2026-04-18 20:52:57,352 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 20:53:02,625 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 20:53:06,684 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 20:53:11,424 [INFO] Dismissing trainer size text...
+2026-04-18 20:53:15,321 [INFO] In appraisal mode — starting main loop.
+2026-04-18 20:53:15,912 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 20:53:16,048 [INFO]   [1] Unknown         CP:1989 IVs:10/13/12 (77.8%) 2★     | GL: None UL: None
+2026-04-18 20:53:20,700 [INFO]   [2] Groudon i       CP:2307 IVs:12/11/13 (80.0%) 2★     | GL: None UL: None
+2026-04-18 20:53:25,508 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/9 (73.3%) 2★     | GL: None UL: None
+2026-04-18 20:53:29,693 [INFO] Reached limit of 3. Stopping.
+2026-04-18 20:53:29,694 [INFO] ==================================================
+2026-04-18 20:53:29,694 [INFO] Session: 3 cataloged, 0 errors, 0.6 min
+2026-04-18 20:53:29,694 [INFO] DB totals: {'total': 27, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 20:53:29,694 [INFO] ==================================================
+2026-04-18 21:02:35,860 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:02:35,860 [INFO] ==================================================
+2026-04-18 21:02:35,860 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:02:35,860 [INFO]   Limit: 3
+2026-04-18 21:02:35,860 [INFO] ==================================================
+2026-04-18 21:02:35,860 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:02:35,860 [INFO] Starting in 3s...
+2026-04-18 21:02:36,866 [INFO] Starting in 2s...
+2026-04-18 21:02:37,870 [INFO] Starting in 1s...
+2026-04-18 21:02:38,872 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 21:02:42,813 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 21:02:47,204 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 21:02:51,132 [INFO] Dismissing trainer size text...
+2026-04-18 21:02:56,959 [INFO] In appraisal mode — starting main loop.
+2026-04-18 21:02:57,502 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 21:02:57,634 [INFO]   [1] Unknown         CP:1989 IVs:10/13/9 (71.1%) 2★     | GL: None UL: None
+2026-04-18 21:03:01,545 [INFO]   [2] Groudon i       CP:2307 IVs:12/11/9 (71.1%) 2★     | GL: None UL: None
+2026-04-18 21:03:05,969 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/7 (68.9%) 2★     | GL: None UL: None
+2026-04-18 21:03:09,823 [INFO] Reached limit of 3. Stopping.
+2026-04-18 21:03:09,824 [INFO] ==================================================
+2026-04-18 21:03:09,824 [INFO] Session: 3 cataloged, 0 errors, 0.6 min
+2026-04-18 21:03:09,824 [INFO] DB totals: {'total': 30, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 21:03:09,824 [INFO] ==================================================
+2026-04-18 21:08:05,198 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:08:05,198 [INFO] ==================================================
+2026-04-18 21:08:05,198 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:08:05,198 [INFO]   Limit: 1
+2026-04-18 21:08:05,198 [INFO] ==================================================
+2026-04-18 21:08:05,198 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:08:05,198 [INFO] Starting in 3s...
+2026-04-18 21:08:06,203 [INFO] Starting in 2s...
+2026-04-18 21:08:07,209 [INFO] Starting in 1s...
+2026-04-18 21:08:08,211 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 21:08:12,516 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 21:08:16,437 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 21:08:20,780 [INFO] Dismissing trainer size text...
+2026-04-18 21:08:24,847 [INFO] In appraisal mode — starting main loop.
+2026-04-18 21:08:25,442 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 21:08:25,577 [INFO]   [1] Unknown         CP:1989 IVs:10/13/9 (71.1%) 2★     | GL: None UL: None
+2026-04-18 21:08:29,238 [INFO] Reached limit of 1. Stopping.
+2026-04-18 21:08:29,239 [INFO] ==================================================
+2026-04-18 21:08:29,239 [INFO] Session: 1 cataloged, 0 errors, 0.4 min
+2026-04-18 21:08:29,239 [INFO] DB totals: {'total': 31, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 21:08:29,240 [INFO] ==================================================
+2026-04-18 21:11:01,516 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:11:01,516 [INFO] ==================================================
+2026-04-18 21:11:01,516 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:11:01,516 [INFO]   Limit: 3
+2026-04-18 21:11:01,516 [INFO] ==================================================
+2026-04-18 21:11:01,516 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:11:01,516 [INFO] Starting in 3s...
+2026-04-18 21:11:02,521 [INFO] Starting in 2s...
+2026-04-18 21:11:03,525 [INFO] Starting in 1s...
+2026-04-18 21:11:04,530 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 21:11:08,816 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 21:11:13,449 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 21:11:16,989 [INFO] Dismissing trainer size text...
+2026-04-18 21:11:28,969 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:11:28,969 [INFO] ==================================================
+2026-04-18 21:11:28,969 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:11:28,969 [INFO]   Limit: 3
+2026-04-18 21:11:28,969 [INFO] ==================================================
+2026-04-18 21:11:28,970 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:11:28,970 [INFO] Starting in 3s...
+2026-04-18 21:11:29,975 [INFO] Starting in 2s...
+2026-04-18 21:11:30,979 [INFO] Starting in 1s...
+2026-04-18 21:11:31,981 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 21:11:36,021 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 21:11:40,539 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 21:11:44,679 [INFO] Dismissing trainer size text...
+2026-04-18 21:11:49,845 [INFO] In appraisal mode — starting main loop.
+2026-04-18 21:11:50,392 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 21:11:50,528 [INFO]   [1] Unknown         CP:1989 IVs:10/13/9 (71.1%) 2★     | GL: None UL: None
+2026-04-18 21:11:54,649 [INFO]   [2] Groudon i       CP:2307 IVs:12/11/9 (71.1%) 2★     | GL: None UL: None
+2026-04-18 21:11:58,554 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/7 (68.9%) 2★     | GL: None UL: None
+2026-04-18 21:12:01,912 [INFO] Reached limit of 3. Stopping.
+2026-04-18 21:12:01,913 [INFO] ==================================================
+2026-04-18 21:12:01,913 [INFO] Session: 3 cataloged, 0 errors, 0.5 min
+2026-04-18 21:12:01,913 [INFO] DB totals: {'total': 34, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 21:12:01,913 [INFO] ==================================================
+2026-04-18 21:12:40,999 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:12:41,000 [INFO] ==================================================
+2026-04-18 21:12:41,000 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:12:41,000 [INFO]   Limit: 3
+2026-04-18 21:12:41,000 [INFO] ==================================================
+2026-04-18 21:12:41,000 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:12:41,000 [INFO] Starting in 3s...
+2026-04-18 21:12:42,005 [INFO] Starting in 2s...
+2026-04-18 21:12:43,010 [INFO] Starting in 1s...
+2026-04-18 21:13:24,845 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 21:13:24,846 [INFO] ==================================================
+2026-04-18 21:13:24,846 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 21:13:24,846 [INFO]   Limit: 3
+2026-04-18 21:13:24,846 [INFO] ==================================================
+2026-04-18 21:13:24,846 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 21:13:24,846 [INFO] Starting in 3s...
+2026-04-18 21:13:25,851 [INFO] Starting in 2s...
+2026-04-18 21:13:26,856 [INFO] Starting in 1s...
+2026-04-18 21:13:27,861 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 21:13:32,140 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 21:13:35,968 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 21:13:41,343 [INFO] Dismissing trainer size text...
+2026-04-18 21:13:45,690 [INFO] In appraisal mode — starting main loop.
+2026-04-18 21:13:46,225 [WARNING]   [1] Name OCR failed (cp=1989) — using 'Unknown'
+2026-04-18 21:13:46,359 [INFO]   [1] Unknown         CP:1989 IVs:10/12/0 (48.9%) 0★     | GL: None UL: None
+2026-04-18 21:13:50,964 [INFO]   [2] Groudon i       CP:2307 IVs:11/10/0 (46.7%) 0★     | GL: None UL: None
+2026-04-18 21:13:55,093 [INFO]   [3] Groudon i       CP:2298 IVs:14/10/0 (53.3%) 1★     | GL: None UL: None
+2026-04-18 21:13:58,553 [INFO] Reached limit of 3. Stopping.
+2026-04-18 21:13:58,554 [INFO] ==================================================
+2026-04-18 21:13:58,555 [INFO] Session: 3 cataloged, 0 errors, 0.6 min
+2026-04-18 21:13:58,555 [INFO] DB totals: {'total': 37, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 21:13:58,555 [INFO] ==================================================
+2026-04-18 22:06:30,967 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:06:30,968 [INFO] ==================================================
+2026-04-18 22:06:30,968 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:06:30,968 [INFO]   Limit: 3
+2026-04-18 22:06:30,968 [INFO] ==================================================
+2026-04-18 22:06:30,968 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:06:30,968 [INFO] Starting in 3s...
+2026-04-18 22:06:31,971 [INFO] Starting in 2s...
+2026-04-18 22:06:32,976 [INFO] Starting in 1s...
+2026-04-18 22:06:33,980 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:06:33,981 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:06:36,506 [WARNING]   [1] Name OCR failed (cp=16) — using 'Unknown'
+2026-04-18 22:06:36,512 [INFO]   [1] Unknown         CP:  16 IVs:0/0/0 (0.0%) 0★     | GL: None UL: None
+2026-04-18 22:06:36,513 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:06:38,554 [WARNING]   [2] Name OCR failed (cp=16) — using 'Unknown'
+2026-04-18 22:06:38,559 [INFO]   [2] Unknown         CP:  16 IVs:0/0/0 (0.0%) 0★     | GL: None UL: None
+2026-04-18 22:06:38,559 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:06:40,591 [WARNING]   [3] Name OCR failed (cp=16) — using 'Unknown'
+2026-04-18 22:06:40,596 [INFO]   [3] Unknown         CP:  16 IVs:0/0/0 (0.0%) 0★     | GL: None UL: None
+2026-04-18 22:06:40,596 [INFO] Reached limit of 3. Stopping.
+2026-04-18 22:06:40,596 [INFO] ==================================================
+2026-04-18 22:06:40,597 [INFO] Session: 3 cataloged, 0 errors, 0.2 min
+2026-04-18 22:06:40,597 [INFO] DB totals: {'total': 40, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:06:40,597 [INFO] ==================================================
+2026-04-18 22:07:37,497 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:07:37,498 [INFO] ==================================================
+2026-04-18 22:07:37,498 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:07:37,498 [INFO]   Limit: 3
+2026-04-18 22:07:37,498 [INFO] ==================================================
+2026-04-18 22:07:37,498 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:07:37,498 [INFO] Starting in 3s...
+2026-04-18 22:07:38,500 [INFO] Starting in 2s...
+2026-04-18 22:07:39,505 [INFO] Starting in 1s...
+2026-04-18 22:07:40,510 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 22:07:44,145 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 22:07:47,462 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 22:07:51,628 [INFO] Dismissing trainer size text...
+2026-04-18 22:07:56,136 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:07:56,137 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:07:58,607 [WARNING]   [1] Name OCR failed (cp=310) — using 'Unknown'
+2026-04-18 22:07:58,709 [ERROR] Unexpected error: unsupported operand type(s) for /: 'str' and 'int'
+2026-04-18 22:07:58,712 [INFO] ==================================================
+2026-04-18 22:07:58,712 [INFO] Session: 0 cataloged, 0 errors, 0.4 min
+2026-04-18 22:07:58,712 [INFO] DB totals: {'total': 40, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:07:58,712 [INFO] ==================================================
+2026-04-18 22:13:25,183 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:13:25,184 [INFO] ==================================================
+2026-04-18 22:13:25,184 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:13:25,184 [INFO]   Limit: 3
+2026-04-18 22:13:25,184 [INFO] ==================================================
+2026-04-18 22:13:25,184 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:13:25,184 [INFO] Starting in 3s...
+2026-04-18 22:13:26,189 [INFO] Starting in 2s...
+2026-04-18 22:13:27,194 [INFO] Starting in 1s...
+2026-04-18 22:13:28,199 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 22:13:32,112 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 22:13:35,959 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 22:13:41,227 [INFO] Dismissing trainer size text...
+2026-04-18 22:13:45,777 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:13:45,778 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:13:48,243 [WARNING]   [1] Name OCR failed (cp=310) — using 'Unknown'
+2026-04-18 22:13:48,344 [ERROR] Unexpected error: invalid literal for int() with base 10: 'atk'
+2026-04-18 22:13:48,346 [INFO] ==================================================
+2026-04-18 22:13:48,346 [INFO] Session: 0 cataloged, 0 errors, 0.4 min
+2026-04-18 22:13:48,346 [INFO] DB totals: {'total': 40, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:13:48,346 [INFO] ==================================================
+2026-04-18 22:30:37,041 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:30:37,042 [INFO] ==================================================
+2026-04-18 22:30:37,042 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:30:37,042 [INFO]   Limit: 3
+2026-04-18 22:30:37,042 [INFO] ==================================================
+2026-04-18 22:30:37,042 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:30:37,042 [INFO] Starting in 3s...
+2026-04-18 22:30:38,047 [INFO] Starting in 2s...
+2026-04-18 22:30:39,052 [INFO] Starting in 1s...
+2026-04-18 22:30:40,058 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 22:30:45,701 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 22:30:49,811 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 22:30:54,687 [INFO] Dismissing trainer size text...
+2026-04-18 22:30:59,466 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:30:59,468 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:31:02,018 [WARNING]   [1] Name OCR failed (cp=310) — using 'Unknown'
+2026-04-18 22:31:02,022 [ERROR] Unexpected error: list indices must be integers or slices, not str
+2026-04-18 22:31:02,025 [INFO] ==================================================
+2026-04-18 22:31:02,025 [INFO] Session: 0 cataloged, 0 errors, 0.4 min
+2026-04-18 22:31:02,025 [INFO] DB totals: {'total': 40, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:31:02,025 [INFO] ==================================================
+2026-04-18 22:35:46,439 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:35:46,439 [INFO] ==================================================
+2026-04-18 22:35:46,439 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:35:46,439 [INFO]   Limit: 3
+2026-04-18 22:35:46,439 [INFO] ==================================================
+2026-04-18 22:35:46,439 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:35:46,440 [INFO] Starting in 3s...
+2026-04-18 22:35:47,445 [INFO] Starting in 2s...
+2026-04-18 22:35:48,451 [INFO] Starting in 1s...
+2026-04-18 22:35:49,454 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 22:35:53,818 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 22:35:57,233 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 22:36:03,683 [INFO] Dismissing trainer size text...
+2026-04-18 22:36:08,901 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:36:08,902 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:36:11,384 [WARNING]   [1] Name OCR failed (cp=310) — using 'Unknown'
+2026-04-18 22:36:11,388 [ERROR] Unexpected error: list indices must be integers or slices, not str
+2026-04-18 22:36:11,390 [INFO] ==================================================
+2026-04-18 22:36:11,390 [INFO] Session: 0 cataloged, 0 errors, 0.4 min
+2026-04-18 22:36:11,390 [INFO] DB totals: {'total': 40, 'species': 5, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:36:11,390 [INFO] ==================================================
+2026-04-18 22:37:05,251 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 22:37:05,251 [INFO] ==================================================
+2026-04-18 22:37:05,251 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 22:37:05,251 [INFO]   Limit: 3
+2026-04-18 22:37:05,251 [INFO] ==================================================
+2026-04-18 22:37:05,251 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 22:37:05,251 [INFO] Starting in 3s...
+2026-04-18 22:37:06,257 [INFO] Starting in 2s...
+2026-04-18 22:37:07,260 [INFO] Starting in 1s...
+2026-04-18 22:37:08,265 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 22:37:13,123 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 22:37:17,318 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 22:37:22,813 [INFO] Dismissing trainer size text...
+2026-04-18 22:37:27,522 [INFO] In appraisal mode — starting main loop.
+2026-04-18 22:37:27,523 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:37:29,951 [WARNING]   [1] Name OCR failed (cp=310) — using 'Unknown'
+2026-04-18 22:37:30,056 [INFO]   [1] Unknown         CP: 310 IVs:4/8/9 (46.7%) 0★     | GL: None UL: None
+2026-04-18 22:37:33,383 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:37:35,676 [INFO]   [2] Pikachu i       CP:  91 IVs:15/3/12 (66.7%) 2★     | GL: None UL: None
+2026-04-18 22:37:38,889 [INFO] Waiting for bar animation to settle...
+2026-04-18 22:37:41,068 [WARNING]   [3] Name OCR failed (cp=567) — using 'Unknown'
+2026-04-18 22:37:41,157 [INFO]   [3] Unknown         CP: 567 IVs:3/8/2 (28.9%) 0★     | GL: None UL: None
+2026-04-18 22:37:45,111 [INFO] Reached limit of 3. Stopping.
+2026-04-18 22:37:45,112 [INFO] ==================================================
+2026-04-18 22:37:45,112 [INFO] Session: 3 cataloged, 0 errors, 0.7 min
+2026-04-18 22:37:45,112 [INFO] DB totals: {'total': 43, 'species': 6, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 22:37:45,112 [INFO] ==================================================
+2026-04-18 23:17:15,600 [INFO] iPhone Mirroring window: {'x': 1116, 'y': 84, 'w': 316, 'h': 696}
+2026-04-18 23:17:15,601 [INFO] ==================================================
+2026-04-18 23:17:15,601 [INFO]   Pokémon GO IV Cataloger — Starting
+2026-04-18 23:17:15,601 [INFO]   Limit: 1
+2026-04-18 23:17:15,601 [INFO] ==================================================
+2026-04-18 23:17:15,601 [INFO] Navigate to the Pokémon storage list now.
+2026-04-18 23:17:15,601 [INFO] Starting in 3s...
+2026-04-18 23:17:16,606 [INFO] Starting in 2s...
+2026-04-18 23:17:17,610 [INFO] Starting in 1s...
+2026-04-18 23:17:18,615 [INFO] Tapping first Pokémon at (0.201, 0.286)
+2026-04-18 23:17:23,202 [INFO] Tapping menu button at (0.842, 0.933)
+2026-04-18 23:17:26,774 [INFO] Tapping APPRAISE at (0.648, 0.770)
+2026-04-18 23:17:31,999 [INFO] Dismissing trainer size text...
+2026-04-18 23:17:36,409 [INFO] In appraisal mode — starting main loop.
+2026-04-18 23:17:36,410 [INFO] Waiting for bar animation to settle...
+2026-04-18 23:17:38,042 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:38,425 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:38,804 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:39,191 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:39,569 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:39,948 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:40,325 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:40,702 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:41,087 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:41,465 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:41,851 [WARNING] read_appraisal_bars failed: 'bar_region'
+2026-04-18 23:17:41,963 [ERROR] Unexpected error: 'x'
+2026-04-18 23:17:41,965 [INFO] ==================================================
+2026-04-18 23:17:41,965 [INFO] Session: 0 cataloged, 0 errors, 0.4 min
+2026-04-18 23:17:41,965 [INFO] DB totals: {'total': 43, 'species': 6, 'perfect_iv': 4, 'three_star_plus': 7, 'gl_top10': 0, 'ul_top10': 0}
+2026-04-18 23:17:41,965 [INFO] ==================================================
