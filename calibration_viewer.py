@@ -5,28 +5,33 @@ Run: python calibration_viewer.py
 
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image, ImageTk, ImageDraw, ImageFont
+from PIL import Image, ImageTk, ImageDraw
 import json
 
 CONFIG_FILE = "calibration.json"
 
 # All editable handles: (label, color, config_path, handle_type)
-# config_path is a dot-path like "ui.cp_region" or "ui.menu_button"
 HANDLES = [
-    ("CP x1/y1",       "#FF4444", "ui.cp_region.x1y1",      "rect_tl"),
-    ("CP x2/y2",       "#FF4444", "ui.cp_region.x2y2",      "rect_br"),
-    ("Name x1/y1",     "#44FF44", "ui.name_region.x1y1",    "rect_tl"),
-    ("Name x2/y2",     "#44FF44", "ui.name_region.x2y2",    "rect_br"),
-    ("HP x1/y1",       "#4488FF", "ui.hp_region.x1y1",      "rect_tl"),
-    ("HP x2/y2",       "#4488FF", "ui.hp_region.x2y2",      "rect_br"),
-    ("Dust x1/y1",     "#FF44FF", "ui.dust_region.x1y1",    "rect_tl"),
-    ("Dust x2/y2",     "#FF44FF", "ui.dust_region.x2y2",    "rect_br"),
-    ("Menu Button",    "#FFFFFF", "ui.menu_button",          "point"),
-    ("Appraise Btn",   "#FFFF00", "ui.appraise_button",      "point"),
-    ("Back Button",    "#FF6600", "ui.back_button",          "point"),
-    ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",      "point_slot"),
-    ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",      "point_slot"),
-    ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",      "point_slot"),
+    ("CP x1/y1",       "#FF4444", "ui.cp_region.x1y1",       "rect_tl"),
+    ("CP x2/y2",       "#FF4444", "ui.cp_region.x2y2",       "rect_br"),
+    ("Name x1/y1",     "#44FF44", "ui.name_region.x1y1",     "rect_tl"),
+    ("Name x2/y2",     "#44FF44", "ui.name_region.x2y2",     "rect_br"),
+    ("HP x1/y1",       "#4488FF", "ui.hp_region.x1y1",       "rect_tl"),
+    ("HP x2/y2",       "#4488FF", "ui.hp_region.x2y2",       "rect_br"),
+    ("Dust x1/y1",     "#FF44FF", "ui.dust_region.x1y1",     "rect_tl"),
+    ("Dust x2/y2",     "#FF44FF", "ui.dust_region.x2y2",     "rect_br"),
+    ("Type x1/y1",     "#FF9900", "ui.type_region.x1y1",     "rect_tl"),
+    ("Type x2/y2",     "#FF9900", "ui.type_region.x2y2",     "rect_br"),
+    ("Weight x1/y1",   "#AAFFAA", "ui.weight_region.x1y1",   "rect_tl"),
+    ("Weight x2/y2",   "#AAFFAA", "ui.weight_region.x2y2",   "rect_br"),
+    ("Height x1/y1",   "#AAAAFF", "ui.height_region.x1y1",   "rect_tl"),
+    ("Height x2/y2",   "#AAAAFF", "ui.height_region.x2y2",   "rect_br"),
+    ("Menu Button",    "#FFFFFF", "ui.menu_button",           "point"),
+    ("Appraise Btn",   "#FFFF00", "ui.appraise_button",       "point"),
+    ("Back Button",    "#FF6600", "ui.back_button",           "point"),
+    ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",       "point_slot"),
+    ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",       "point_slot"),
+    ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",       "point_slot"),
 ]
 
 BAR_KEYS = [
@@ -37,48 +42,50 @@ BAR_KEYS = [
     ("Bar X End",   "bar_x_end",   "#00CCFF", "vline"),
 ]
 
+# Regions drawn as coloured overlays on the screenshot
+RECT_REGIONS = [
+    ("cp_region",     "#FF4444"),
+    ("name_region",   "#44FF44"),
+    ("hp_region",     "#4488FF"),
+    ("dust_region",   "#FF44FF"),
+    ("type_region",   "#FF9900"),
+    ("weight_region", "#AAFFAA"),
+    ("height_region", "#AAAAFF"),
+]
+
+# Default values injected into calibration.json if a region is missing
+REGION_DEFAULTS = {
+    "type_region":   {"x1": 0.10, "y1": 0.28, "x2": 0.90, "y2": 0.36},
+    "weight_region": {"x1": 0.10, "y1": 0.38, "x2": 0.55, "y2": 0.46},
+    "height_region": {"x1": 0.55, "y1": 0.38, "x2": 0.90, "y2": 0.46},
+}
+
+
 def load_config():
     with open(CONFIG_FILE) as f:
-        return json.load(f)
+        cfg = json.load(f)
+    # Inject missing regions so the viewer works even before calibration
+    ui = cfg.setdefault("ui", {})
+    for key, default in REGION_DEFAULTS.items():
+        if key not in ui:
+            ui[key] = default
+    return cfg
+
 
 def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
 
-def get_nested(cfg, path):
-    keys = path.split(".")
-    val = cfg
-    for k in keys:
-        if isinstance(val, list):
-            val = val[int(k)]
-        else:
-            val = val.get(k)
-        if val is None:
-            return None
-    return val
-
-def set_nested(cfg, path, value):
-    keys = path.split(".")
-    val = cfg
-    for k in keys[:-1]:
-        if isinstance(val, list):
-            val = val[int(k)]
-        else:
-            val = val[k]
-    last = keys[-1]
-    if isinstance(val, list):
-        val[int(last)] = value
-    else:
-        val[last] = value
 
 def capture_screenshot(cfg):
     from screen_capture import capture_window, get_mirror_window_bounds
     try:
         bounds = get_mirror_window_bounds()
         cfg["mirror_region"] = bounds
-    except Exception as e:
+    except Exception:
         bounds = cfg.get("mirror_region", {"x": 0, "y": 0, "w": 400, "h": 800})
     return capture_window(bounds)
+
 
 class CalibrationApp:
     HANDLE_RADIUS = 9
@@ -91,7 +98,7 @@ class CalibrationApp:
         self.raw_img = None
         self.photo = None
         self.display_scale = 1.0
-        self.dragging = None   # (handle_id, path, type, offset_x, offset_y)
+        self.dragging = None
         self._build_ui()
         self.refresh()
 
@@ -99,7 +106,6 @@ class CalibrationApp:
     def _build_ui(self):
         bar = tk.Frame(self.root, bg="#16213e", pady=6)
         bar.pack(fill="x")
-
         tk.Label(bar, text="📍 Calibration Viewer", font=("Helvetica", 14, "bold"),
                  fg="#e2e8f0", bg="#16213e").pack(side="left", padx=12)
         tk.Button(bar, text="🔄 Refresh", command=self.refresh,
@@ -115,32 +121,29 @@ class CalibrationApp:
         main = tk.Frame(self.root, bg="#1a1a2e")
         main.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Canvas
         self.canvas = tk.Canvas(main, bg="#0d0d1a", cursor="crosshair",
                                 highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.bind("<ButtonPress-1>",   self.on_press)
         self.canvas.bind("<B1-Motion>",       self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
-        # Add after canvas.bind("<ButtonRelease-1>", self.on_release)
-        self.canvas.bind("<Left>", lambda e: self._nudge(-0.001, 0))
-        self.canvas.bind("<Right>", lambda e: self._nudge(0.001, 0))
-        self.canvas.bind("<Up>", lambda e: self._nudge(0, -0.001))
-        self.canvas.bind("<Down>", lambda e: self._nudge(0, 0.001))
-        # Shift+arrow = coarse nudge (10x)
-        self.canvas.bind("<Shift-Left>", lambda e: self._nudge(-0.01, 0))
-        self.canvas.bind("<Shift-Right>", lambda e: self._nudge(0.01, 0))
-        self.canvas.bind("<Shift-Up>", lambda e: self._nudge(0, -0.01))
-        self.canvas.bind("<Shift-Down>", lambda e: self._nudge(0, 0.01))
+        self.canvas.bind("<Left>",       lambda e: self._nudge(-0.001,  0))
+        self.canvas.bind("<Right>",      lambda e: self._nudge( 0.001,  0))
+        self.canvas.bind("<Up>",         lambda e: self._nudge( 0, -0.001))
+        self.canvas.bind("<Down>",       lambda e: self._nudge( 0,  0.001))
+        self.canvas.bind("<Shift-Left>",  lambda e: self._nudge(-0.01,  0))
+        self.canvas.bind("<Shift-Right>", lambda e: self._nudge( 0.01,  0))
+        self.canvas.bind("<Shift-Up>",    lambda e: self._nudge( 0, -0.01))
+        self.canvas.bind("<Shift-Down>",  lambda e: self._nudge( 0,  0.01))
         self.canvas.focus_set()
-        self.canvas.bind("<Motion>",          self.on_motion)
+        self.canvas.bind("<Motion>", self.on_motion)
 
-        # Right panel
+        # ── Right panel ──
         panel = tk.Frame(main, bg="#16213e", width=270)
         panel.pack(side="right", fill="y", padx=(8, 0))
         panel.pack_propagate(False)
 
-        tk.Label(panel, text="Bar Positions (drag on canvas\nor use sliders)",
+        tk.Label(panel, text="Bar Positions (drag on canvas or use sliders)",
                  font=("Helvetica", 11, "bold"), fg="#e2e8f0",
                  bg="#16213e", justify="center").pack(pady=(10, 4))
 
@@ -148,8 +151,7 @@ class CalibrationApp:
         for label, key, color, _ in BAR_KEYS:
             row = tk.Frame(panel, bg="#16213e")
             row.pack(fill="x", padx=8, pady=3)
-            swatch = tk.Label(row, bg=color, width=2)
-            swatch.pack(side="left", padx=(0, 6))
+            tk.Label(row, bg=color, width=2).pack(side="left", padx=(0, 6))
             tk.Label(row, text=label, fg="#e2e8f0", bg="#16213e",
                      font=("Helvetica", 9), width=11, anchor="w").pack(side="left")
             val = self.cfg["ui"].get(key, 0.5)
@@ -175,6 +177,9 @@ class CalibrationApp:
             ("#44FF44", "Name region corners"),
             ("#4488FF", "HP region corners"),
             ("#FF44FF", "Dust region corners"),
+            ("#FF9900", "Type region corners"),
+            ("#AAFFAA", "Weight region corners"),
+            ("#AAAAFF", "Height region corners"),
             ("#FFFFFF", "Menu button"),
             ("#FFFF00", "Appraise button"),
             ("#FF6600", "Back button"),
@@ -243,25 +248,22 @@ class CalibrationApp:
             r = ui.get(key)
             if not r:
                 return
-            x1, y1 = int(r["x1"]*w), int(r["y1"]*h)
-            x2, y2 = int(r["x2"]*w), int(r["y2"]*h)
-            hex_c = color.lstrip("#")
-            rc, gc, bc = tuple(int(hex_c[i:i+2], 16) for i in (0, 2, 4))
+            x1, y1 = int(r["x1"] * w), int(r["y1"] * h)
+            x2, y2 = int(r["x2"] * w), int(r["y2"] * h)
+            hc = color.lstrip("#")
+            rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
             draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 40),
                            outline=(rc, gc, bc, 200), width=2)
 
-        rect("cp_region",    "#FF4444")
-        rect("name_region",  "#44FF44")
-        rect("hp_region",    "#4488FF")
-        rect("dust_region",  "#FF44FF")
+        for region_key, color in RECT_REGIONS:
+            rect(region_key, color)
 
-        # Bar lines
         for _, key, color, btype in BAR_KEYS:
             val = ui.get(key)
             if val is None:
                 continue
-            hex_c = color.lstrip("#")
-            rc, gc, bc = tuple(int(hex_c[i:i+2], 16) for i in (0, 2, 4))
+            hc = color.lstrip("#")
+            rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
             if btype == "hline":
                 y = int(val * h)
                 draw.line([(0, y), (w, y)], fill=(rc, gc, bc, 220), width=2)
@@ -270,7 +272,7 @@ class CalibrationApp:
                 draw.line([(x, 0), (x, h)], fill=(rc, gc, bc, 220), width=2)
 
     def _draw_handles_on_canvas(self):
-        """Draw draggable handle circles on the Tkinter canvas."""
+        """Draw draggable handle circles/squares on the Tkinter canvas."""
         ui = self.cfg["ui"]
         s = self.display_scale
         r = self.HANDLE_RADIUS
@@ -286,13 +288,17 @@ class CalibrationApp:
                                         fill=color, font=("Helvetica", 8),
                                         anchor="w", tags=tag+"_lbl")
 
-        # Rect corners
-        for cfg_key, color, short in [
-            ("cp_region",   "#FF4444", "CP"),
-            ("name_region", "#44FF44", "Name"),
-            ("hp_region",   "#4488FF", "HP"),
-            ("dust_region", "#FF44FF", "Dust"),
-        ]:
+        # All rect regions (existing + new)
+        rect_handles = [
+            ("cp_region",     "#FF4444", "CP"),
+            ("name_region",   "#44FF44", "Name"),
+            ("hp_region",     "#4488FF", "HP"),
+            ("dust_region",   "#FF44FF", "Dust"),
+            ("type_region",   "#FF9900", "Type"),
+            ("weight_region", "#AAFFAA", "Wt"),
+            ("height_region", "#AAAAFF", "Ht"),
+        ]
+        for cfg_key, color, short in rect_handles:
             reg = ui.get(cfg_key, {})
             dot(reg.get("x1", 0), reg.get("y1", 0), color,
                 f"rect_tl_{cfg_key}", f"{short} ↖")
@@ -314,7 +320,7 @@ class CalibrationApp:
             dot(slot.get("x", 0), slot.get("y", 0),
                 "#00FF88", f"slot_{i}", f"Slot{i+1}")
 
-        # Bar handles (small squares on the line ends)
+        # Bar handles (squares)
         for label, key, color, btype in BAR_KEYS:
             val = ui.get(key)
             if val is None:
@@ -338,22 +344,24 @@ class CalibrationApp:
         return cx / (self.img_w * s), cy / (self.img_h * s)
 
     def _find_handle(self, cx, cy):
-        """Find which handle is closest to the clicked canvas point."""
         ui = self.cfg["ui"]
         s = self.display_scale
-        r = self.HANDLE_RADIUS + 4  # hit area slightly larger than visual
+        r = self.HANDLE_RADIUS + 4
 
         candidates = []
 
-        # Rect corners
-        for cfg_key in ("cp_region", "name_region", "hp_region", "dust_region"):
+        # All rect region corners
+        all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region",
+                         "type_region", "weight_region", "height_region")
+        for cfg_key in all_rect_keys:
             reg = ui.get(cfg_key, {})
             for corner, xk, yk in [("tl", "x1", "y1"), ("br", "x2", "y2")]:
                 hx = reg.get(xk, 0) * self.img_w * s
                 hy = reg.get(yk, 0) * self.img_h * s
                 dist = abs(cx - hx) + abs(cy - hy)
                 if dist < r * 2:
-                    candidates.append((dist, f"rect_{corner}_{cfg_key}", xk, yk, cfg_key, "rect_corner"))
+                    candidates.append((dist, f"rect_{corner}_{cfg_key}",
+                                       xk, yk, cfg_key, "rect_corner"))
 
         # Points
         for cfg_key in ("menu_button", "appraise_button", "back_button"):
@@ -362,7 +370,8 @@ class CalibrationApp:
             hy = p.get("y", 0.5) * self.img_h * s
             dist = abs(cx - hx) + abs(cy - hy)
             if dist < r * 2:
-                candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
+                candidates.append((dist, f"point_{cfg_key}",
+                                   "x", "y", cfg_key, "point"))
 
         # Slots
         for i, slot in enumerate(ui.get("pokemon_slots", [])):
@@ -389,7 +398,7 @@ class CalibrationApp:
         if not candidates:
             return None
         candidates.sort(key=lambda x: x[0])
-        return candidates[0]  # (dist, tag, xk, yk, cfg_key, handle_type)
+        return candidates[0]
 
     def on_press(self, event):
         result = self._find_handle(event.x, event.y)
@@ -494,6 +503,7 @@ class CalibrationApp:
                 self.bar_vars[cfg_key][1].config(text=f"{new_val:.3f}")
 
         self._redraw()
+
 
 if __name__ == "__main__":
     root = tk.Tk()

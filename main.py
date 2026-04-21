@@ -6,11 +6,12 @@ import os
 import sys
 import time
 import traceback
+import pytesseract
 
 from ocr_parser import (
-    resolvespeciesname,   # NEW — combines type-based ID + name OCR fallback
+    resolvespeciesname,  # NEW — combines type-based ID + name OCR fallback
     parsecp, parsehp,
-    ocrregion, getrelativeregion,
+    ocrregion, getrelativeregion, parseweight, parseheight,
 )
 
 logging.basicConfig(
@@ -37,7 +38,7 @@ def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
     while time.time() < deadline:
         time.sleep(poll)
         img  = capturefn()
-        bars = readfn(img, ui, cfg["barfillbrightness"])
+        bars = readfn(img, ui, cfg.get("bar_fill_brightness", 160))
         if bars == prevbars and prevbars is not None:
             return previmg
         prevbars = bars
@@ -147,6 +148,13 @@ def runbot(args):
                 lambda: capture_window(cfg["mirror_region"]),
                 readappraisalbars, ui, cfg,
             )
+            if args.debug:
+                raw_crop = getrelativeregion(img, ui["name_region"])
+                raw_crop.save(f"screenshots/nameregion{count:03d}.png")
+                raw_text = pytesseract.image_to_string(
+                    raw_crop.convert("L"), config="--psm 6 --oem 3"
+                ).strip().replace("\n", " ")
+                log.info(f"  Name region raw OCR: {raw_text!r}")
             if img is None:
                 log.warning(f"#{count+1} Could not capture stable image. Skipping.")
                 errors += 1
@@ -159,29 +167,23 @@ def runbot(args):
                 img.save(f"screenshots/appraisal{count:03d}.png")
 
             # OCR CP and HP
-            cpimg = get_relative_region(img, ui["cp_region"])
-            hpimg = get_relative_region(img, ui["hp_region"])
+            cp_img = get_relative_region(img, ui["cp_region"])
+            hp_img = get_relative_region(img, ui["hp_region"])
             try:
-                cp = int(str(parsecp(ocrregion(cpimg))).replace(",", "").strip())
+                cp = int(str(parsecp(ocrregion(cp_img))).replace(",", "").strip())
             except (ValueError, TypeError):
                 cp = 0
             try:
-                hp = int(str(parsehp(ocrregion(hpimg))).replace(",", "").strip())
+                hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
             except (ValueError, TypeError):
                 hp = 0
 
-            # Species identification — type/weight/height first, name OCR fallback
-            typetext   = ocrregion(getrelativeregion(img, ui["type_region"]))
-            weighttext = ocrregion(getrelativeregion(img, ui["weight_region"]))
-            heighttext = ocrregion(getrelativeregion(img, ui["height_region"]))
 
-            # NEW: resolvespeciesname uses name OCR below the IV bars as fallback
-            name = resolvespeciesname(img, ui, typetext, weighttext, heighttext, cp)
-
+            name = resolvespeciesname(img, ui, cp)
             if not name or name == "Unknown":
                 log.warning(
-                    f"#{count+1} Species ID failed (cp={cp} "
-                    f"types={typetext!r} weight={weighttext!r} height={heighttext!r})"
+                    f"#{count+1} Species ID failed (cp={cp} )"
+                    #f"weight={weight_text!r} height={height_text!r})"
                 )
                 name = "Unknown"
             if not cp:
@@ -189,9 +191,10 @@ def runbot(args):
 
             # Read IV bars
             if args.debug:
-                bars = readappraisalbarsdebug(img, ui, cfg["bar_fill_brightness"])
+                bars = readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160))
             else:
-                bars = readappraisalbars(img, ui, cfg["bar_fill_brightness"])
+                bars = readappraisalbars(img, ui, cfg.get("bar_fill_brightness", 160))
+
 
             if not bars:
                 log.warning(f"#{count+1} Bar read failed for {name}. Skipping.")
@@ -202,23 +205,23 @@ def runbot(args):
 
             # Normalise — handle both list (atk, def, sta) and dict {"atk":…}
             if isinstance(bars, dict):
-                atkiv, defiv, staiv = bars["atk"], bars["def"], bars["sta"]
+                atk_iv, def_iv, sta_iv = bars["atk"], bars["def"], bars["sta"]
             else:
-                atkiv, defiv, staiv = bars[0], bars[1], bars[2]
+                atk_iv, def_iv, sta_iv = bars[0], bars[1], bars[2]
 
             # Compute IVs and PvP rankings
-            ivdata = compute_ivs(name, cp, hp, atkiv, defiv, staiv, None)
-            pvp    = all_league_rankings(name, atkiv, defiv, staiv)
-            ivdata["pvp"] = pvp
+            iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
+            pvp    = all_league_rankings(name, atk_iv, def_iv, sta_iv)
+            iv_data["pvp"] = pvp
 
             if not args.dry_run:
-                insert_pokemon(conn, ivdata)
+                insert_pokemon(conn, iv_data)
 
             gl    = pvp.get("pvp", {}).get("great", {})
             ul    = pvp.get("pvp", {}).get("ultra", {})
-            iv_pct = ivdata.get("iv_pct", 0) or 0
-            iv_str = ivdata.get("iv_stars", "?")
-            barss = f"{atkiv}/{defiv}/{staiv}"
+            iv_pct = iv_data.get("iv_pct", 0) or 0
+            iv_str = iv_data.get("iv_stars", "?")
+            barss = f"{atk_iv}/{def_iv}/{sta_iv}"
             gl_rank = gl.get("rank")
             ul_rank = ul.get("rank")
             gl_str  = f"{gl_rank}" if gl_rank is not None else "-"
@@ -233,7 +236,7 @@ def runbot(args):
 
             if not args.dry_run:
                 tapnextarrow(tap, ui, cfg)
-                tap.antibot_break()
+                tap.anti_bot_break()
 
     except KeyboardInterrupt:
         log.info("Stopped by user.")

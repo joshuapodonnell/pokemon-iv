@@ -90,114 +90,112 @@ def parseheight(text: str) -> float | None:
         return None
 
 
-def parsetypes(text: str) -> set[str]:
-    """Extract Pokémon types from OCR text like 'Fire Flying' or 'FireFlying'."""
-    found = set()
-    for t in ALLTYPES:
-        if t.lower() in text.lower():
-            found.add(t)
-    return found
+# def parsetypes(text: str) -> set[str]:
+#     """Extract Pokémon types from OCR text like 'Fire Flying' or 'FireFlying'."""
+#     found = set()
+#     for t in ALLTYPES:
+#         if t.lower() in text.lower():
+#             found.add(t)
+#     return found
 
 
 # ---------------------------------------------------------------------------
 # Species identification (nickname-proof)
 # ---------------------------------------------------------------------------
 
-def identifyspecies(typetext: str, weighttext: str, heighttext: str = "",
-                    cp: int = 0) -> str:
-    """Identify Pokémon species from type/weight/height OCR text.
-
-    Fully nickname-proof — never reads the display name.
-    Returns species name string, or 'Unknown' if unresolvable.
-    """
-    if not SPECIESDB:
-        return "Unknown"
-
-    foundtypes = parsetypes(typetext)
-    weight = parseweight(weighttext)
-
-    if not foundtypes:
-        log.debug(f"identifyspecies: no types parsed from {typetext!r}")
-        return "Unknown"
-
-    # 1. Filter by exact type match
-    candidates = [name for name, data in SPECIESDB.items()
-                  if set(data["types"]) == foundtypes]
-
-    if not candidates:
-        log.debug(f"identifyspecies: no species match for types {foundtypes}")
-        return "Unknown"
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # 2. Narrow by weight (±12% tolerance — covers GO's XS/XL size variants)
-    if weight is not None:
-        weightfiltered = [
-            name for name in candidates
-            if SPECIESDB[name].get("weightkg", 0) > 0
-            and abs(SPECIESDB[name]["weightkg"] - weight) / SPECIESDB[name]["weightkg"] <= 0.12
-        ]
-        if weightfiltered:
-            candidates = weightfiltered
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # 3. Narrow by height (±12% tolerance)
-    height = parseheight(heighttext)
-    if height is not None:
-        heightfiltered = [
-            name for name in candidates
-            if SPECIESDB[name].get("heightm") is not None
-            and SPECIESDB[name]["heightm"] > 0
-            and abs(SPECIESDB[name]["heightm"] - height) / SPECIESDB[name]["heightm"] <= 0.12
-        ]
-        if heightfiltered:
-            candidates = heightfiltered
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # 4. Return first candidate (best-effort)
-    return candidates[0]
+# def identifyspecies(weighttext: str, heighttext: str = "",
+#                     cp: int = 0) -> str:
+#     """Identify Pokémon species from type/weight/height OCR text.
+#
+#     Fully nickname-proof — never reads the display name.
+#     Returns species name string, or 'Unknown' if unresolvable.
+#     """
+#     if not SPECIESDB:
+#         return "Unknown"
+#
+#     #foundtypes = parsetypes(typetext)
+#     weight = parseweight(weighttext)
+#     #
+#     # if not foundtypes:
+#     #     log.debug(f"identifyspecies: no types parsed from {typetext!r}")
+#     #     return "Unknown"
+#
+#     # # 1. Filter by exact type match
+#     # candidates = [name for name, data in SPECIESDB.items()
+#     #               if set(data["types"]) == foundtypes]
+#     #
+#     # if not candidates:
+#     #     log.debug(f"identifyspecies: no species match for types {foundtypes}")
+#     #     return "Unknown"
+#     # if len(candidates) == 1:
+#     #     return candidates[0]
+#
+#     # 2. Narrow by weight (±12% tolerance — covers GO's XS/XL size variants)
+#     if weight is not None:
+#         weightfiltered = [
+#             name for name in candidates
+#             if SPECIESDB[name].get("weightkg", 0) > 0
+#             and abs(SPECIESDB[name]["weightkg"] - weight) / SPECIESDB[name]["weightkg"] <= 0.12
+#         ]
+#         if weightfiltered:
+#             candidates = weightfiltered
+#     if len(candidates) == 1:
+#         return candidates[0]
+#
+#     # 3. Narrow by height (±12% tolerance)
+#     height = parseheight(heighttext)
+#     if height is not None:
+#         heightfiltered = [
+#             name for name in candidates
+#             if SPECIESDB[name].get("heightm") is not None
+#             and SPECIESDB[name]["heightm"] > 0
+#             and abs(SPECIESDB[name]["heightm"] - height) / SPECIESDB[name]["heightm"] <= 0.12
+#         ]
+#         if heightfiltered:
+#             candidates = heightfiltered
+#     if len(candidates) == 1:
+#         return candidates[0]
+#
+#     # 4. Return first candidate (best-effort)
+#     return candidates[0]
 
 
 # ---------------------------------------------------------------------------
 # Pokémon name OCR  (NEW)
 # ---------------------------------------------------------------------------
 
-def ocrnameregion(img: Image.Image, ui: dict) -> str:
-    """OCR the Pokémon name label from the appraisal screen.
-
-    This reads the name label displayed directly below the IV bars
-    (the 'nameregion' calibration region). It is used as a cross-check
-    against the species identified from types/weight/height, and as a
-    fallback when species ID fails.
-
-    Returns the cleaned name string, or '' if nothing readable.
-    """
-    try:
-        nameimg = getrelativeregion(img, ui["nameregion"])
-        # Upscale so Tesseract handles the small font better
-        w, h = nameimg.size
-        nameimg = nameimg.resize((w * 3, h * 3), Image.LANCZOS)
-        raw = pytesseract.image_to_string(
-            nameimg,
-            config="--psm 7 -c tessedit_char_whitelist="
-                   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .-'é"
-        ).strip()
-        # Strip any trailing punctuation / stray characters
-        name = re.sub(r"[^A-Za-zÀ-ÿ .'\-]", "", raw).strip()
-        return name
-    except Exception as e:
-        log.debug(f"ocrnameregion failed: {e}")
+def ocrnameregion(img, ui):
+    region = ui.get("name_region")
+    if not region:
         return ""
 
+    crop = getrelativeregion(img, region)
+    W, H = crop.size
+    crop = crop.resize((W * 3, H * 3), Image.LANCZOS)
+
+    # Don't binarise — the teal text is close to the threshold and gets destroyed.
+    # Greyscale + mild contrast boost is enough for Tesseract on this font.
+    crop = crop.convert("L")
+    from PIL import ImageEnhance
+    crop = ImageEnhance.Contrast(crop).enhance(2.0)
+
+    # PSM 6 = block of text (two lines); no whitelist so teal text isn't mangled
+    text = pytesseract.image_to_string(crop, config="--psm 6 --oem 3").strip()
+    # Collapse newlines so the regex works across the two-line caption
+    text = text.replace("\n", " ")
+
+    m = re.search(r"\bThis\s+(.+?)\s+was\b", text, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        log.debug(f"ocrnameregion: extracted {name!r} from: {text!r}")
+        return name
+
+    log.warning(f"ocrnameregion: pattern not found in: {text!r}")
+    return ""
 
 def resolvespeciesname(
     img: Image.Image,
     ui: dict,
-    typetext: str,
-    weighttext: str,
-    heighttext: str,
     cp: int,
 ) -> str:
     """Combine type/weight/height species ID with direct name OCR for best accuracy.
@@ -208,9 +206,9 @@ def resolvespeciesname(
       3. If the OCR name fuzzy-matches a known species, use it.
       4. Return 'Unknown' only if everything fails.
     """
-    species = identifyspecies(typetext, weighttext, heighttext, cp)
-    if species and species != "Unknown":
-        return species
+    # species = identifyspecies(weighttext, heighttext, cp)
+    # if species and species != "Unknown":
+    #     return species
 
     # Fallback: OCR the name label visible below the IV bars
     ocr_name = ocrnameregion(img, ui)
@@ -245,37 +243,46 @@ def resolvespeciesname(
 # ---------------------------------------------------------------------------
 
 def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> tuple | None:
-    """Read IV bars from a full appraisal screenshot using calibrated UI regions.
+    """Read ATK/DEF/STA IVs (0–15) from a full appraisal screenshot.
 
-    Uses the individual bar Y lines (atkbary, defbary, stabary) and
-    barxstart / barxend from calibration — NOT a single 'barregion' rect.
+    Uses colour detection (not brightness) to distinguish filled bar
+    segments from the white card background and grey empty segments:
+      - ATK / STA bars are orange: R>190, 110<G<190, B<100
+      - DEF bar is pink/red:       R>155, G<145, R > G+25
 
-    Returns (atkiv, defiv, staiv) each 0–15, or None on failure.
+    Samples each segment at its centre ±3px vertically (majority vote)
+    to survive the thin inter-segment gap lines.
     """
     try:
         W, H = img.size
-        barsegments = ui.get("barsegments", 15)
-        xstart = ui.get("barxstart", 0.141)
-        xend   = ui.get("barxend",   0.457)
+        bar_segments = ui.get("bar_segments", 15)
+        x_start = ui.get("bar_x_start", 0.141)
+        x_end   = ui.get("bar_x_end",   0.457)
 
         bar_ys = {
-            "atk": ui.get("atkbary", 0.773),
-            "def": ui.get("defbary", 0.816),
-            "sta": ui.get("stabary", 0.857),
+            "atk": (ui.get("atk_bar_y", 0.773), "orange"),
+            "def": (ui.get("def_bar_y", 0.816), "pink"),
+            "sta": (ui.get("sta_bar_y", 0.857), "orange"),
         }
 
         results = {}
-        for stat, yrel in bar_ys.items():
-            rowy = int(yrel * H)
+        for stat, (yrel, color) in bar_ys.items():
             filled = 0
-            for seg in range(1, barsegments + 1):
-                # Sample the centre of each segment
-                xfrac = xstart + (xend - xstart) * (seg - 0.5) / barsegments
+            py = int(yrel * H)
+            for seg in range(bar_segments):
+                xfrac = x_start + (x_end - x_start) * (seg + 0.5) / bar_segments
                 px = int(xfrac * W)
-                pixel = img.getpixel((px, rowy))
-                r, g, b = pixel[:3]
-                brightness = (r + g + b) / 3
-                if brightness >= barfillbrightness:
+                # Vote across 3 vertical samples to survive segment gap lines
+                votes = 0
+                for dy in (-3, 0, 3):
+                    sample_y = max(0, min(py + dy, H - 1))
+                    pixel = img.getpixel((px, sample_y))
+                    r, g, b = pixel[0], pixel[1], pixel[2]
+                    if color == "orange" and r > 190 and 110 < g < 190 and b < 100:
+                        votes += 1
+                    elif color == "pink" and r > 155 and g < 145 and r > g + 25:
+                        votes += 1
+                if votes >= 2:
                     filled += 1
             results[stat] = filled
 
@@ -288,21 +295,39 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> t
 
 
 def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float) -> tuple | None:
-    """Debug version of readappraisalbars — saves the bar strip to disk."""
+    """Debug version — saves an annotated bar strip to debugbars.png, then delegates."""
     try:
         W, H = img.size
-        xstart = ui.get("barxstart", 0.141)
-        xend   = ui.get("barxend",   0.457)
-        atkbary = ui.get("atkbary", 0.773)
-        stabary = ui.get("stabary", 0.857)
+        x_start   = ui.get("bar_x_start", 0.141)
+        x_end     = ui.get("bar_x_end",   0.457)
+        atk_bar_y = ui.get("atk_bar_y",   0.773)
+        sta_bar_y = ui.get("sta_bar_y",   0.857)
 
-        # Crop the region spanning all three bars for debugging
-        x1 = int(xstart * W)
-        x2 = int(xend * W)
-        y1 = int((atkbary - 0.02) * H)
-        y2 = int((stabary + 0.02) * H)
+        x1 = int(x_start * W)
+        x2 = int(x_end   * W)
+        y1 = int((atk_bar_y - 0.025) * H)
+        y2 = int((sta_bar_y + 0.025) * H)
         barstrip = img.crop((x1, y1, x2, y2))
+
+        # Upscale 3× so the saved image is readable at a glance
+        sw, sh = barstrip.size
+        barstrip = barstrip.resize((sw * 3, sh * 3), Image.LANCZOS)
         barstrip.save("debugbars.png")
+        # Log the actual pixel colour at each bar's centre for calibration
+        W2, H2 = img.size
+        for stat, (yrel, color) in [
+            ("ATK", (ui.get("atk_bar_y", 0.773), "orange")),
+            ("DEF", (ui.get("def_bar_y", 0.816), "pink")),
+            ("STA", (ui.get("sta_bar_y", 0.857), "orange")),
+        ]:
+            py = int(yrel * H2)
+            sample_px = []
+            for seg in range(ui.get("bar_segments", 15)):
+                xfrac = x_start + (x_end - x_start) * (seg + 0.5) / ui.get("bar_segments", 15)
+                px = int(xfrac * W2)
+                r, g, b = img.getpixel((px, py))[:3]
+                sample_px.append(f"({r},{g},{b})")
+            log.debug(f"  {stat} y={py}: {' '.join(sample_px)}")
         log.info("Debug bar image saved to debugbars.png")
 
         return readappraisalbars(img, ui, barfillbrightness)
