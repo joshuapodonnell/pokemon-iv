@@ -53,6 +53,28 @@ def tapnextarrow(tap, ui, cfg):
     arrowy = ui.get("nextarrow", {}).get("y", 0.80)
     tap.tap(arrowx, arrowy, base_delay=cfg["timing"].get("afterswipe", 1.2))
 
+def retryreadcp(capturefn, ui, cfg, max_attempts: int = 5):
+    """
+    Retry CP OCR up to max_attempts times, re-capturing the screen each time.
+    Returns (cp, img) — cp=0 and img=last_capture if all attempts fail.
+    Waits a short settle delay between retries to let the UI stabilise.
+    """
+    from ocr_parser import getrelativeregion, ocrregion, parsecp
+
+    for attempt in range(1, max_attempts + 1):
+        img = capturefn()
+        cp_img = getrelativeregion(img, ui["cp_region"])
+        cp_text = ocrregion(cp_img)
+        cp = parsecp(cp_text)
+        if cp and cp > 0:
+            if attempt > 1:
+                log.info(f"  CP retry succeeded on attempt {attempt}: CP{cp}")
+            return cp, img
+        log.debug(f"  CP OCR attempt {attempt}/{max_attempts} failed (got {cp_text!r}), retrying…")
+        time.sleep(0.4)
+
+    log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for manual review")
+    return 0, img
 
 def reloadcalibration(cfg):
     """Hot-reload mutable calibration keys from disk, preserving mirrorregion."""
@@ -167,12 +189,15 @@ def runbot(args):
                 img.save(f"screenshots/appraisal{count:03d}.png")
 
             # OCR CP and HP
-            cp_img = get_relative_region(img, ui["cp_region"])
+            # OCR CP with retry loop
+            cp, img = retryreadcp(
+                lambda: capture_window(cfg["mirror_region"]),
+                ui, cfg,
+                max_attempts=5,
+            )
+
+            # OCR HP (single attempt — HP failures are less impactful)
             hp_img = get_relative_region(img, ui["hp_region"])
-            try:
-                cp = int(str(parsecp(ocrregion(cp_img))).replace(",", "").strip())
-            except (ValueError, TypeError):
-                cp = 0
             try:
                 hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
             except (ValueError, TypeError):
@@ -216,6 +241,7 @@ def runbot(args):
 
             # Compute IVs and PvP rankings
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
+            iv_data["needs_review"] = (cp == 0)
             pvp    = all_league_rankings(name, atk_iv, def_iv, sta_iv)
             iv_data["pvp"] = pvp
 
@@ -232,10 +258,11 @@ def runbot(args):
             gl_str  = f"{gl_rank}" if gl_rank is not None else "-"
             ul_str  = f"{ul_rank}" if ul_rank is not None else "-"
 
+            review_flag = " ⚠ NEEDS REVIEW" if cp == 0 else ""
             log.info(
-                f"#{count+1} {str(name):<15s} CP{str(cp):>4s} "
+                f"#{count + 1} {str(name):<15s} CP{str(cp):>4s} "
                 f"IVs={barss} {iv_pct:.1f}% {str(iv_str):<6s} "
-                f"GL={gl_str:<6s} UL={ul_str:<6s}"
+                f"GL={gl_str:<6s} UL={ul_str:<6s}{review_flag}"
             )
             count += 1
 

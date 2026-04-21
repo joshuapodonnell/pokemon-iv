@@ -60,6 +60,7 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
     conn.commit()
     return conn
 
@@ -81,6 +82,7 @@ def insert_pokemon(conn: sqlite3.Connection, data: dict) -> int:
         ul.get("best_level"),  ul.get("best_cp"),
         ml.get("stat_product"),ml.get("sp_pct_of_max"),
         data.get("screenshot_path"), data.get("notes"),
+        int(bool(data.get("needs_review", False))),
     )
     cur = conn.execute("""
         INSERT INTO pokemon (
@@ -89,8 +91,8 @@ def insert_pokemon(conn: sqlite3.Connection, data: dict) -> int:
             gl_rank, gl_percentile, gl_sp, gl_sp_pct, gl_best_level, gl_best_cp,
             ul_rank, ul_percentile, ul_sp, ul_sp_pct, ul_best_level, ul_best_cp,
             ml_sp, ml_sp_pct,
-            screenshot_path, notes
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            screenshot_path, notes, needs_review
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, row)
     conn.commit()
     return cur.lastrowid
