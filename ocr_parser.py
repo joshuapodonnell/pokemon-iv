@@ -336,77 +336,85 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float)
         return None
 
 
-def parseivbars(barimg: Image.Image, debug: bool = False) -> tuple[int, int, int] | None:
-    """
-    Read ATK/DEF/STA IV values (0-15) from the appraisal bar crop (debugbars.png region).
-
-    Scans left-to-right at the vertical centre of each bar. Detects 3 segment groups
-    by tracking color transitions (outside→bar→outside), then measures filled fraction
-    in each group to count filled segments. No hardcoded X coordinates.
-
-    Colors:
-      filled  = orange (normal) or pink/red (ATK=15 perfect star)
-      empty   = grey (unfilled segment)
-      outside = white/transparent (gap between groups, or outside the bar)
-    """
+def parseivbars(barimg: Image.Image, debug: bool = False):
     W, H = barimg.size
 
-    # Vertical centre of each bar — relative to bar crop height
-    # Measured from real debugbars.png captures (642×555)
-    Y_ATK = 0.18   # ATK bar centre within the crop
-    Y_DEF = 0.50   # DEF bar centre within the crop
-    Y_HP  = 0.82   # HP bar centre within the crop
+    # Bar centres in the 240x174 barstrip crop
+    Y_ATK = 0.155
+    Y_DEF = 0.483
+    Y_HP  = 0.816
 
-    def _classify(r: int, g: int, b: int) -> str:
-        # Orange (normal filled) or pink/red (perfect IV star)
+    def _classify(r, g, b):
         if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
             return 'filled'
-        # Grey unfilled segment
+        if r > 170 and g < 165 and b < 165 and r > g + 30 and r > b + 30:
+            return 'filled'
         if 190 < r < 250 and 190 < g < 250 and 190 < b < 250 \
                 and abs(r - g) < 18 and abs(g - b) < 18:
             return 'empty'
         return 'outside'
 
-    def _count_at_row(y_rel: float) -> int:
+    def _count_at_row(y_rel):
         y = int(y_rel * H)
 
-        # Per-column classification: majority vote across ±4px vertically
-        col_class = []
+        col = []
         for x in range(W):
             votes = {'filled': 0, 'empty': 0, 'outside': 0}
-            for dy in (-4, -2, 0, 2, 4):
+            for dy in (-3, 0, 3):           # tighter ±3px — avoids smearing the 3px gap
                 sy = max(0, min(y + dy, H - 1))
                 r, g, b = barimg.getpixel((x, sy))[:3]
                 votes[_classify(r, g, b)] += 1
-            col_class.append(max(votes, key=votes.get))
+            col.append(max(votes, key=votes.get))
 
-        # Find the 3 segment groups separated by >=3px of 'outside'
-        groups: list[tuple[int, int]] = []
+        # Find the first 'outside' → bar transition to locate the bar start
+        # Then find each group as a run of (filled|empty), separated by >=2px outside
+        groups = []
         in_group = False
         gstart = 0
         outside_run = 0
-
-        for x, cls in enumerate(col_class):
-            if cls != 'outside':
+        for x, cls in enumerate(col):
+            if cls == 'outside':
+                outside_run += 1
+                if in_group and outside_run >= 2:   # ← 2px is enough given tighter vote window
+                    groups.append((gstart, x - outside_run))
+                    in_group = False
+            else:
                 if not in_group:
                     gstart = x
                     in_group = True
                 outside_run = 0
-            else:
-                outside_run += 1
-                if in_group and outside_run >= 3:
-                    groups.append((gstart, x - outside_run))
-                    in_group = False
         if in_group:
-            groups.append((gstart, len(col_class) - 1))
+            groups.append((gstart, len(col) - 1))
 
-        # Each group = 5 segments; filled fraction × 5 → count for this group
+        if not groups:
+            return 0
+
+        # Expected group width = width of group1 (always cleanly detected)
+        gw = groups[0][1] - groups[0][0] + 1
+
+        # Split any merged group wider than 1.4× expected width
+        final = []
+        for gs, ge in groups:
+            w = ge - gs + 1
+            if w > gw * 1.4:
+                # Split into chunks of gw, skip inter-chunk outside pixels
+                x = gs
+                while x <= ge:
+                    end = min(x + gw - 1, ge)
+                    final.append((x, end))
+                    x = end + 1
+                    while x <= ge and col[x] == 'outside':
+                        x += 1
+            else:
+                final.append((gs, ge))
+
+        # Score: filled fraction × 5 per group, sum all 3 groups
         total = 0
-        for gstart, gend in groups:
-            chunk = col_class[gstart:gend + 1]
-            filled_px = sum(1 for c in chunk if c == 'filled')
-            fraction = filled_px / len(chunk) if chunk else 0
-            total += round(fraction * 5)
+        for gs, ge in final[:3]:          # only use first 3 groups
+            chunk = col[gs:ge+1]
+            fp = sum(1 for c in chunk if c == 'filled')
+            frac = fp / len(chunk) if chunk else 0
+            total += round(frac * 5)
         return total
 
     try:
