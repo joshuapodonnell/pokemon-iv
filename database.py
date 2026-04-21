@@ -60,7 +60,9 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(pokemon)")}
+    if "needs_review" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
     conn.commit()
     return conn
 

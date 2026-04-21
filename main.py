@@ -149,7 +149,9 @@ def runbot(args):
     # STEP 4: Dismiss trainer size commentary
     if not args.dry_run:
         log.info("Dismissing trainer size text…")
-        tap.tap(0.50, 0.50, base_delay=cfg["timing"]["after_appraise"])
+        #tap.tap(0.50, 0.50, base_delay=cfg["timing"]["after_appraise"])
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=cfg["timing"]["after_appraise"])
 
     log.info("In appraisal mode — starting main loop.")
 
@@ -248,8 +250,8 @@ def runbot(args):
             if not args.dry_run:
                 insert_pokemon(conn, iv_data)
 
-            gl    = pvp.get("pvp", {}).get("great", {})
-            ul    = pvp.get("pvp", {}).get("ultra", {})
+            gl    = pvp.get("great", {})
+            ul    = pvp.get("ultra", {})
             iv_pct = iv_data.get("iv_pct", 0) or 0
             iv_str = iv_data.get("iv_stars", "?")
             barss = f"{atk_iv}/{def_iv}/{sta_iv}"
