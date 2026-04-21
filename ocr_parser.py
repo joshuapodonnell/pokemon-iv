@@ -7,7 +7,7 @@ import pytesseract
 
 log = logging.getLogger(__name__)
 
-LOOKUPPATH = Path(__file__).parent / "specieslookup.json"
+LOOKUPPATH = Path(__file__).parent / "species_lookup.json"
 if LOOKUPPATH.exists():
     with open(LOOKUPPATH) as f:
         SPECIESDB = dict(json.load(f))
@@ -35,25 +35,19 @@ def ocrregion(img: Image.Image, upscale: bool = False) -> str:
     return text
 
 
-def getrelativeregion(img: Image.Image, region: dict) -> Image.Image:
-    """Crop a region from img using relative coordinates.
-
-    Supports both formats:
-      - x1/y1/x2/y2  (as stored in calibration.json for named regions)
-      - x/y/w/h      (legacy width/height format)
-    """
+def getrelativeregion(img, region):
     W, H = img.size
     if "x1" in region:
-        x = int(region["x1"] * W)
-        y = int(region["y1"] * H)
+        x1 = int(region["x1"] * W)
+        y1 = int(region["y1"] * H)
         x2 = int(region["x2"] * W)
         y2 = int(region["y2"] * H)
     else:
-        x = int(region["x"] * W)
-        y = int(region["y"] * H)
-        x2 = x + int(region["w"] * W)
-        y2 = y + int(region["h"] * H)
-    return img.crop((x, y, x2, y2))
+        x1 = int(region["x"] * W)
+        y1 = int(region["y"] * H)
+        x2 = x1 + int(region["w"] * W)
+        y2 = y1 + int(region["h"] * H)
+    return img.crop((x1, y1, x2, y2))
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +56,7 @@ def getrelativeregion(img: Image.Image, region: dict) -> Image.Image:
 
 def parsecp(text: str) -> int:
     """Extract CP integer from OCR text like 'CP 310' or '310'."""
-    m = re.search(r"\d{1,5}", text.replace(",", ""))
+    m = re.search(r"(\d{1,4})", text)
     try:
         return int(m.group(1)) if m else 0
     except (ValueError, TypeError):
@@ -71,7 +65,7 @@ def parsecp(text: str) -> int:
 
 def parsehp(text: str) -> int:
     """Extract HP integer from OCR text like '47 / 47 HP'."""
-    m = re.search(r"\d{1,4}", text)
+    m = re.search(r"(\d{1,5})", text.replace(",", ""))
     try:
         return int(m.group(1)) if m else 0
     except (ValueError, TypeError):

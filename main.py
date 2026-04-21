@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from ocrparser import (
+from ocr_parser import (
     resolvespeciesname,   # NEW — combines type-based ID + name OCR fallback
     parsecp, parsehp,
     ocrregion, getrelativeregion,
@@ -72,20 +72,20 @@ def reloadcalibration(cfg):
 
 def runbot(args):
     from config import loadconfig
-    from screencapture import capturewindow, getmirrorwindowbounds
-    from tapcontroller import TapController
-    from ocrparser import readappraisalbars, readappraisalbarsdebug
-    from ivcalculator import computeivs
-    from pvprankings import allleaguerankings
-    from database import getdb, insertpokemon, getstats
+    from screen_capture import capture_window, get_mirror_window_bounds, get_relative_region
+    from tap_controller import TapController
+    from ocr_parser import readappraisalbars, readappraisalbarsdebug
+    from iv_calculator import compute_ivs
+    from pvp_rankings import all_league_rankings
+    from database import get_db, insert_pokemon, get_stats
 
     cfg  = loadconfig()
-    conn = getdb()
+    conn = get_db()
     tap  = TapController(cfg)
 
     ui = cfg["ui"]
     try:
-        bounds = getmirrorwindowbounds()
+        bounds = get_mirror_window_bounds()
         cfg["mirrorregion"] = bounds
         tap.mirror = bounds
         log.info(f"iPhone Mirroring window bounds: {bounds}")
@@ -107,26 +107,26 @@ def runbot(args):
 
     # STEP 1: Open first Pokémon
     if not args.dry_run:
-        slot = ui["pokemonslots"][0]
+        slot = ui["pokemon_slots"][0]
         log.info(f"Tapping first Pokémon at {slot['x']:.3f}, {slot['y']:.3f}")
-        tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["aftertap"])
+        tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
 
     # STEP 2: Tap hamburger menu
     if not args.dry_run:
-        log.info(f"Tapping menu button at {ui['menubutton']['x']:.3f}, {ui['menubutton']['y']:.3f}")
-        tap.tap(ui["menubutton"]["x"], ui["menubutton"]["y"],
-                base_delay=cfg["timing"]["aftertap"])
+        log.info(f"Tapping menu button at {ui['menu_button']['x']:.3f}, {ui['menu_button']['y']:.3f}")
+        tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                base_delay=cfg["timing"]["after_tap"])
 
     # STEP 3: Tap APPRAISE
     if not args.dry_run:
-        log.info(f"Tapping APPRAISE at {ui['appraisebutton']['x']:.3f}, {ui['appraisebutton']['y']:.3f}")
-        tap.tap(ui["appraisebutton"]["x"], ui["appraisebutton"]["y"],
-                base_delay=cfg["timing"]["afterappraise"])
+        log.info(f"Tapping APPRAISE at {ui['appraise_button']['x']:.3f}, {ui['appraise_button']['y']:.3f}")
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=cfg["timing"]["after_appraise"])
 
     # STEP 4: Dismiss trainer size commentary
     if not args.dry_run:
         log.info("Dismissing trainer size text…")
-        tap.tap(0.50, 0.50, base_delay=cfg["timing"]["afterappraise"])
+        tap.tap(0.50, 0.50, base_delay=cfg["timing"]["after_appraise"])
 
     log.info("In appraisal mode — starting main loop.")
 
@@ -144,7 +144,7 @@ def runbot(args):
             log.info("Waiting for bar animation to settle…")
             time.sleep(1.2)
             img = waitforbarsstableimage(
-                lambda: capturewindow(cfg["mirrorregion"]),
+                lambda: capture_window(cfg["mirror_region"]),
                 readappraisalbars, ui, cfg,
             )
             if img is None:
@@ -159,8 +159,8 @@ def runbot(args):
                 img.save(f"screenshots/appraisal{count:03d}.png")
 
             # OCR CP and HP
-            cpimg = getrelativeregion(img, ui["cpregion"])
-            hpimg = getrelativeregion(img, ui["hpregion"])
+            cpimg = get_relative_region(img, ui["cp_region"])
+            hpimg = get_relative_region(img, ui["hp_region"])
             try:
                 cp = int(str(parsecp(ocrregion(cpimg))).replace(",", "").strip())
             except (ValueError, TypeError):
@@ -171,9 +171,9 @@ def runbot(args):
                 hp = 0
 
             # Species identification — type/weight/height first, name OCR fallback
-            typetext   = ocrregion(getrelativeregion(img, ui["typeregion"]))
-            weighttext = ocrregion(getrelativeregion(img, ui["weightregion"]))
-            heighttext = ocrregion(getrelativeregion(img, ui["heightregion"]))
+            typetext   = ocrregion(getrelativeregion(img, ui["type_region"]))
+            weighttext = ocrregion(getrelativeregion(img, ui["weight_region"]))
+            heighttext = ocrregion(getrelativeregion(img, ui["height_region"]))
 
             # NEW: resolvespeciesname uses name OCR below the IV bars as fallback
             name = resolvespeciesname(img, ui, typetext, weighttext, heighttext, cp)
@@ -189,9 +189,9 @@ def runbot(args):
 
             # Read IV bars
             if args.debug:
-                bars = readappraisalbarsdebug(img, ui, cfg["barfillbrightness"])
+                bars = readappraisalbarsdebug(img, ui, cfg["bar_fill_brightness"])
             else:
-                bars = readappraisalbars(img, ui, cfg["barfillbrightness"])
+                bars = readappraisalbars(img, ui, cfg["bar_fill_brightness"])
 
             if not bars:
                 log.warning(f"#{count+1} Bar read failed for {name}. Skipping.")
@@ -207,27 +207,27 @@ def runbot(args):
                 atkiv, defiv, staiv = bars[0], bars[1], bars[2]
 
             # Compute IVs and PvP rankings
-            ivdata = computeivs(name, cp, hp, atkiv, defiv, staiv, None)
-            pvp    = allleaguerankings(name, atkiv, defiv, staiv)
+            ivdata = compute_ivs(name, cp, hp, atkiv, defiv, staiv, None)
+            pvp    = all_league_rankings(name, atkiv, defiv, staiv)
             ivdata["pvp"] = pvp
 
             if not args.dry_run:
-                insertpokemon(conn, ivdata)
+                insert_pokemon(conn, ivdata)
 
             gl    = pvp.get("pvp", {}).get("great", {})
             ul    = pvp.get("pvp", {}).get("ultra", {})
-            ivpct = ivdata.get("ivpct", 0) or 0
-            ivstr = ivdata.get("ivstars", "?")
+            iv_pct = ivdata.get("iv_pct", 0) or 0
+            iv_str = ivdata.get("iv_stars", "?")
             barss = f"{atkiv}/{defiv}/{staiv}"
-            glrank = gl.get("rank")
-            ulrank = ul.get("rank")
-            glstr  = f"{glrank}" if glrank is not None else "-"
-            ulstr  = f"{ulrank}" if ulrank is not None else "-"
+            gl_rank = gl.get("rank")
+            ul_rank = ul.get("rank")
+            gl_str  = f"{gl_rank}" if gl_rank is not None else "-"
+            ul_str  = f"{ul_rank}" if ul_rank is not None else "-"
 
             log.info(
                 f"#{count+1} {str(name):<15s} CP{str(cp):>4s} "
-                f"IVs={barss} {ivpct:.1f}% {str(ivstr):<6s} "
-                f"GL={glstr:<6s} UL={ulstr:<6s}"
+                f"IVs={barss} {iv_pct:.1f}% {str(iv_str):<6s} "
+                f"GL={gl_str:<6s} UL={ul_str:<6s}"
             )
             count += 1
 
@@ -242,7 +242,7 @@ def runbot(args):
         traceback.print_exc()
     finally:
         elapsed = (time.time() - starttime) / 60
-        stats   = getstats(conn)
+        stats   = get_stats(conn)
         log.info("=" * 50)
         log.info(f"Session: {count} cataloged, {errors} errors, {elapsed:.1f} min")
         log.info(f"DB totals: {stats}")
