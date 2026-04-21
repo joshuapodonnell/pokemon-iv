@@ -11,7 +11,7 @@ import pytesseract
 from ocr_parser import (
     resolvespeciesname,  # NEW — combines type-based ID + name OCR fallback
     parsecp, parsehp,
-    ocrregion, getrelativeregion, parseweight, parseheight,
+    ocrregion, getrelativeregion, parseweight, parseheight, parseivbars,
 )
 
 logging.basicConfig(
@@ -190,10 +190,15 @@ def runbot(args):
                 log.warning(f"#{count+1} CP OCR failed for {name}, using 0")
 
             # Read IV bars
+            # if args.debug:
+            #     bars = readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160))
+            # else:
+            #     bars = readappraisalbars(img, ui, cfg.get("bar_fill_brightness", 160))
+            bar_strip = getrelativeregion(img, ui["bar_region"])
             if args.debug:
-                bars = readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160))
-            else:
-                bars = readappraisalbars(img, ui, cfg.get("bar_fill_brightness", 160))
+                bar_strip.save(f"screenshots/barstrip{count:03d}.png")
+            bars = parseivbars(bar_strip, args.debug)
+
 
 
             if not bars:

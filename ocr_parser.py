@@ -293,7 +293,6 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> t
         log.warning(f"readappraisalbars failed: {e}")
         return None
 
-
 def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float) -> tuple | None:
     """Debug version — saves an annotated bar strip to debugbars.png, then delegates."""
     try:
@@ -334,4 +333,89 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float)
 
     except Exception as e:
         log.warning(f"readappraisalbarsdebug failed: {e}")
+        return None
+
+
+def parseivbars(barimg: Image.Image, debug: bool = False) -> tuple[int, int, int] | None:
+    """
+    Read ATK/DEF/STA IV values (0-15) from the appraisal bar crop (debugbars.png region).
+
+    Scans left-to-right at the vertical centre of each bar. Detects 3 segment groups
+    by tracking color transitions (outside→bar→outside), then measures filled fraction
+    in each group to count filled segments. No hardcoded X coordinates.
+
+    Colors:
+      filled  = orange (normal) or pink/red (ATK=15 perfect star)
+      empty   = grey (unfilled segment)
+      outside = white/transparent (gap between groups, or outside the bar)
+    """
+    W, H = barimg.size
+
+    # Vertical centre of each bar — relative to bar crop height
+    # Measured from real debugbars.png captures (642×555)
+    Y_ATK = 0.18   # ATK bar centre within the crop
+    Y_DEF = 0.50   # DEF bar centre within the crop
+    Y_HP  = 0.82   # HP bar centre within the crop
+
+    def _classify(r: int, g: int, b: int) -> str:
+        # Orange (normal filled) or pink/red (perfect IV star)
+        if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
+            return 'filled'
+        # Grey unfilled segment
+        if 190 < r < 250 and 190 < g < 250 and 190 < b < 250 \
+                and abs(r - g) < 18 and abs(g - b) < 18:
+            return 'empty'
+        return 'outside'
+
+    def _count_at_row(y_rel: float) -> int:
+        y = int(y_rel * H)
+
+        # Per-column classification: majority vote across ±4px vertically
+        col_class = []
+        for x in range(W):
+            votes = {'filled': 0, 'empty': 0, 'outside': 0}
+            for dy in (-4, -2, 0, 2, 4):
+                sy = max(0, min(y + dy, H - 1))
+                r, g, b = barimg.getpixel((x, sy))[:3]
+                votes[_classify(r, g, b)] += 1
+            col_class.append(max(votes, key=votes.get))
+
+        # Find the 3 segment groups separated by >=3px of 'outside'
+        groups: list[tuple[int, int]] = []
+        in_group = False
+        gstart = 0
+        outside_run = 0
+
+        for x, cls in enumerate(col_class):
+            if cls != 'outside':
+                if not in_group:
+                    gstart = x
+                    in_group = True
+                outside_run = 0
+            else:
+                outside_run += 1
+                if in_group and outside_run >= 3:
+                    groups.append((gstart, x - outside_run))
+                    in_group = False
+        if in_group:
+            groups.append((gstart, len(col_class) - 1))
+
+        # Each group = 5 segments; filled fraction × 5 → count for this group
+        total = 0
+        for gstart, gend in groups:
+            chunk = col_class[gstart:gend + 1]
+            filled_px = sum(1 for c in chunk if c == 'filled')
+            fraction = filled_px / len(chunk) if chunk else 0
+            total += round(fraction * 5)
+        return total
+
+    try:
+        atk = _count_at_row(Y_ATK)
+        def_ = _count_at_row(Y_DEF)
+        sta = _count_at_row(Y_HP)
+        if debug:
+            log.debug(f"Bar scan ATK={atk} DEF={def_} STA={sta}")
+        return atk, def_, sta
+    except Exception as e:
+        log.warning(f"parseivbars failed: {e}")
         return None
