@@ -13,6 +13,9 @@ from ocr_parser import (
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseweight, parseheight, parseivbars,
 )
+from pvp_rankings import all_league_rankings_with_evos
+from database import insert_evo_rankings
+from evaluator import evaluate_catch, get_species_summary
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,6 +94,15 @@ def reloadcalibration(cfg):
             cfg["timing"] = fresh["timing"]
     except Exception as e:
         log.warning(f"calibration reload failed (using current values): {e}")
+
+# main.py — add to runbot()
+def already_cataloged(conn, cp, iv_atk, iv_def, iv_sta, name):
+    """Skip Pokémon already in DB with identical stats."""
+    return conn.execute("""
+        SELECT 1 FROM pokemon
+        WHERE name=? AND cp=? AND iv_atk=? AND iv_def=? AND iv_sta=?
+        LIMIT 1
+    """, (name, cp, iv_atk, iv_def, iv_sta)).fetchone() is not None
 
 
 def runbot(args):
@@ -244,11 +256,16 @@ def runbot(args):
             # Compute IVs and PvP rankings
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
             iv_data["needs_review"] = (cp == 0)
-            pvp    = all_league_rankings(name, atk_iv, def_iv, sta_iv)
+            pvp_all = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
+            pvp = pvp_all[name]  # base species rankings (used for DB + log as before)
+            pvp_evos = {k: v for k, v in pvp_all.items() if k != name}  # evos only
             iv_data["pvp"] = pvp
 
+            # After insert_pokemon:
             if not args.dry_run:
-                insert_pokemon(conn, iv_data)
+                row_id = insert_pokemon(conn, iv_data)
+                if pvp_evos:
+                    insert_evo_rankings(conn, row_id, pvp_evos)
 
             gl    = pvp.get("great", {})
             ul    = pvp.get("ultra", {})

@@ -10,12 +10,40 @@
 
 import math
 from iv_calculator import CPM, BASE_STATS, calc_cp
+from evolution_chains import get_evolutions
 
 LEAGUE_CAPS = {
     "great":  1500,
     "ultra":  2500,
     "master": 10000,  # no cap — 15/15/15 is always rank 1
 }
+
+
+
+def all_league_rankings_with_evos(
+    pokemon_name: str, iv_atk: int, iv_def: int, iv_sta: int
+) -> dict:
+    """
+    Rankings for the Pokémon itself plus all its evolved forms.
+    IVs are identical across evolutions in Pokémon GO.
+
+    Returns:
+    {
+        "Panpour":   {"great": {...}, "ultra": {...}, "master": {...}},
+        "Simipour":  {"great": {...}, "ultra": {...}, "master": {...}},
+    }
+    """
+    results = {}
+
+    # Rankings for the Pokémon itself
+    results[pokemon_name] = all_league_rankings(pokemon_name, iv_atk, iv_def, iv_sta)
+
+    # Rankings for each evolved form with the same IVs
+    for evo in get_evolutions(pokemon_name):
+        results[evo] = all_league_rankings(evo, iv_atk, iv_def, iv_sta)
+
+    return results
+
 
 def _stat_product(base_atk, base_def, base_sta, iv_atk, iv_def, iv_sta, level) -> float:
     """Compute the PvP stat product at a given level."""

@@ -161,5 +161,11 @@
   "def_bar_y": 0.741,
   "sta_bar_y": 0.811,
   "bar_x_start": 0.089,
-  "bar_x_end": 0.555
+  "bar_x_end": 0.555,
+  "tag_menu_btn":    {"x": 0.842, "y": 0.933},
+  "tag_option_btn":  {"x": 0.648, "y": 0.650},
+  "tag_keep":      {"x": 0.500, "y": 0.350},
+  "tag_transfer":  {"x": 0.500, "y": 0.450},
+  "tag_review":    {"x": 0.500, "y": 0.550},
+  "tag_dismiss":    {"x": 0.500, "y": 0.850}
 }

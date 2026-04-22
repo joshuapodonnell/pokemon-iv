@@ -47,19 +47,41 @@ CREATE TABLE IF NOT EXISTS pokemon (
     cataloged_at    TEXT DEFAULT (datetime('now')),
     screenshot_path TEXT,
     notes           TEXT,
-    flagged         INTEGER DEFAULT 0  -- 1 = flagged for review
+    flagged         INTEGER DEFAULT 0,
+    needs_review    INTEGER DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_name     ON pokemon(name);
-CREATE INDEX IF NOT EXISTS idx_iv_pct   ON pokemon(iv_pct DESC);
-CREATE INDEX IF NOT EXISTS idx_gl_rank  ON pokemon(name, gl_rank);
-CREATE INDEX IF NOT EXISTS idx_ul_rank  ON pokemon(name, ul_rank);
+CREATE TABLE IF NOT EXISTS evo_rankings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pokemon_id      INTEGER NOT NULL REFERENCES pokemon(id) ON DELETE CASCADE,
+    evo_name        TEXT NOT NULL,
+    gl_rank         INTEGER,
+    gl_percentile   REAL,
+    gl_sp           REAL,
+    gl_sp_pct       REAL,
+    gl_best_level   REAL,
+    gl_best_cp      INTEGER,
+    ul_rank         INTEGER,
+    ul_percentile   REAL,
+    ul_sp           REAL,
+    ul_sp_pct       REAL,
+    ul_best_level   REAL,
+    ul_best_cp      INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_name        ON pokemon(name);
+CREATE INDEX IF NOT EXISTS idx_iv_pct      ON pokemon(iv_pct DESC);
+CREATE INDEX IF NOT EXISTS idx_gl_rank     ON pokemon(name, gl_rank);
+CREATE INDEX IF NOT EXISTS idx_ul_rank     ON pokemon(name, ul_rank);
+CREATE INDEX IF NOT EXISTS idx_evo_pokemon ON evo_rankings(pokemon_id);
+CREATE INDEX IF NOT EXISTS idx_evo_name    ON evo_rankings(evo_name, gl_rank);
 """
 
 def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    # Migration: add needs_review to any existing DB created before it was in the schema
     existing = {row[1] for row in conn.execute("PRAGMA table_info(pokemon)")}
     if "needs_review" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
@@ -145,3 +167,29 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "perfect_iv": perfect, "three_star_plus": three_star,
         "gl_top10": gl_top10, "ul_top10": ul_top10,
     }
+
+def insert_evo_rankings(conn: sqlite3.Connection, pokemon_id: int, evo_rankings: dict):
+    """
+    Insert evolution PvP rankings for a cataloged Pokémon.
+    evo_rankings: the dict returned by all_league_rankings_with_evos,
+                  minus the base species entry (evos only).
+    """
+    for evo_name, leagues in evo_rankings.items():
+        gl = leagues.get("great", {})
+        ul = leagues.get("ultra", {})
+        conn.execute("""
+            INSERT INTO evo_rankings (
+                pokemon_id, evo_name,
+                gl_rank, gl_percentile, gl_sp, gl_sp_pct, gl_best_level, gl_best_cp,
+                ul_rank, ul_percentile, ul_sp, ul_sp_pct, ul_best_level, ul_best_cp
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            pokemon_id, evo_name,
+            gl.get("rank"),         gl.get("percentile"),
+            gl.get("stat_product"), gl.get("sp_pct_of_max"),
+            gl.get("best_level"),   gl.get("best_cp"),
+            ul.get("rank"),         ul.get("percentile"),
+            ul.get("stat_product"), ul.get("sp_pct_of_max"),
+            ul.get("best_level"),   ul.get("best_cp"),
+        ))
+    conn.commit()
