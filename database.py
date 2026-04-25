@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS pokemon (
     notes           TEXT,
     flagged         INTEGER DEFAULT 0,
     needs_review    INTEGER DEFAULT 0,
-    caught_date TEXT
+    caught_date TEXT,
+    tag             TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS evo_rankings (
@@ -88,6 +89,8 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
     if "caught_date" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN caught_date TEXT")
+    if "tag" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN tag TEXT DEFAULT NULL")
     conn.commit()
     return conn
 
@@ -197,6 +200,20 @@ def insert_evo_rankings(conn: sqlite3.Connection, pokemon_id: int, evo_rankings:
             ul.get("best_level"),   ul.get("best_cp"),
         ))
     conn.commit()
+    
+def get_evo_rankings(conn, pokemon_id: int) -> dict:
+    """Reconstruct evo_rankings dict from DB for a given pokemon_id."""
+    rows = conn.execute("""
+        SELECT evo_name, gl_rank, gl_percentile, ul_rank, ul_percentile
+        FROM evo_rankings WHERE pokemon_id = ?
+    """, (pokemon_id,)).fetchall()
+    result = {}
+    for r in rows:
+        result[r["evo_name"]] = {
+            "great": {"rank": r["gl_rank"], "percentile": r["gl_percentile"]},
+            "ultra": {"rank": r["ul_rank"], "percentile": r["ul_percentile"]},
+        }
+    return result
 
 def find_duplicate(conn, name, cp, iv_atk, iv_def, iv_sta, caught_date) -> bool:
     # If we have a date, it's the strongest possible key

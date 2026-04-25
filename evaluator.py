@@ -47,7 +47,8 @@ KEEP_SPECIES = frozenset({
     })
 
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
-                   pvp: dict, evo_rankings: dict) -> dict:
+                   pvp: dict, evo_rankings: dict,
+                   current_id: int = None) -> dict:
     """
     Returns a decision dict:
     {
@@ -59,6 +60,7 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     """
     reasons = []
     action  = "TRANSFER"
+    existing_top = get_best_in_db(conn, name, exclude_id=current_id)
 
     # ── Rule 1: Perfect IV / nundo
     is_hundo = (iv_atk == 15 and iv_def == 15 and iv_sta == 15)
@@ -109,7 +111,6 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "KEEP"
 
     # ── Rule 6: Compare against existing best in DB
-    existing_top = get_best_in_db(conn, name)
     beats_existing = False
     new_gl = gl.get("rank")
     new_ul = ul.get("rank")
@@ -156,37 +157,35 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     }
 
 
-def get_best_in_db(conn, name: str, limit: int = 5) -> list[dict]:
-    """
-    Returns up to `limit` entries sorted by GL rank, plus the UL best
-    if it isn't already in that set. Callers can rely on [0] being the
-    best GL and check the full list for UL context.
-    """
-    gl_rows = conn.execute("""
+def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> list[dict]:
+    exclude_clause = "AND id != ?" if exclude_id is not None else ""
+    params_gl = (name, exclude_id, limit) if exclude_id else (name, limit)
+    params_ul = (name, exclude_id) if exclude_id else (name,)
+
+    gl_rows = conn.execute(f"""
         SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank, ul_rank, gl_best_cp, ul_best_cp
-        FROM pokemon WHERE name = ?
+        FROM pokemon WHERE name = ? {exclude_clause}
         ORDER BY
             CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
             iv_pct DESC
         LIMIT ?
-    """, (name, limit)).fetchall()
+    """, params_gl).fetchall()
 
-    ul_best = conn.execute("""
+    ul_best = conn.execute(f"""
         SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank, ul_rank, gl_best_cp, ul_best_cp
-        FROM pokemon WHERE name = ?
+        FROM pokemon WHERE name = ? {exclude_clause}
         ORDER BY
             CASE WHEN ul_rank IS NOT NULL THEN ul_rank ELSE 99999 END ASC,
             iv_pct DESC
         LIMIT 1
-    """, (name,)).fetchone()
+    """, params_ul).fetchone()
 
     seen_ids = {r["id"] for r in gl_rows}
     combined = [dict(r) for r in gl_rows]
     if ul_best and ul_best["id"] not in seen_ids:
         combined.append(dict(ul_best))
-
     return combined
 
 def find_displaced(conn, limit: int = 5) -> list[dict]:

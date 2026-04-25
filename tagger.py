@@ -42,9 +42,7 @@ def apply_ingame_tag(tap: TapController, ui: dict, window: dict, action: str):
         log.warning(f"  Tag position '{tag_key}' not in calibration — skipping tag")
         log.warning(f"  Run calibrate.py to set tag positions")
         return
-    menu = ui.get("menubutton", {"x": 0.842, "y": 0.933})
-    tap.tap( menu["x"], menu["y"])
-    time.sleep(TAG_MENU_SETTLE)
+
     # Step 1: Open ⋮ menu
     menu = ui.get("menubutton", {"x": 0.842, "y": 0.933})
     tap.tap( menu["x"], menu["y"])
