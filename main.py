@@ -9,13 +9,14 @@ import traceback
 import pytesseract
 
 from ocr_parser import (
-    resolvespeciesname,  # NEW — combines type-based ID + name OCR fallback
+    resolvespeciesname,
     parsecp, parsehp,
-    ocrregion, getrelativeregion, parseweight, parseheight, parseivbars,
+    ocrregion, getrelativeregion, parseivbars, parse_caught_date,
 )
 from pvp_rankings import all_league_rankings_with_evos
-from database import insert_evo_rankings
+from database import insert_evo_rankings, find_duplicate
 from evaluator import evaluate_catch, get_species_summary
+from tagger import apply_ingame_tag, tags_are_calibrated
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,14 +28,15 @@ log = logging.getLogger(__name__)
 
 def parseargs():
     p = argparse.ArgumentParser()
-    p.add_argument("--limit",   type=int, default=0)
-    p.add_argument("--debug",   action="store_true")
+    p.add_argument("--limit",  type=int, default=0)
+    p.add_argument("--debug",  action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--mode", choices=["catalog", "newcatch"], default="catalog",
+                   help="catalog: scan whole box. newcatch: appraise most recent catch only.")
     return p.parse_args()
 
 
 def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
-    """Capture repeatedly until bar readings stabilise. Returns the stable image."""
     prevbars = None
     previmg  = None
     deadline = time.time() + timeout
@@ -46,27 +48,19 @@ def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
             return previmg
         prevbars = bars
         previmg  = img
-    return previmg  # best effort on timeout
+    return previmg
 
 
 def tapnextarrow(tap, ui, cfg):
-    """Tap the right arrow on the appraisal screen to advance to the next Pokémon."""
-    # BUG FIX: use correct default y=0.80 (matches calibration.json default)
     arrowx = ui.get("nextarrow", {}).get("x", 0.93)
     arrowy = ui.get("nextarrow", {}).get("y", 0.80)
     tap.tap(arrowx, arrowy, base_delay=cfg["timing"].get("afterswipe", 1.2))
 
-def retryreadcp(capturefn, ui, cfg, max_attempts: int = 5):
-    """
-    Retry CP OCR up to max_attempts times, re-capturing the screen each time.
-    Returns (cp, img) — cp=0 and img=last_capture if all attempts fail.
-    Waits a short settle delay between retries to let the UI stabilise.
-    """
-    from ocr_parser import getrelativeregion, ocrregion, parsecp
 
+def retryreadcp(capturefn, ui, cfg, max_attempts=5):
     for attempt in range(1, max_attempts + 1):
         img = capturefn()
-        cp_img = getrelativeregion(img, ui["cp_region"])
+        cp_img  = getrelativeregion(img, ui["cp_region"])
         cp_text = ocrregion(cp_img)
         cp = parsecp(cp_text)
         if cp and cp > 0:
@@ -75,14 +69,11 @@ def retryreadcp(capturefn, ui, cfg, max_attempts: int = 5):
             return cp, img
         log.debug(f"  CP OCR attempt {attempt}/{max_attempts} failed (got {cp_text!r}), retrying…")
         time.sleep(0.4)
-
     log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for manual review")
     return 0, img
 
+
 def reloadcalibration(cfg):
-    """Hot-reload mutable calibration keys from disk, preserving mirrorregion."""
-    # BUG FIX: wrapped in try/except so a malformed calibration.json mid-run
-    # never crashes the bot; logs a warning and continues with the current values.
     try:
         with open("calibration.json") as f:
             fresh = json.load(f)
@@ -95,9 +86,8 @@ def reloadcalibration(cfg):
     except Exception as e:
         log.warning(f"calibration reload failed (using current values): {e}")
 
-# main.py — add to runbot()
+
 def already_cataloged(conn, cp, iv_atk, iv_def, iv_sta, name):
-    """Skip Pokémon already in DB with identical stats."""
     return conn.execute("""
         SELECT 1 FROM pokemon
         WHERE name=? AND cp=? AND iv_atk=? AND iv_def=? AND iv_sta=?
@@ -107,32 +97,35 @@ def already_cataloged(conn, cp, iv_atk, iv_def, iv_sta, name):
 
 def runbot(args):
     from config import loadconfig
-    from screen_capture import capture_window, get_mirror_window_bounds, get_relative_region
+    from screen_capture import capture_window, get_mirror_window_bounds
     from tap_controller import TapController
-    from ocr_parser import readappraisalbars, readappraisalbarsdebug
+    from ocr_parser import readappraisalbars
     from iv_calculator import compute_ivs
-    from pvp_rankings import all_league_rankings
     from database import get_db, insert_pokemon, get_stats
 
     cfg  = loadconfig()
     conn = get_db()
     tap  = TapController(cfg)
+    ui   = cfg["ui"]
 
-    ui = cfg["ui"]
     try:
         bounds = get_mirror_window_bounds()
-        cfg["mirrorregion"] = bounds
+        cfg["mirror_region"] = bounds
         tap.mirror = bounds
         log.info(f"iPhone Mirroring window bounds: {bounds}")
     except Exception as e:
         log.warning(f"Could not auto-detect window: {e}")
 
-    count  = 0
-    errors = 0
+    if not tags_are_calibrated(ui):
+        log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
+
+    visit_num = 0
+    count     = 0
+    errors    = 0
     starttime = time.time()
 
     log.info("=" * 50)
-    log.info("Pokémon GO IV Cataloger — Starting")
+    log.info(f"Pokémon GO IV Cataloger — Mode: {args.mode}")
     log.info(f"Limit: {args.limit or 'unlimited'}")
     log.info("=" * 50)
     log.info("Navigate to the Pokémon storage list now.")
@@ -140,153 +133,160 @@ def runbot(args):
         log.info(f"Starting in {i}s…")
         time.sleep(1)
 
-    # STEP 1: Open first Pokémon
+    # ── Open first Pokémon ────────────────────────────────────────────────────
     if not args.dry_run:
-        slot = ui["pokemon_slots"][0]
-        log.info(f"Tapping first Pokémon at {slot['x']:.3f}, {slot['y']:.3f}")
+        # newcatch: most recent = last slot; catalog: start from first slot
+        slot = ui["pokemon_slots"][-1] if args.mode == "newcatch" else ui["pokemon_slots"][0]
+        log.info(f"Tapping {'last' if args.mode == 'newcatch' else 'first'} "
+                 f"Pokémon at {slot['x']:.3f}, {slot['y']:.3f}")
         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
 
-    # STEP 2: Tap hamburger menu
-    if not args.dry_run:
-        log.info(f"Tapping menu button at {ui['menu_button']['x']:.3f}, {ui['menu_button']['y']:.3f}")
-        tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-                base_delay=cfg["timing"]["after_tap"])
-
-    # STEP 3: Tap APPRAISE
-    if not args.dry_run:
-        log.info(f"Tapping APPRAISE at {ui['appraise_button']['x']:.3f}, {ui['appraise_button']['y']:.3f}")
-        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=cfg["timing"]["after_appraise"])
-
-    # STEP 4: Dismiss trainer size commentary
-    if not args.dry_run:
-        log.info("Dismissing trainer size text…")
-        #tap.tap(0.50, 0.50, base_delay=cfg["timing"]["after_appraise"])
-        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=cfg["timing"]["after_appraise"])
+        # tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+        #         base_delay=cfg["timing"]["after_tap"])
+        # tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+        #         base_delay=cfg["timing"]["after_appraise"])
+        # # Dismiss trainer size commentary
+        # tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+        #         base_delay=cfg["timing"]["after_appraise"])
 
     log.info("In appraisal mode — starting main loop.")
 
     try:
         while True:
-            if args.limit and count >= args.limit:
+            if args.limit and visit_num >= args.limit:
                 log.info(f"Reached limit of {args.limit}. Stopping.")
                 break
 
-            # Hot-reload calibration (allows live adjustments without restarting)
             reloadcalibration(cfg)
             ui = cfg["ui"]
+            tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                    base_delay=cfg["timing"]["after_tap"])
+            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                    base_delay=cfg["timing"]["after_appraise"])
+            # Dismiss trainer size commentary
+            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                    base_delay=cfg["timing"]["after_appraise"])
 
-            # Wait for bar animation then capture stable image
             log.info("Waiting for bar animation to settle…")
             time.sleep(1.2)
             img = waitforbarsstableimage(
                 lambda: capture_window(cfg["mirror_region"]),
                 readappraisalbars, ui, cfg,
             )
-            if args.debug:
-                raw_crop = getrelativeregion(img, ui["name_region"])
-                raw_crop.save(f"screenshots/nameregion{count:03d}.png")
-                raw_text = pytesseract.image_to_string(
-                    raw_crop.convert("L"), config="--psm 6 --oem 3"
-                ).strip().replace("\n", " ")
-                log.info(f"  Name region raw OCR: {raw_text!r}")
+
             if img is None:
-                log.warning(f"#{count+1} Could not capture stable image. Skipping.")
+                log.warning(f"#{visit_num} Could not capture stable image. Skipping.")
                 errors += 1
-                if not args.dry_run:
+                if not args.dry_run and args.mode == "catalog":
                     tapnextarrow(tap, ui, cfg)
                 continue
+
+            raw_crop = getrelativeregion(img, ui["name_region"])
+            raw_text = pytesseract.image_to_string(
+                raw_crop.convert("L"), config="--psm 6 --oem 3"
+            ).strip().replace("\n", " ")
 
             if args.debug:
                 os.makedirs("screenshots", exist_ok=True)
                 img.save(f"screenshots/appraisal{count:03d}.png")
 
-            # OCR CP and HP
-            # OCR CP with retry loop
+                raw_crop.save(f"screenshots/nameregion{count:03d}.png")
+
+                log.info(f"  Name region raw OCR: {raw_text!r}")
+
+            # ── OCR CP ────────────────────────────────────────────────────────
             cp, img = retryreadcp(
                 lambda: capture_window(cfg["mirror_region"]),
-                ui, cfg,
-                max_attempts=5,
+                ui, cfg, max_attempts=5,
             )
 
-            # OCR HP (single attempt — HP failures are less impactful)
-            hp_img = get_relative_region(img, ui["hp_region"])
+            # ── OCR HP ────────────────────────────────────────────────────────
+            hp_img = getrelativeregion(img, ui["hp_region"])   # FIX: use getrelativeregion
             try:
                 hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
             except (ValueError, TypeError):
                 hp = 0
 
-
+            # ── Species name ──────────────────────────────────────────────────
             name = resolvespeciesname(img, ui, cp)
+            caught_date = parse_caught_date(raw_text)  # new
             if not name or name == "Unknown":
-                log.warning(
-                    f"#{count+1} Species ID failed (cp={cp} )"
-                    #f"weight={weight_text!r} height={height_text!r})"
-                )
+                log.warning(f"#{visit_num} Species ID failed (cp={cp}) — OCR returned no match")
                 name = "Unknown"
             if not cp:
-                log.warning(f"#{count+1} CP OCR failed for {name}, using 0")
+                log.warning(f"#{visit_num} CP OCR failed for {name}, using 0")
 
-            # Read IV bars
-            # if args.debug:
-            #     bars = readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160))
-            # else:
-            #     bars = readappraisalbars(img, ui, cfg.get("bar_fill_brightness", 160))
+
+            # ── IV bars ───────────────────────────────────────────────────────
             bar_strip = getrelativeregion(img, ui["bar_region"])
             if args.debug:
                 bar_strip.save(f"screenshots/barstrip{count:03d}.png")
             bars = parseivbars(bar_strip, args.debug)
 
-
-
             if not bars:
-                log.warning(f"#{count+1} Bar read failed for {name}. Skipping.")
+                log.warning(f"#{visit_num} Bar read failed for {name}. Skipping.")
                 errors += 1
-                if not args.dry_run:
+                if not args.dry_run and args.mode == "catalog":
                     tapnextarrow(tap, ui, cfg)
                 continue
 
-            # Normalise — handle both list (atk, def, sta) and dict {"atk":…}
-            if isinstance(bars, dict):
-                atk_iv, def_iv, sta_iv = bars["atk"], bars["def"], bars["sta"]
-            else:
-                atk_iv, def_iv, sta_iv = bars[0], bars[1], bars[2]
+            atk_iv, def_iv, sta_iv = (
+                (bars["atk"], bars["def"], bars["sta"])
+                if isinstance(bars, dict)
+                else (bars[0], bars[1], bars[2])
+            )
 
-            # Compute IVs and PvP rankings
-            iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
+            # ── Duplicate check ───────────────────────────────────────────────
+            visit_num += 1
+            if find_duplicate(conn, name, cp, atk_iv, def_iv, sta_iv, caught_date):
+                log.info(f"#{visit_num} {name} CP{cp} caught {caught_date} — already in DB, skipping.")
+                if not args.dry_run and args.mode == "catalog":
+                    tap.swipe_left()
+                continue
+
+            # ── Compute IVs + PvP ─────────────────────────────────────────────
+            iv_data  = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
+            iv_data["caught_date"] = caught_date
             iv_data["needs_review"] = (cp == 0)
-            pvp_all = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
-            pvp = pvp_all[name]  # base species rankings (used for DB + log as before)
-            pvp_evos = {k: v for k, v in pvp_all.items() if k != name}  # evos only
+
+            pvp_all  = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
+            pvp      = pvp_all[name]
+            pvp_evos = {k: v for k, v in pvp_all.items() if k != name}
             iv_data["pvp"] = pvp
 
-            # After insert_pokemon:
+            # ── Database insert ───────────────────────────────────────────────
             if not args.dry_run:
                 row_id = insert_pokemon(conn, iv_data)
                 if pvp_evos:
                     insert_evo_rankings(conn, row_id, pvp_evos)
 
-            gl    = pvp.get("great", {})
-            ul    = pvp.get("ultra", {})
-            iv_pct = iv_data.get("iv_pct", 0) or 0
-            iv_str = iv_data.get("iv_stars", "?")
-            barss = f"{atk_iv}/{def_iv}/{sta_iv}"
+            # ── Log line ──────────────────────────────────────────────────────
+            gl      = pvp.get("great", {})
+            ul      = pvp.get("ultra", {})
+            iv_pct  = iv_data.get("iv_pct", 0) or 0
+            iv_str  = iv_data.get("iv_stars", "?")
             gl_rank = gl.get("rank")
             ul_rank = ul.get("rank")
-            gl_str  = f"{gl_rank}" if gl_rank is not None else "-"
-            ul_str  = f"{ul_rank}" if ul_rank is not None else "-"
-
             review_flag = " ⚠ NEEDS REVIEW" if cp == 0 else ""
             log.info(
-                f"#{count + 1} {str(name):<15s} CP{str(cp):>4s} "
-                f"IVs={barss} {iv_pct:.1f}% {str(iv_str):<6s} "
-                f"GL={gl_str:<6s} UL={ul_str:<6s}{review_flag}"
+                f"#{visit_num} {str(name):<15s} CP{str(cp):>4s} "
+                f"IVs={atk_iv}/{def_iv}/{sta_iv} {iv_pct:.1f}% {str(iv_str):<6s} "
+                f"GL={gl_rank or '-':<6} UL={ul_rank or '-':<6}{review_flag}"
             )
             count += 1
 
+            # ── Evaluate + tag ────────────────────────────────────────────────
+            decision = evaluate_catch(conn, name, cp, atk_iv, def_iv, sta_iv,
+                                      iv_pct, pvp, pvp_evos)
+            apply_ingame_tag(tap, ui, cfg["mirror_region"], decision["action"]) # FIX: was 'window'
+
+            # ── Advance ───────────────────────────────────────────────────────
             if not args.dry_run:
-                tapnextarrow(tap, ui, cfg)
+                if args.mode == "catalog":
+                    # Swipe right on detail screen to go to next Pokémon
+                    tap.swipe_left()
+                else:
+                    break
                 tap.anti_bot_break()
 
     except KeyboardInterrupt:

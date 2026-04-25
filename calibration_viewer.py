@@ -60,6 +60,12 @@ REGION_DEFAULTS = {
     "height_region": {"x1": 0.55, "y1": 0.38, "x2": 0.90, "y2": 0.46},
 }
 
+TAG_DEFAULTS = {
+    "tag_option_btn": {"x": 0.85, "y": 0.92},
+    "tag_keep":       {"x": 0.25, "y": 0.70},
+    "tag_transfer":   {"x": 0.50, "y": 0.70},
+    "tag_review":     {"x": 0.75, "y": 0.70},
+}
 
 def load_config():
     with open(CONFIG_FILE) as f:
@@ -67,6 +73,9 @@ def load_config():
     # Inject missing regions so the viewer works even before calibration
     ui = cfg.setdefault("ui", {})
     for key, default in REGION_DEFAULTS.items():
+        if key not in ui:
+            ui[key] = default
+    for key, default in TAG_DEFAULTS.items():  # ← add this
         if key not in ui:
             ui[key] = default
     return cfg
@@ -188,6 +197,10 @@ class CalibrationApp:
             ("#FFCC00", "DEF bar (drag vert)"),
             ("#FF0088", "STA bar (drag vert)"),
             ("#00FFFF", "Bar X start/end (drag horiz)"),
+            ("#00FFFF", "Tag ⋮ (option button)"),
+            ("#00FF44", "Tag Keep"),
+            ("#FF3333", "Tag Transfer"),
+            ("#FF9900", "Tag Review"),
         ]
         lf = tk.Frame(panel, bg="#16213e")
         lf.pack(fill="x", padx=8, pady=4)
@@ -310,6 +323,10 @@ class CalibrationApp:
             ("menu_button",     "#FFFFFF", "Menu"),
             ("appraise_button", "#FFFF00", "Appraise"),
             ("back_button",     "#FF6600", "Back"),
+            ("tag_option_btn", "#00FFFF", "Tag ⋮"),  # ← new
+            ("tag_keep", "#00FF44", "Tag Keep"),  # ← new
+            ("tag_transfer", "#FF3333", "Tag Transfer"),  # ← new
+            ("tag_review", "#FF9900", "Tag Review"),  # ← new
         ]:
             p = ui.get(cfg_key, {})
             dot(p.get("x", 0.5), p.get("y", 0.5), color,
@@ -364,7 +381,8 @@ class CalibrationApp:
                                        xk, yk, cfg_key, "rect_corner"))
 
         # Points
-        for cfg_key in ("menu_button", "appraise_button", "back_button"):
+        for cfg_key in ("menu_button", "appraise_button", "back_button",
+                        "tag_option_btn", "tag_keep", "tag_transfer", "tag_review"):
             p = ui.get(cfg_key, {})
             hx = p.get("x", 0.5) * self.img_w * s
             hy = p.get("y", 0.5) * self.img_h * s

@@ -42,30 +42,32 @@ def apply_ingame_tag(tap: TapController, ui: dict, window: dict, action: str):
         log.warning(f"  Tag position '{tag_key}' not in calibration — skipping tag")
         log.warning(f"  Run calibrate.py to set tag positions")
         return
-
+    menu = ui.get("menubutton", {"x": 0.842, "y": 0.933})
+    tap.tap( menu["x"], menu["y"])
+    time.sleep(TAG_MENU_SETTLE)
     # Step 1: Open ⋮ menu
     menu = ui.get("menubutton", {"x": 0.842, "y": 0.933})
-    tap.tap(window, menu["x"], menu["y"])
+    tap.tap( menu["x"], menu["y"])
     time.sleep(TAG_MENU_SETTLE)
 
     # Step 2: Tap "Tag" option
-    tag_option = ui.get("tagoptionbtn")
+    tag_option = ui.get("tag_option_btn")
     if not tag_option:
-        log.warning("  'tagoptionbtn' not calibrated — skipping tag")
+        log.warning("  'tag_option_btn' not calibrated — skipping tag")
         # Dismiss the menu we just opened
-        tap.tap(window, 0.1, 0.5)
+        tap.tap( 0.1, 0.5)
         return
-    tap.tap(window, tag_option["x"], tag_option["y"])
+    tap.tap( tag_option["x"], tag_option["y"])
     time.sleep(TAG_MENU_SETTLE)
 
     # Step 3: Tap the specific tag
     tag_pos = ui[tag_key]
-    tap.tap(window, tag_pos["x"], tag_pos["y"])
+    tap.tap( tag_pos["x"], tag_pos["y"])
     time.sleep(TAG_SELECT_PAUSE)
 
     # Step 4: Dismiss tag sheet (tap outside / back)
     dismiss = ui.get("tag_dismiss", {"x": 0.500, "y": 0.850})
-    tap.tap(window, dismiss["x"], dismiss["y"])
+    tap.tap( dismiss["x"], dismiss["y"])
     time.sleep(TAG_DISMISS_PAUSE)
 
     icons = {"KEEP": "🟢", "TRANSFER": "🔴", "REVIEW": "🟡"}

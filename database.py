@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS pokemon (
     screenshot_path TEXT,
     notes           TEXT,
     flagged         INTEGER DEFAULT 0,
-    needs_review    INTEGER DEFAULT 0
+    needs_review    INTEGER DEFAULT 0,
+    caught_date TEXT
 );
 
 CREATE TABLE IF NOT EXISTS evo_rankings (
@@ -85,6 +86,8 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
     existing = {row[1] for row in conn.execute("PRAGMA table_info(pokemon)")}
     if "needs_review" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
+    if "caught_date" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN caught_date TEXT")
     conn.commit()
     return conn
 
@@ -107,6 +110,7 @@ def insert_pokemon(conn: sqlite3.Connection, data: dict) -> int:
         ml.get("stat_product"),ml.get("sp_pct_of_max"),
         data.get("screenshot_path"), data.get("notes"),
         int(bool(data.get("needs_review", False))),
+        data.get("caught_date"),
     )
     cur = conn.execute("""
         INSERT INTO pokemon (
@@ -115,8 +119,8 @@ def insert_pokemon(conn: sqlite3.Connection, data: dict) -> int:
             gl_rank, gl_percentile, gl_sp, gl_sp_pct, gl_best_level, gl_best_cp,
             ul_rank, ul_percentile, ul_sp, ul_sp_pct, ul_best_level, ul_best_cp,
             ml_sp, ml_sp_pct,
-            screenshot_path, notes, needs_review
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            screenshot_path, notes, needs_review, caught_date
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, row)
     conn.commit()
     return cur.lastrowid
@@ -193,3 +197,24 @@ def insert_evo_rankings(conn: sqlite3.Connection, pokemon_id: int, evo_rankings:
             ul.get("best_level"),   ul.get("best_cp"),
         ))
     conn.commit()
+
+def find_duplicate(conn, name, cp, iv_atk, iv_def, iv_sta, caught_date) -> bool:
+    # If we have a date, it's the strongest possible key
+    if caught_date:
+        row = conn.execute("""
+            SELECT id FROM pokemon
+            WHERE name = ? AND cp = ?
+              AND iv_atk = ? AND iv_def = ? AND iv_sta = ?
+              AND caught_date = ?
+            LIMIT 1
+        """, (name, cp, iv_atk, iv_def, iv_sta, caught_date)).fetchone()
+    else:
+        # Fallback: no date parsed, match on stats only (old behavior)
+        row = conn.execute("""
+            SELECT id FROM pokemon
+            WHERE name = ? AND cp = ?
+              AND iv_atk = ? AND iv_def = ? AND iv_sta = ?
+              AND caught_date IS NULL
+            LIMIT 1
+        """, (name, cp, iv_atk, iv_def, iv_sta)).fetchone()
+    return row is not None

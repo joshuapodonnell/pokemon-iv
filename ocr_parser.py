@@ -87,9 +87,14 @@ def parseheight(text: str) -> float | None:
     try:
         return float(m.group(1)) if m else None
     except (ValueError, TypeError):
-        return None
+        return None 
 
-
+def parse_caught_date(ocr_text: str) -> str | None:
+    """Extract catch date from 'This X was caught on M/D/YYYY' string."""
+    match = re.search(r'caught on (\d{1,2}/\d{1,2}/\d{4})', ocr_text)
+    if match:
+        return match.group(1)   # e.g. "4/18/2026"
+    return None
 # def parsetypes(text: str) -> set[str]:
 #     """Extract Pokémon types from OCR text like 'Fire Flying' or 'FireFlying'."""
 #     found = set()

@@ -95,6 +95,37 @@ class TapController:
         pyautogui.dragTo(end_x, end_y, duration=swipe_dur, button="left")
         _human_delay(self.timing["after_swipe"], self.rand["timing_sigma"])
 
+    def swipe_right(self):
+        """Swipe right on Pokémon detail screen to advance to next Pokémon."""
+        start_x = self.mirror["x"] + 0.25 * self.mirror["w"]
+        end_x = self.mirror["x"] + 0.75 * self.mirror["w"]
+        y = self.mirror["y"] + 0.50 * self.mirror["h"]
+
+        # Add jitter
+        start_x = _jitter(start_x, self.rand["tap_jitter_px"] * 2)
+        end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
+        y = _jitter(y, self.rand["tap_jitter_px"])
+
+        swipe_dur = random.uniform(0.18, 0.40)
+        pyautogui.moveTo(start_x, y, duration=random.uniform(0.05, 0.15))
+        pyautogui.dragTo(end_x, y, duration=swipe_dur, button="left")
+        _human_delay(self.timing["after_swipe"], self.rand["timing_sigma"])
+
+    def swipe_left(self):
+        """Swipe left on Pokémon detail screen to advance to next Pokémon."""
+        start_x = self.mirror["x"] + 0.75 * self.mirror["w"]
+        end_x = self.mirror["x"] + 0.25 * self.mirror["w"]
+        y = self.mirror["y"] + 0.50 * self.mirror["h"]
+
+        start_x = _jitter(start_x, self.rand["tap_jitter_px"] * 2)
+        end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
+        y = _jitter(y, self.rand["tap_jitter_px"])
+
+        swipe_dur = random.uniform(0.18, 0.40)
+        pyautogui.moveTo(start_x, y, duration=random.uniform(0.05, 0.15))
+        pyautogui.dragTo(end_x, y, duration=swipe_dur, button="left")
+        _human_delay(self.timing["after_swipe"], self.rand["timing_sigma"])
+
     def anti_bot_break(self):
         """Inject realistic pauses to avoid bot detection."""
         self._pokemon_count += 1

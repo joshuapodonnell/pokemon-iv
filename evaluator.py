@@ -10,8 +10,41 @@ KEEP_RULES = {
     "evo_gl_rank_max":  500,    # Keep if any evolution is GL rank ≤ 500
     "evo_ul_rank_max":  500,    # Keep if any evolution is UL rank ≤ 500
     "perfect_iv":       True,   # Always keep 100% IV
-    "lucky_trade_floor": 80.0,  # Keep if IV% ≥ 80 (lucky trade potential)
+    "zero_iv":            True,   # Always keep 0% IV
+   # "lucky_trade_floor": 80.0,  # Keep if IV% ≥ 80 (lucky trade potential)
 }
+KEEP_SPECIES = frozenset({
+        # Gen 1 Birds / Mewtwo / Mew
+        "Articuno", "Zapdos", "Moltres", "Mewtwo", "Mew",
+        # Gen 2
+        "Raikou", "Entei", "Suicune", "Lugia", "Ho-Oh", "Celebi",
+        # Gen 3
+        "Regirock", "Regice", "Registeel", "Latias", "Latios",
+        "Kyogre", "Groudon", "Rayquaza", "Jirachi", "Deoxys",
+        # Gen 4
+        "Uxie", "Mesprit", "Azelf", "Dialga", "Palkia", "Heatran",
+        "Regigigas", "Giratina", "Cresselia", "Phione", "Manaphy",
+        "Darkrai", "Shaymin", "Arceus",
+        # Gen 5
+        "Cobalion", "Terrakion", "Virizion", "Tornadus", "Thundurus",
+        "Reshiram", "Zekrom", "Landorus", "Kyurem", "Keldeo",
+        "Meloetta", "Genesect",
+        # Gen 6
+        "Xerneas", "Yveltal", "Zygarde", "Diancie", "Hoopa", "Volcanion",
+        # Gen 7 + Ultra Beasts
+        "Tapu Koko", "Tapu Lele", "Tapu Bulu", "Tapu Fini",
+        "Cosmog", "Cosmoem", "Solgaleo", "Lunala", "Necrozma",
+        "Magearna", "Marshadow", "Zeraora",
+        "Nihilego", "Buzzwole", "Pheromosa", "Xurkitree",
+        "Celesteela", "Kartana", "Guzzlord",
+        "Poipole", "Naganadel", "Stakataka", "Blacephalon",
+        # Gen 8
+        "Zacian", "Zamazenta", "Eternatus", "Kubfu", "Urshifu",
+        "Zarude", "Regieleki", "Regidrago", "Glastrier", "Spectrier", "Calyrex",
+        # Gen 9
+        "Wo-Chien", "Chien-Pao", "Ting-Lu", "Chi-Yu",
+        "Koraidon", "Miraidon", "Ogerpon", "Terapagos",
+    })
 
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                    pvp: dict, evo_rankings: dict) -> dict:
@@ -27,9 +60,14 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     reasons = []
     action  = "TRANSFER"
 
-    # ── Rule 1: Perfect IV
-    if iv_pct == 100.0:
-        reasons.append("100% IV — perfect")
+    # ── Rule 1: Perfect IV / nundo
+    is_hundo = (iv_atk == 15 and iv_def == 15 and iv_sta == 15)
+    is_nundo = (iv_atk == 0 and iv_def == 0 and iv_sta == 0)
+    if KEEP_RULES["perfect_iv"] and is_hundo:
+        reasons.append("100% IV — hundo")
+        action = "KEEP"
+    if KEEP_RULES["zero_iv"] and is_nundo:
+        reasons.append("0% IV — nundo")
         action = "KEEP"
 
     # ── Rule 2: High IV% (3★+)
@@ -37,10 +75,17 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
         reasons.append(f"{iv_pct}% IV (3★+)")
         action = "KEEP"
 
-    # ── Rule 3: Lucky trade floor
-    if iv_pct >= KEEP_RULES["lucky_trade_floor"] and action != "KEEP":
-        reasons.append(f"{iv_pct}% IV — lucky trade potential")
+
+
+    # ── Rule 2.5: Legendary / Mythical / Ultra Beast — always keep
+    if any(name.startswith(s) for s in KEEP_SPECIES):
+        reasons.append("Legendary/mythical/UB — always keep")
         action = "KEEP"
+
+    # # ── Rule 3: Lucky trade floor
+    # if iv_pct >= KEEP_RULES["lucky_trade_floor"] and action != "KEEP":
+    #     reasons.append(f"{iv_pct}% IV — lucky trade potential")
+    #     action = "KEEP"
 
     # ── Rule 4: PvP rank on base species
     gl = pvp.get("great", {})
@@ -64,40 +109,45 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "KEEP"
 
     # ── Rule 6: Compare against existing best in DB
-    existing_best = get_best_in_db(conn, name)
+    existing_top = get_best_in_db(conn, name)  # list of ≤5
     beats_existing = False
-    if existing_best:
-        # "Better" = lower GL rank (or UL rank if GL not applicable)
-        existing_gl = existing_best["gl_rank"]
-        new_gl      = gl.get("rank")
-        if new_gl and existing_gl and new_gl < existing_gl:
+
+    if is_hundo or is_nundo:
+        beats_existing = True
+    elif existing_top:
+        # [0] is already the best-ranked — ordered by gl_rank ASC
+        best = existing_top[0]
+        existing_gl = best["gl_rank"]
+        new_gl = gl.get("rank")
+        if new_gl and (existing_gl is None or new_gl < existing_gl):
             beats_existing = True
             reasons.append(
                 f"NEW BEST for {name}: GL #{new_gl} beats current best #{existing_gl}"
             )
             action = "KEEP"
     else:
-        # First of this species — always keep
         reasons.append(f"First {name} in collection")
         action = "KEEP"
         beats_existing = True
 
-    # ── Rule 7: Unknown species / OCR failure → flag for review
-    if name in ("Unknown", "") or cp == 0:
-        action = "REVIEW"
-        reasons.append("OCR uncertain — needs manual check")
+    # ── Rule 7: OCR failure → flag for review
+    if not is_hundo and not is_nundo:
+        if name in ("Unknown", "") or cp == 0:
+            action = "REVIEW"
+            reasons.append("OCR uncertain — needs manual check")
 
     return {
-        "action":         action,
-        "reasons":        reasons,
+        "action": action,
+        "reasons": reasons,
         "beats_existing": beats_existing,
-        "existing_best":  existing_best,
+        "existing_best": existing_top[0] if existing_top else None,  # caller compat
+        "existing_top": existing_top,  # full list
     }
 
 
-def get_best_in_db(conn, name: str) -> dict | None:
-    """Returns the best existing entry for a species by GL rank."""
-    row = conn.execute("""
+def get_best_in_db(conn, name: str, limit: int = 5) -> list[dict]:
+    """Returns the top N existing entries for a species by GL rank."""
+    rows = conn.execute("""
         SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank, ul_rank, gl_best_cp, ul_best_cp
         FROM pokemon
@@ -105,9 +155,9 @@ def get_best_in_db(conn, name: str) -> dict | None:
         ORDER BY
             CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
             iv_pct DESC
-        LIMIT 1
-    """, (name,)).fetchone()
-    return dict(row) if row else None
+        LIMIT ?
+    """, (name, limit)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def get_species_summary(conn, name: str) -> dict:
