@@ -15,7 +15,7 @@ from ocr_parser import (
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import insert_evo_rankings, find_duplicate
-from evaluator import evaluate_catch, get_species_summary
+from evaluator import evaluate_catch, find_displaced, flag_displaced
 from tagger import apply_ingame_tag, tags_are_calibrated
 
 logging.basicConfig(

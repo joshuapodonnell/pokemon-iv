@@ -109,21 +109,32 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "KEEP"
 
     # ── Rule 6: Compare against existing best in DB
-    existing_top = get_best_in_db(conn, name)  # list of ≤5
+    existing_top = get_best_in_db(conn, name)
     beats_existing = False
+    new_gl = gl.get("rank")
+    new_ul = ul.get("rank")
 
     if is_hundo or is_nundo:
         beats_existing = True
+        if not existing_top:
+            reasons.append(f"First {name} in collection")
     elif existing_top:
-        # [0] is already the best-ranked — ordered by gl_rank ASC
-        best = existing_top[0]
-        existing_gl = best["gl_rank"]
-        new_gl = gl.get("rank")
-        if new_gl and (existing_gl is None or new_gl < existing_gl):
+        existing_gl = existing_top[0]["gl_rank"]  # [0] is reliably the GL best
+        existing_ul = min(
+            (r["ul_rank"] for r in existing_top if r["ul_rank"] is not None),
+            default=None
+        )
+
+        beats_gl = new_gl and (existing_gl is None or new_gl < existing_gl)
+        beats_ul = new_ul and (existing_ul is None or new_ul < existing_ul)
+
+        if beats_gl:
             beats_existing = True
-            reasons.append(
-                f"NEW BEST for {name}: GL #{new_gl} beats current best #{existing_gl}"
-            )
+            reasons.append(f"NEW BEST GL for {name}: #{new_gl} beats #{existing_gl}")
+            action = "KEEP"
+        if beats_ul:
+            beats_existing = True
+            reasons.append(f"NEW BEST UL for {name}: #{new_ul} beats #{existing_ul}")
             action = "KEEP"
     else:
         reasons.append(f"First {name} in collection")
@@ -146,19 +157,64 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
 
 
 def get_best_in_db(conn, name: str, limit: int = 5) -> list[dict]:
-    """Returns the top N existing entries for a species by GL rank."""
-    rows = conn.execute("""
+    """
+    Returns up to `limit` entries sorted by GL rank, plus the UL best
+    if it isn't already in that set. Callers can rely on [0] being the
+    best GL and check the full list for UL context.
+    """
+    gl_rows = conn.execute("""
         SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank, ul_rank, gl_best_cp, ul_best_cp
-        FROM pokemon
-        WHERE name = ?
+        FROM pokemon WHERE name = ?
         ORDER BY
             CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
             iv_pct DESC
         LIMIT ?
     """, (name, limit)).fetchall()
+
+    ul_best = conn.execute("""
+        SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
+               gl_rank, ul_rank, gl_best_cp, ul_best_cp
+        FROM pokemon WHERE name = ?
+        ORDER BY
+            CASE WHEN ul_rank IS NOT NULL THEN ul_rank ELSE 99999 END ASC,
+            iv_pct DESC
+        LIMIT 1
+    """, (name,)).fetchone()
+
+    seen_ids = {r["id"] for r in gl_rows}
+    combined = [dict(r) for r in gl_rows]
+    if ul_best and ul_best["id"] not in seen_ids:
+        combined.append(dict(ul_best))
+
+    return combined
+
+def find_displaced(conn, limit: int = 5) -> list[dict]:
+    """
+    Returns all Pokémon that are no longer in the top `limit`
+    for their species by GL rank, and were previously tagged Keep.
+    """
+    rows = conn.execute(f"""
+        SELECT * FROM pokemon p
+        WHERE (
+            SELECT COUNT(*) FROM pokemon p2
+            WHERE p2.name = p.name
+            AND COALESCE(p2.gl_rank, 99999) < COALESCE(p.gl_rank, 99999)
+        ) >= {limit}
+        AND p.needs_review = 0
+    """).fetchall()
     return [dict(r) for r in rows]
 
+def flag_displaced(conn, limit: int = 5):
+    displaced = find_displaced(conn, limit)
+    ids = [r["id"] for r in displaced]
+    if ids:
+        conn.execute(
+            f"UPDATE pokemon SET needs_review = 1 WHERE id IN ({','.join('?'*len(ids))})",
+            ids
+        )
+        conn.commit()
+    return displaced
 
 def get_species_summary(conn, name: str) -> dict:
     """
