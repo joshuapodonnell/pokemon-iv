@@ -19,7 +19,7 @@ from ocr_parser import (
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
-from evaluator import evaluate_catch, find_displaced, flag_displaced
+from evaluator import evaluate_catch, find_displaced, flag_displaced, get_best_in_db
 from tagger import apply_ingame_tag, tags_are_calibrated
 
 logging.basicConfig(
@@ -249,139 +249,120 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
     reloadcalibration(cfg)
     ui = cfg["ui"]
 
-    # Open appraisal
-    tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-            base_delay=cfg["timing"]["after_tap"])
-    tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-            base_delay=cfg["timing"]["after_appraise"])
-    # Dismiss trainer size commentary
-    tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-            base_delay=cfg["timing"]["after_appraise"])
-
     try:
-        while True:
-            if args.limit and visit_num >= args.limit:
-                log.info(f"Reached limit of {args.limit}.")
-                break
+        for visit_num in range(1, args.limit + 1):
+            log.info(f"--- Scanning Pokemon {visit_num} ---")
 
-            reloadcalibration(cfg)
-            ui = cfg["ui"]
+            # 1. OCR BASE SCREEN (Bright screen, perfect contrast)
+            base_img = capture_window(cfg['mirror_region'])
 
-            time.sleep(1.2)
+            cp_crop = getrelativeregion(base_img, ui['cp_region'])
+            cp_text = ocrregion(cp_crop)
+            cp = parsecp(cp_text)
 
-            # ── DETERMINE LAYOUT FROM TEXT LINES ──────────────────────────────
-            img_initial = capture_window(cfg["mirror_region"])
-            raw_crop = getrelativeregion(img_initial, ui["name_region"])
+            hp_crop = getrelativeregion(base_img, ui['hp_region'])
+            hp = parsehp(ocrregion(hp_crop))
 
-            num_lines, raw_text, kept_lines = detect_description_lines(
-                raw_crop,
-                debug=args.debug,
-                debug_path=f"screenshots/nameregion_lines_{visit_num:03d}.png" if args.debug else None,
+            # Get form identifiers BEFORE the dark overlay hits!
+            type_text = ocrregion(getrelativeregion(base_img, ui['type_region']))
+            weight_text = ocrregion(getrelativeregion(base_img, ui['weight_region']))
+            height_text = ocrregion(getrelativeregion(base_img, ui['height_region']))
+
+            # 2. OPEN APPRAISAL
+            tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+            tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
+            tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
+            # Wait for the IV bars to settle
+            appraisal_img = waitforbarsstableimage(
+                lambda: capture_window(cfg['mirror_region']),  # ← Wrap it in a lambda
+                readappraisalbars,
+                ui,
+                cfg
             )
+            # 3. OCR NAME & IVS (Bypasses nicknames)
+            name_crop = getrelativeregion(appraisal_img, ui['name_region'])
+            raw_name_text = pytesseract.image_to_string(name_crop, config='--psm 6 --oem 3').strip()
 
-            if args.debug:
-                os.makedirs("screenshots", exist_ok=True)
-                img_initial.save(f"screenshots/appraisal{visit_num:03d}.png")
-                raw_crop.save(f"screenshots/nameregion{visit_num:03d}.png")
-                log.info(f"  Name region OCR: {raw_text!r}")
-                log.info(f"  Detected physical lines: {num_lines}")
+            # Resolve Galarian/Alolan using the bright text we grabbed in Step 1
+            name = resolvespeciesname(raw_name_text, type_text, weight_text, height_text)
 
-            # ── WAIT FOR BARS & READ ──────────────────────────────────────────
-            read_fn = readappraisalbarsdebug if args.debug else readappraisalbars
+            bar_strip = getrelativeregion(appraisal_img, ui['bar_region'])
+            bars = parseivbars(bar_strip)
+            atk_iv, def_iv, sta_iv = bars
 
-            img = waitforbarsstableimage(
-                lambda: capture_window(cfg["mirror_region"]),
-                lambda im, u, b: read_fn(im, u, b, lines=num_lines),
-                ui, cfg,
-            )
+            # 4. DATA VALIDATION (The Sanity Check)
+            # Reject physically impossible CPs, or CPs below the absolute game minimum (10)
+            cp_valid = True
+            if cp > 5500 or cp < 10:
+                log.warning(f"Impossible CP read: {cp}. Forcing REVIEW tag.")
+                cp_valid = False
 
-            if img is None:
-                log.warning(f"#{visit_num + 1} Could not capture stable image. Skipping.")
-                errors += 1
-                if not args.dry_run:
-                    tapnextarrow(tap, ui, cfg)
-                continue
+            # 5. INSERT & EVALUATE
+            iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
 
-            cp, img = retryreadcp(
-                lambda: capture_window(cfg["mirror_region"]),
-                ui, cfg, max_attempts=5,
-            )
+            all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
 
-            hp_img = getrelativeregion(img, ui["hp_region"])
-            try:
-                hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
-            except (ValueError, TypeError):
-                hp = 0
+            pvp = all_rankings.get(name, {
+                "great": {},
+                "ultra": {},
+            })
 
-            name = resolvespeciesname(img, ui, cp)
-            caught_date = parse_caught_date(raw_text)
-            if not name or name == "Unknown":
-                log.warning(f"#{visit_num + 1} Species ID failed (cp={cp})")
-                name = "Unknown"
-
-            # Dynamic bar strip extraction for legacy parseivbars
-            offset = (num_lines - 2) * 0.027
-            dynamic_bar_region = {
-                "x1": ui["bar_region"]["x1"],
-                "y1": ui["bar_region"]["y1"] - offset,
-                "x2": ui["bar_region"]["x2"],
-                "y2": ui["bar_region"]["y2"] - offset,
+            evo_rankings = {
+                species_name: leagues
+                for species_name, leagues in all_rankings.items()
+                if species_name != name
             }
-            bar_strip = getrelativeregion(img, dynamic_bar_region)
 
-            if args.debug:
-                bar_strip.save(f"screenshots/barstrip{visit_num:03d}.png")
+            poke_id = insert_pokemon(conn, iv_data)
+            insert_evo_rankings(conn, poke_id, evo_rankings)
 
-            bars = parseivbars(bar_strip, args.debug)
+            if not cp_valid:
+                decision = {
+                    "action": "REVIEW",
+                    "reasons": ["Impossible CP read"],
+                    "beats_existing": False,
+                    "existing_best": None,
+                    "existing_top": [],
+                }
+            else:
+                decision = evaluate_catch(
+                    conn,
+                    name,
+                    cp,
+                    atk_iv,
+                    def_iv,
+                    sta_iv,
+                    iv_data["iv_pct"],
+                    pvp,
+                    evo_rankings,
+                    current_id=poke_id,
+                )
 
-            if not bars:
-                log.warning(f"#{visit_num + 1} Bar read failed for {name}. Skipping.")
-                errors += 1
-                if not args.dry_run:
-                    tapnextarrow(tap, ui, cfg)
-                continue
+            action = decision["action"]
+            reasons = decision["reasons"]
 
-            atk_iv, def_iv, sta_iv = (
-                (bars["atk"], bars["def"], bars["sta"])
-                if isinstance(bars, dict)
-                else (bars[0], bars[1], bars[2])
-            )
+            log.info(f"Result: {action} ({reasons})")
 
-            visit_num += 1
+            # 6. CLOSE APPRAISAL (Tap screen center to dismiss leader)
+            tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
 
-            if find_duplicate(conn, name, cp, atk_iv, def_iv, sta_iv, caught_date):
-                log.info(f"#{visit_num} {name} CP{cp} — already in DB, skipping.")
-                if not args.dry_run:
-                    tap.swipe_left()
-                continue
+            # 7. APPLY TAG IN-GAME
+            # Open Menu -> Tap Tag -> Tap appropriate color -> Close Menu
+            tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+            tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
 
-            iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
-            iv_data["caught_date"] = caught_date
-            iv_data["needs_review"] = (cp < 10 or not name or name == "Unknown")
+            if action == "KEEP":
+                tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])
+            elif action == "TRANSFER":
+                tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
+            else:
+                tap.tap(ui['tag_review']['x'], ui['tag_review']['y'])
 
-            pvp_all = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
-            pvp = pvp_all[name]
-            pvp_evos = {k: v for k, v in pvp_all.items() if k != name}
-            iv_data["pvp"] = pvp
+            # Tap upper area to close the tag slide-up menu
+            tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
 
-            if not args.dry_run:
-                row_id = insert_pokemon(conn, iv_data)
-                if pvp_evos:
-                    insert_evo_rankings(conn, row_id, pvp_evos)
-                session_ids.append(row_id)
-
-            gl = pvp.get("great", {})
-            ul = pvp.get("ultra", {})
-            iv_pct = iv_data.get("iv_pct", 0) or 0
-            log.info(
-                f"#{visit_num} {name:<15s} CP{str(cp):>4s} "
-                f"IVs={atk_iv}/{def_iv}/{sta_iv} {iv_pct:.1f}% {iv_data.get('iv_stars', '?'):<6s} "
-                f"GL={gl.get('rank') or '-':<6} UL={ul.get('rank') or '-'}"
-            )
-
-            if not args.dry_run:
-                tap.swipe_left()
-                tap.anti_bot_break()
+            # 8. SWIPE TO NEXT POKEMON
+            tap.swipe_left() # Or swipe_left(), returning you to the bright base screen!
 
             if args.mode == "newcatch":
                 break
@@ -493,6 +474,48 @@ def pass2_tag(args, cfg, conn, tap, session_ids):
     log.info(f"Pass 2 complete: {tagged} Pokémon tagged.")
 
 
+def micro_pass_2_cleanup(conn, tap, ui, cfg):
+    # Fetch only the Pokémon that got outranked during Pass 1
+    demoted_rows = conn.execute("SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1").fetchall()
+
+    if not demoted_rows:
+        log.info("No Pokémon were demoted. Pass 2 skipped! You are done.")
+        return
+
+    log.info(f"Micro Pass 2: Cleaning up {len(demoted_rows)} demoted Pokémon...")
+
+    # Assume the bot is backed out to the Pokémon storage grid screen
+    for p in demoted_rows:
+        log.info(f"Demoting {p['name']} (CP {p['cp']}, HP {p['hp']}) to TRANSFER...")
+
+        # 1. Tap the Search Icon
+        tap.tap(ui['search_icon']['x'], ui['search_icon']['y'], base_delay=cfg['timing']['after_tap'])
+
+        # 2. Type exact stats to find it instantly
+        search_str = f"{p['name']}&cp{p['cp']}&hp{p['hp']}"
+        tap.type_text(search_str)
+        time.sleep(1.5)  # Wait for results to filter
+
+        # 3. Tap the first (and only) result in the grid
+        tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'], base_delay=cfg['timing']['aftertap'])
+
+        # 4. Swap the tag from KEEP to TRANSFER
+        tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+        tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
+
+        tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])  # Tap to REMOVE keep tag
+        tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])  # Tap to ADD transfer tag
+
+        tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])  # Close tag menu
+
+        # 5. Back out to the search grid and clear the search
+        # bottom of page
+        tap.tap(ui['back_button']['x'], ui['back_button']['y'], base_delay=cfg['timing']['after_tap'])
+        # top left
+        tap.tap(ui['clear_search']['x'], ui['clear_search']['y'], base_delay=cfg['timing']['after_tap'])
+
+    log.info("Micro Pass 2 Complete.")
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def runbot(args):
@@ -531,7 +554,8 @@ def runbot(args):
             report_displaced(conn)
 
         if not args.dry_run and tags_are_calibrated(cfg["ui"]):
-            pass2_tag(args, cfg, conn, tap, session_ids)
+            #pass2_tag(args, cfg, conn, tap, session_ids)
+            micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
         else:

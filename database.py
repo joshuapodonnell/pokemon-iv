@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS pokemon (
     notes           TEXT,
     flagged         INTEGER DEFAULT 0,
     needs_review    INTEGER DEFAULT 0,
-    caught_date TEXT,
+    review_reason   TEXT,
+    caught_date     TEXT,
     tag             TEXT DEFAULT NULL
 );
 
@@ -91,6 +92,11 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute("ALTER TABLE pokemon ADD COLUMN caught_date TEXT")
     if "tag" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN tag TEXT DEFAULT NULL")
+    if "review_reason" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN review_reason TEXT")
+    if "demoted" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN demoted INTEGER DEFAULT 0")
+    conn.commit()
     conn.commit()
     return conn
 

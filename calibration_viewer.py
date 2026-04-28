@@ -34,6 +34,7 @@ HANDLES = [
     ("Menu Button",    "#FFFFFF", "ui.menu_button",           "point"),
     ("Appraise Btn",   "#FFFF00", "ui.appraise_button",       "point"),
     ("Back Button",    "#FF6600", "ui.back_button",           "point"),
+    ("Clear Search",    "#FF6600", "ui.clear_search",           "point"),
     ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",       "point_slot"),
     ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",       "point_slot"),
     ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",       "point_slot"),
@@ -184,6 +185,7 @@ class CalibrationApp:
                 ("#FFFFFF", "Menu button"),
                 ("#FFFF00", "Appraise button"),
                 ("#FF6600", "Back button"),
+                ("#FF6600", "Clear Search"),
             ],
             "Slots": [
                 ("#00FF88", "Pokémon slots"),
@@ -455,6 +457,7 @@ class CalibrationApp:
             ("menu_button",     "#FFFFFF", "Menu"),
             ("appraise_button", "#FFFF00", "Appraise"),
             ("back_button",     "#FF6600", "Back"),
+            ("clear_search", "#FF6600", "Clear"),
             ("tag_option_btn", "#00FFFF", "Tag ⋮"),
             ("tag_keep", "#00FF44", "Tag Keep"),
             ("tag_transfer", "#FF3333", "Tag Transfer"),
@@ -513,7 +516,7 @@ class CalibrationApp:
                                        xk, yk, cfg_key, "rect_corner"))
 
         # Points
-        for cfg_key in ("menu_button", "appraise_button", "back_button",
+        for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search",
                         "tag_option_btn", "tag_keep", "tag_transfer", "tag_review"):
             p = ui.get(cfg_key, {})
             hx = p.get("x", 0.5) * self.img_w * s

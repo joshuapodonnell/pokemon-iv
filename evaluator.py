@@ -118,6 +118,18 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "REVIEW"
             reasons.append(f"OCR uncertain — needs manual check (CP < {KEEP_RULES['min_trusted_cp']} or unknown name)")
 
+        # NEW DEMOTION LOGIC — mark previously kept Pokémon for review if beaten
+    if action == "KEEP" and beats_existing and existing_top:
+        for old_poke in existing_top:
+            # Only demote if it was previously tagged KEEP
+            if old_poke.get('tag') == 'KEEP':
+                conn.execute("""
+                       UPDATE pokemon 
+                       SET needs_review = 1, 
+                           review_reason = 'demoted_by_better'
+                       WHERE id = ? AND tag = 'KEEP'
+                   """, (old_poke['id'],))
+                reasons.append(f"Demoted {old_poke['name']} #{old_poke['id']} from top ranks")
     return {
         "action": action,
         "reasons": reasons,
