@@ -13,7 +13,7 @@ if LOOKUPPATH.exists():
         SPECIESDB = dict(json.load(f))
 else:
     SPECIESDB = {}
-    log.warning("specieslookup.json not found — run buildspecieslookup.py first")
+    log.warning("species_lookup.json not found — run build_species_lookup.py first")
 
 ALLTYPES = [
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting",
@@ -30,7 +30,7 @@ def ocrregion(img: Image.Image, upscale: bool = False) -> str:
     """Run Tesseract OCR on a PIL image crop. Optionally upscale for small regions."""
     if upscale:
         w, h = img.size
-        img = img.resize((w * 3, h * 3), Image.LANCZOS)
+        img_rgb = img.convert("RGB").resize((w, h), Image.Resampling.LANCZOS)
     text = pytesseract.image_to_string(img, config="--psm 7").strip()
     return text
 
@@ -87,82 +87,15 @@ def parseheight(text: str) -> float | None:
     try:
         return float(m.group(1)) if m else None
     except (ValueError, TypeError):
-        return None 
+        return None
+
 
 def parse_caught_date(ocr_text: str) -> str | None:
     """Extract catch date from 'This X was caught on M/D/YYYY' string."""
     match = re.search(r'caught on (\d{1,2}/\d{1,2}/\d{4})', ocr_text)
     if match:
-        return match.group(1)   # e.g. "4/18/2026"
+        return match.group(1)  # e.g. "4/18/2026"
     return None
-# def parsetypes(text: str) -> set[str]:
-#     """Extract Pokémon types from OCR text like 'Fire Flying' or 'FireFlying'."""
-#     found = set()
-#     for t in ALLTYPES:
-#         if t.lower() in text.lower():
-#             found.add(t)
-#     return found
-
-
-# ---------------------------------------------------------------------------
-# Species identification (nickname-proof)
-# ---------------------------------------------------------------------------
-
-# def identifyspecies(weighttext: str, heighttext: str = "",
-#                     cp: int = 0) -> str:
-#     """Identify Pokémon species from type/weight/height OCR text.
-#
-#     Fully nickname-proof — never reads the display name.
-#     Returns species name string, or 'Unknown' if unresolvable.
-#     """
-#     if not SPECIESDB:
-#         return "Unknown"
-#
-#     #foundtypes = parsetypes(typetext)
-#     weight = parseweight(weighttext)
-#     #
-#     # if not foundtypes:
-#     #     log.debug(f"identifyspecies: no types parsed from {typetext!r}")
-#     #     return "Unknown"
-#
-#     # # 1. Filter by exact type match
-#     # candidates = [name for name, data in SPECIESDB.items()
-#     #               if set(data["types"]) == foundtypes]
-#     #
-#     # if not candidates:
-#     #     log.debug(f"identifyspecies: no species match for types {foundtypes}")
-#     #     return "Unknown"
-#     # if len(candidates) == 1:
-#     #     return candidates[0]
-#
-#     # 2. Narrow by weight (±12% tolerance — covers GO's XS/XL size variants)
-#     if weight is not None:
-#         weightfiltered = [
-#             name for name in candidates
-#             if SPECIESDB[name].get("weightkg", 0) > 0
-#             and abs(SPECIESDB[name]["weightkg"] - weight) / SPECIESDB[name]["weightkg"] <= 0.12
-#         ]
-#         if weightfiltered:
-#             candidates = weightfiltered
-#     if len(candidates) == 1:
-#         return candidates[0]
-#
-#     # 3. Narrow by height (±12% tolerance)
-#     height = parseheight(heighttext)
-#     if height is not None:
-#         heightfiltered = [
-#             name for name in candidates
-#             if SPECIESDB[name].get("heightm") is not None
-#             and SPECIESDB[name]["heightm"] > 0
-#             and abs(SPECIESDB[name]["heightm"] - height) / SPECIESDB[name]["heightm"] <= 0.12
-#         ]
-#         if heightfiltered:
-#             candidates = heightfiltered
-#     if len(candidates) == 1:
-#         return candidates[0]
-#
-#     # 4. Return first candidate (best-effort)
-#     return candidates[0]
 
 
 # ---------------------------------------------------------------------------
@@ -176,17 +109,13 @@ def ocrnameregion(img, ui):
 
     crop = getrelativeregion(img, region)
     W, H = crop.size
-    crop = crop.resize((W * 3, H * 3), Image.LANCZOS)
+    crop = crop.resize((W * 3, H * 3), Image.Resampling.LANCZOS)
 
-    # Don't binarise — the teal text is close to the threshold and gets destroyed.
-    # Greyscale + mild contrast boost is enough for Tesseract on this font.
     crop = crop.convert("L")
     from PIL import ImageEnhance
     crop = ImageEnhance.Contrast(crop).enhance(2.0)
 
-    # PSM 6 = block of text (two lines); no whitelist so teal text isn't mangled
     text = pytesseract.image_to_string(crop, config="--psm 6 --oem 3").strip()
-    # Collapse newlines so the regex works across the two-line caption
     text = text.replace("\n", " ")
 
     m = re.search(r"\bThis\s+(.+?)\s+was\b", text, re.IGNORECASE)
@@ -198,47 +127,33 @@ def ocrnameregion(img, ui):
     log.warning(f"ocrnameregion: pattern not found in: {text!r}")
     return ""
 
+
 def resolvespeciesname(
-    img: Image.Image,
-    ui: dict,
-    cp: int,
+        img: Image.Image,
+        ui: dict,
+        cp: int,
 ) -> str:
-    """Combine type/weight/height species ID with direct name OCR for best accuracy.
+    """Combine type/weight/height species ID with direct name OCR for best accuracy."""
 
-    Strategy:
-      1. Try species ID via types + weight + height (nickname-proof).
-      2. If that fails or returns 'Unknown', fall back to name-label OCR.
-      3. If the OCR name fuzzy-matches a known species, use it.
-      4. Return 'Unknown' only if everything fails.
-    """
-    # species = identifyspecies(weighttext, heighttext, cp)
-    # if species and species != "Unknown":
-    #     return species
-
-    # Fallback: OCR the name label visible below the IV bars
     ocr_name = ocrnameregion(img, ui)
     if not ocr_name:
         return "Unknown"
 
-    # Exact match first (case-insensitive)
     ocr_lower = ocr_name.lower()
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
             log.debug(f"resolvespeciesname: name OCR exact match → {known}")
             return known
 
-    # Prefix match (handles truncated names like "Charizard" vs "CharizardMega …")
     matches = [k for k in SPECIESDB if k.lower().startswith(ocr_lower)]
     if len(matches) == 1:
         log.debug(f"resolvespeciesname: name OCR prefix match → {matches[0]}")
         return matches[0]
     if matches:
-        # Prefer the shortest (base form)
         best = min(matches, key=len)
         log.debug(f"resolvespeciesname: name OCR best prefix match → {best}")
         return best
 
-    # Return the raw OCR name as a last resort so the record is still saved
     log.debug(f"resolvespeciesname: using raw OCR name {ocr_name!r}")
     return ocr_name.title()
 
@@ -247,27 +162,28 @@ def resolvespeciesname(
 # IV bar parsing  (FIXED)
 # ---------------------------------------------------------------------------
 
-def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> tuple | None:
-    """Read ATK/DEF/STA IVs (0–15) from a full appraisal screenshot.
-
-    Uses colour detection (not brightness) to distinguish filled bar
-    segments from the white card background and grey empty segments:
-      - ATK / STA bars are orange: R>190, 110<G<190, B<100
-      - DEF bar is pink/red:       R>155, G<145, R > G+25
-
-    Samples each segment at its centre ±3px vertically (majority vote)
-    to survive the thin inter-segment gap lines.
-    """
+def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, lines: int = 2) -> tuple | None:
+    """Read ATK/DEF/STA IVs (0–15) from a full appraisal screenshot dynamically."""
     try:
         W, H = img.size
         bar_segments = ui.get("bar_segments", 15)
         x_start = ui.get("bar_x_start", 0.141)
-        x_end   = ui.get("bar_x_end",   0.457)
+        x_end = ui.get("bar_x_end", 0.457)
+
+        # Dynamic parameter retrieval based on line count
+        if lines == 2:
+            atk_y = ui.get("atk_bar_y", 0.774)
+            def_y = ui.get("def_bar_y", 0.815)
+            sta_y = ui.get("sta_bar_y", 0.857)
+        else:
+            atk_y = ui.get(f"atk_bar_y_{lines}lines", ui.get("atk_bar_y", 0.774))
+            def_y = ui.get(f"def_bar_y_{lines}lines", ui.get("def_bar_y", 0.815))
+            sta_y = ui.get(f"sta_bar_y_{lines}lines", ui.get("sta_bar_y", 0.857))
 
         bar_ys = {
-            "atk": (ui.get("atk_bar_y", 0.773), "orange"),
-            "def": (ui.get("def_bar_y", 0.816), "pink"),
-            "sta": (ui.get("sta_bar_y", 0.857), "orange"),
+            "atk": (atk_y, "orange"),
+            "def": (def_y, "pink"),
+            "sta": (sta_y, "orange"),
         }
 
         results = {}
@@ -277,7 +193,6 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> t
             for seg in range(bar_segments):
                 xfrac = x_start + (x_end - x_start) * (seg + 0.5) / bar_segments
                 px = int(xfrac * W)
-                # Vote across 3 vertical samples to survive segment gap lines
                 votes = 0
                 for dy in (-3, 0, 3):
                     sample_y = max(0, min(py + dy, H - 1))
@@ -298,31 +213,50 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float) -> t
         log.warning(f"readappraisalbars failed: {e}")
         return None
 
-def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float) -> tuple | None:
+
+def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float, lines: int = 2) -> tuple | None:
     """Debug version — saves an annotated bar strip to debugbars.png, then delegates."""
     try:
         W, H = img.size
-        x_start   = ui.get("bar_x_start", 0.141)
-        x_end     = ui.get("bar_x_end",   0.457)
-        atk_bar_y = ui.get("atk_bar_y",   0.773)
-        sta_bar_y = ui.get("sta_bar_y",   0.857)
+        x_start = ui.get("bar_x_start", 0.141)
+        x_end = ui.get("bar_x_end", 0.457)
+
+        # Dynamic parameter retrieval based on line count
+        if lines == 2:
+            atk_bar_y = ui.get("atk_bar_y", 0.773)
+            sta_bar_y = ui.get("sta_bar_y", 0.857)
+            def_bar_y = ui.get("def_bar_y", 0.816)
+        else:
+            atk_bar_y = ui.get(f"atk_bar_y_{lines}lines", ui.get("atk_bar_y", 0.773))
+            sta_bar_y = ui.get(f"sta_bar_y_{lines}lines", ui.get("sta_bar_y", 0.857))
+            def_bar_y = ui.get(f"def_bar_y_{lines}lines", ui.get("def_bar_y", 0.816))
 
         x1 = int(x_start * W)
-        x2 = int(x_end   * W)
-        y1 = int((atk_bar_y - 0.025) * H)
-        y2 = int((sta_bar_y + 0.025) * H)
+        x2 = int(x_end * W)
+        # Pad the crop area slightly so we can see the context around the bars
+        y1 = int((atk_bar_y - 0.035) * H)
+        y2 = int((sta_bar_y + 0.035) * H)
         barstrip = img.crop((x1, y1, x2, y2))
 
-        # Upscale 3× so the saved image is readable at a glance
+        # Save the exact strip we are analyzing for debug purposes
         sw, sh = barstrip.size
         barstrip = barstrip.resize((sw * 3, sh * 3), Image.LANCZOS)
-        barstrip.save("debugbars.png")
-        # Log the actual pixel colour at each bar's centre for calibration
+
+        # Draw on the strip where the horizontal line checks are occurring
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(barstrip)
+        for stat_y in [atk_bar_y, def_bar_y, sta_bar_y]:
+            # Convert the absolute yrel to the relative coordinate inside the cropped strip
+            rel_y = (stat_y * H - y1) * 3
+            draw.line((0, rel_y, sw * 3, rel_y), fill="cyan", width=2)
+
+        barstrip.save(f"screenshots/debugbars_lines{lines}.png")
+
         W2, H2 = img.size
         for stat, (yrel, color) in [
-            ("ATK", (ui.get("atk_bar_y", 0.773), "orange")),
-            ("DEF", (ui.get("def_bar_y", 0.816), "pink")),
-            ("STA", (ui.get("sta_bar_y", 0.857), "orange")),
+            ("ATK", (atk_bar_y, "orange")),
+            ("DEF", (def_bar_y, "pink")),
+            ("STA", (sta_bar_y, "orange")),
         ]:
             py = int(yrel * H2)
             sample_px = []
@@ -332,22 +266,20 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float)
                 r, g, b = img.getpixel((px, py))[:3]
                 sample_px.append(f"({r},{g},{b})")
             log.debug(f"  {stat} y={py}: {' '.join(sample_px)}")
-        log.info("Debug bar image saved to debugbars.png")
+        log.info(f"Debug bar image saved to screenshots/debugbars_lines{lines}.png")
 
-        return readappraisalbars(img, ui, barfillbrightness)
+        return readappraisalbars(img, ui, barfillbrightness, lines)
 
     except Exception as e:
         log.warning(f"readappraisalbarsdebug failed: {e}")
         return None
 
-
 def parseivbars(barimg: Image.Image, debug: bool = False):
     W, H = barimg.size
 
-    # Bar centres in the 240x174 barstrip crop
     Y_ATK = 0.155
     Y_DEF = 0.483
-    Y_HP  = 0.816
+    Y_HP = 0.816
 
     def _classify(r, g, b):
         if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
@@ -365,14 +297,12 @@ def parseivbars(barimg: Image.Image, debug: bool = False):
         col = []
         for x in range(W):
             votes = {'filled': 0, 'empty': 0, 'outside': 0}
-            for dy in (-3, 0, 3):           # tighter ±3px — avoids smearing the 3px gap
+            for dy in (-3, 0, 3):
                 sy = max(0, min(y + dy, H - 1))
                 r, g, b = barimg.getpixel((x, sy))[:3]
                 votes[_classify(r, g, b)] += 1
             col.append(max(votes, key=votes.get))
 
-        # Find the first 'outside' → bar transition to locate the bar start
-        # Then find each group as a run of (filled|empty), separated by >=2px outside
         groups = []
         in_group = False
         gstart = 0
@@ -380,7 +310,7 @@ def parseivbars(barimg: Image.Image, debug: bool = False):
         for x, cls in enumerate(col):
             if cls == 'outside':
                 outside_run += 1
-                if in_group and outside_run >= 2:   # ← 2px is enough given tighter vote window
+                if in_group and outside_run >= 2:
                     groups.append((gstart, x - outside_run))
                     in_group = False
             else:
@@ -394,15 +324,12 @@ def parseivbars(barimg: Image.Image, debug: bool = False):
         if not groups:
             return 0
 
-        # Expected group width = width of group1 (always cleanly detected)
         gw = groups[0][1] - groups[0][0] + 1
 
-        # Split any merged group wider than 1.4× expected width
         final = []
         for gs, ge in groups:
             w = ge - gs + 1
             if w > gw * 1.4:
-                # Split into chunks of gw, skip inter-chunk outside pixels
                 x = gs
                 while x <= ge:
                     end = min(x + gw - 1, ge)
@@ -413,10 +340,9 @@ def parseivbars(barimg: Image.Image, debug: bool = False):
             else:
                 final.append((gs, ge))
 
-        # Score: filled fraction × 5 per group, sum all 3 groups
         total = 0
-        for gs, ge in final[:3]:          # only use first 3 groups
-            chunk = col[gs:ge+1]
+        for gs, ge in final[:3]:
+            chunk = col[gs:ge + 1]
             fp = sum(1 for c in chunk if c == 'filled')
             frac = fp / len(chunk) if chunk else 0
             total += round(frac * 5)

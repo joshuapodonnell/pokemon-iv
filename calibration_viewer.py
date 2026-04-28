@@ -10,6 +10,11 @@ import json
 
 CONFIG_FILE = "calibration.json"
 
+try:
+    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
+except AttributeError:
+    RESAMPLE_LANCZOS = Image.LANCZOS
+
 # All editable handles: (label, color, config_path, handle_type)
 HANDLES = [
     ("CP x1/y1",       "#FF4444", "ui.cp_region.x1y1",       "rect_tl"),
@@ -34,13 +39,37 @@ HANDLES = [
     ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",       "point_slot"),
 ]
 
-BAR_KEYS = [
-    ("ATK Bar Y",   "atk_bar_y",   "#FF8800", "hline"),
-    ("DEF Bar Y",   "def_bar_y",   "#FFCC00", "hline"),
-    ("STA Bar Y",   "sta_bar_y",   "#FF0088", "hline"),
-    ("Bar X Start", "bar_x_start", "#00FFFF", "vline"),
-    ("Bar X End",   "bar_x_end",   "#00CCFF", "vline"),
-]
+# We map the number of text lines (2, 3, 4, 5) to the respective config keys
+TEXT_LINES_KEYS = {
+    2: [
+        ("ATK Bar Y",   "atk_bar_y",   "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y",   "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y",   "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start", "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",   "#00CCFF", "vline"),
+    ],
+    3: [
+        ("ATK Bar Y",   "atk_bar_y_3lines",   "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_3lines",   "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_3lines",   "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+    ],
+    4: [
+        ("ATK Bar Y",   "atk_bar_y_4lines",   "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_4lines",   "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_4lines",   "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+    ],
+    5: [
+        ("ATK Bar Y",   "atk_bar_y_5lines",   "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_5lines",   "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_5lines",   "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+    ],
+}
 
 # Regions drawn as coloured overlays on the screenshot
 RECT_REGIONS = [
@@ -67,17 +96,48 @@ TAG_DEFAULTS = {
     "tag_review":     {"x": 0.75, "y": 0.70},
 }
 
+
 def load_config():
     with open(CONFIG_FILE) as f:
         cfg = json.load(f)
+
     # Inject missing regions so the viewer works even before calibration
     ui = cfg.setdefault("ui", {})
+
+    # Default text lines selection
+    ui.setdefault("text_lines_layout", 2)
+
+    # 2 Lines (Default)
+    ui.setdefault("atk_bar_y", 0.774)
+    ui.setdefault("def_bar_y", 0.815)
+    ui.setdefault("sta_bar_y", 0.857)
+
+    # 3 Lines
+    ui.setdefault("atk_bar_y_3lines", 0.749)
+    ui.setdefault("def_bar_y_3lines", 0.787)
+    ui.setdefault("sta_bar_y_3lines", 0.830)
+
+    # 4 Lines
+    ui.setdefault("atk_bar_y_4lines", 0.721)
+    ui.setdefault("def_bar_y_4lines", 0.760)
+    ui.setdefault("sta_bar_y_4lines", 0.802)
+
+    # 5 Lines (Extrapolated from the 0.027 vertical shift per line)
+    ui.setdefault("atk_bar_y_5lines", 0.694)
+    ui.setdefault("def_bar_y_5lines", 0.733)
+    ui.setdefault("sta_bar_y_5lines", 0.775)
+
+    # General X-axis boundaries for the bars
+    ui.setdefault("bar_x_start", 0.132)
+    ui.setdefault("bar_x_end", 0.471)
+
     for key, default in REGION_DEFAULTS.items():
         if key not in ui:
             ui[key] = default
-    for key, default in TAG_DEFAULTS.items():  # ← add this
+    for key, default in TAG_DEFAULTS.items():
         if key not in ui:
             ui[key] = default
+
     return cfg
 
 
@@ -108,8 +168,112 @@ class CalibrationApp:
         self.photo = None
         self.display_scale = 1.0
         self.dragging = None
+
+        # Legend categorized data
+        self.legend_subsets = {
+            "OCR Regions": [
+                ("#FF4444", "CP region corners"),
+                ("#44FF44", "Name region corners"),
+                ("#4488FF", "HP region corners"),
+                ("#FF44FF", "Dust region corners"),
+                ("#FF9900", "Type region corners"),
+                ("#AAFFAA", "Weight region corners"),
+                ("#AAAAFF", "Height region corners"),
+            ],
+            "Buttons": [
+                ("#FFFFFF", "Menu button"),
+                ("#FFFF00", "Appraise button"),
+                ("#FF6600", "Back button"),
+            ],
+            "Slots": [
+                ("#00FF88", "Pokémon slots"),
+            ],
+            "Tags": [
+                ("#00FFFF", "Tag ⋮ (option button)"),
+                ("#00FF44", "Tag Keep"),
+                ("#FF3333", "Tag Transfer"),
+                ("#FF9900", "Tag Review"),
+            ]
+        }
+
+        # Combine all subsets for the "Legend" view
+        self.legend_subsets["Legend"] = [item for sub in self.legend_subsets.values() for item in sub]
+        self.legend_subsets["Legend"].extend([
+            ("#FF8800", "ATK bar (drag vert)"),
+            ("#FFCC00", "DEF bar (drag vert)"),
+            ("#FF0088", "STA bar (drag vert)"),
+            ("#00FFFF", "Bar X start/end (drag horiz)")
+        ])
+
         self._build_ui()
         self.refresh()
+
+    def get_text_lines_layout(self):
+        return int(self.cfg["ui"].get("text_lines_layout", 2))
+
+    def get_active_bar_keys(self):
+        return TEXT_LINES_KEYS.get(self.get_text_lines_layout(), TEXT_LINES_KEYS[2])
+
+    def show_category(self):
+        selected = self.category_var.get()
+        for frame in self.category_frames.values():
+            frame.pack_forget()
+        self.category_frames[selected].pack(fill="both", expand=True, padx=8, pady=4)
+
+    def _build_category_legend(self, parent, subset):
+        lf = tk.Frame(parent, bg="#16213e")
+        lf.pack(fill="x", pady=4)
+        tk.Label(lf, text="Drag colored handles on image",
+                 fg="#94a3b8", bg="#16213e", font=("Helvetica", 9)).pack(pady=(0, 8))
+        for color, text in subset:
+            r = tk.Frame(lf, bg="#16213e")
+            r.pack(fill="x", pady=1)
+            tk.Label(r, bg=color, width=2, height=1).pack(side="left", padx=(0, 5))
+            tk.Label(r, text=text, fg="#cbd5e1", bg="#16213e",
+                     font=("Helvetica", 8)).pack(side="left")
+
+    def _build_iv_bars_panel(self, parent):
+        for w in parent.winfo_children():
+            w.destroy()
+
+        top_f = tk.Frame(parent, bg="#16213e")
+        top_f.pack(fill="x", pady=4)
+        tk.Label(top_f, text="Catch Text Lines:", fg="#e2e8f0", bg="#16213e").pack(side="left")
+
+        layout_var = tk.StringVar(value=str(self.get_text_lines_layout()))
+        cb = ttk.Combobox(top_f, textvariable=layout_var, values=["2", "3", "4", "5"], state="readonly", width=5)
+        cb.pack(side="left", padx=8)
+
+        def on_layout_change(e):
+            self.cfg["ui"]["text_lines_layout"] = int(layout_var.get())
+            self._build_iv_bars_panel(parent)
+            self._redraw()
+
+        cb.bind("<<ComboboxSelected>>", on_layout_change)
+
+        tk.Label(parent, text="Bar Positions (drag or use sliders)",
+                 font=("Helvetica", 10, "bold"), fg="#e2e8f0",
+                 bg="#16213e", justify="center").pack(pady=(10, 4))
+
+        self.bar_vars = {}
+        for label, key, color, _ in self.get_active_bar_keys():
+            row = tk.Frame(parent, bg="#16213e")
+            row.pack(fill="x", pady=3)
+            tk.Label(row, bg=color, width=2).pack(side="left", padx=(0, 6))
+            tk.Label(row, text=label, fg="#e2e8f0", bg="#16213e",
+                     font=("Helvetica", 9), width=11, anchor="w").pack(side="left")
+            val = self.cfg["ui"].get(key, 0.5)
+            var = tk.DoubleVar(value=val)
+            sl = tk.Scale(row, from_=0.0, to=1.0, resolution=0.001,
+                          orient="horizontal", variable=var,
+                          bg="#16213e", fg="#e2e8f0", troughcolor="#0f3460",
+                          highlightthickness=0, length=100,
+                          command=lambda v, k=key, dv=var: self._bar_slider(k, dv))
+            sl.pack(side="left")
+            lbl = tk.Label(row, text=f"{val:.3f}", fg="#94a3b8", bg="#16213e",
+                           font=("Helvetica", 8), width=5)
+            lbl.pack(side="left")
+            self.bar_vars[key] = (var, lbl)
 
     # ── UI BUILD ──────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -152,64 +316,30 @@ class CalibrationApp:
         panel.pack(side="right", fill="y", padx=(8, 0))
         panel.pack_propagate(False)
 
-        tk.Label(panel, text="Bar Positions (drag on canvas or use sliders)",
-                 font=("Helvetica", 11, "bold"), fg="#e2e8f0",
-                 bg="#16213e", justify="center").pack(pady=(10, 4))
+        top = tk.Frame(panel, bg="#16213e")
+        top.pack(fill="x", padx=8, pady=(10, 6))
 
-        self.bar_vars = {}
-        for label, key, color, _ in BAR_KEYS:
-            row = tk.Frame(panel, bg="#16213e")
-            row.pack(fill="x", padx=8, pady=3)
-            tk.Label(row, bg=color, width=2).pack(side="left", padx=(0, 6))
-            tk.Label(row, text=label, fg="#e2e8f0", bg="#16213e",
-                     font=("Helvetica", 9), width=11, anchor="w").pack(side="left")
-            val = self.cfg["ui"].get(key, 0.5)
-            var = tk.DoubleVar(value=val)
-            sl = tk.Scale(row, from_=0.0, to=1.0, resolution=0.001,
-                          orient="horizontal", variable=var,
-                          bg="#16213e", fg="#e2e8f0", troughcolor="#0f3460",
-                          highlightthickness=0, length=100,
-                          command=lambda v, k=key, dv=var: self._bar_slider(k, dv))
-            sl.pack(side="left")
-            lbl = tk.Label(row, text=f"{val:.3f}", fg="#94a3b8", bg="#16213e",
-                           font=("Helvetica", 8), width=5)
-            lbl.pack(side="left")
-            self.bar_vars[key] = (var, lbl)
+        tk.Label(top, text="Category:", fg="#e2e8f0", bg="#16213e",
+                 font=("Helvetica", 10, "bold")).pack(side="left")
 
-        ttk.Separator(panel, orient="horizontal").pack(fill="x", padx=8, pady=8)
+        self.category_var = tk.StringVar(value="IV Bars")
+        categories = ["IV Bars", "OCR Regions", "Buttons", "Slots", "Tags", "Legend"]
+        self.category_menu = ttk.Combobox(top, textvariable=self.category_var,
+                                          values=categories, state="readonly", width=15)
+        self.category_menu.pack(side="right", fill="x", expand=True, padx=(8, 0))
+        self.category_menu.bind("<<ComboboxSelected>>", lambda e: self.show_category())
 
-        tk.Label(panel, text="Legend — drag colored handles",
-                 fg="#94a3b8", bg="#16213e", font=("Helvetica", 9)).pack()
+        self.panel_body = tk.Frame(panel, bg="#16213e")
+        self.panel_body.pack(fill="both", expand=True)
 
-        legend = [
-            ("#FF4444", "CP region corners"),
-            ("#44FF44", "Name region corners"),
-            ("#4488FF", "HP region corners"),
-            ("#FF44FF", "Dust region corners"),
-            ("#FF9900", "Type region corners"),
-            ("#AAFFAA", "Weight region corners"),
-            ("#AAAAFF", "Height region corners"),
-            ("#FFFFFF", "Menu button"),
-            ("#FFFF00", "Appraise button"),
-            ("#FF6600", "Back button"),
-            ("#00FF88", "Pokémon slots"),
-            ("#FF8800", "ATK bar (drag vert)"),
-            ("#FFCC00", "DEF bar (drag vert)"),
-            ("#FF0088", "STA bar (drag vert)"),
-            ("#00FFFF", "Bar X start/end (drag horiz)"),
-            ("#00FFFF", "Tag ⋮ (option button)"),
-            ("#00FF44", "Tag Keep"),
-            ("#FF3333", "Tag Transfer"),
-            ("#FF9900", "Tag Review"),
-        ]
-        lf = tk.Frame(panel, bg="#16213e")
-        lf.pack(fill="x", padx=8, pady=4)
-        for color, text in legend:
-            r = tk.Frame(lf, bg="#16213e")
-            r.pack(fill="x", pady=1)
-            tk.Label(r, bg=color, width=2, height=1).pack(side="left", padx=(0, 5))
-            tk.Label(r, text=text, fg="#cbd5e1", bg="#16213e",
-                     font=("Helvetica", 8)).pack(side="left")
+        self.category_frames = {}
+        for cat in categories:
+            f = tk.Frame(self.panel_body, bg="#16213e")
+            self.category_frames[cat] = f
+            if cat == "IV Bars":
+                self._build_iv_bars_panel(f)
+            else:
+                self._build_category_legend(f, self.legend_subsets[cat])
 
         ttk.Separator(panel, orient="horizontal").pack(fill="x", padx=8, pady=6)
 
@@ -218,6 +348,8 @@ class CalibrationApp:
                                     fg="#64748b", bg="#16213e",
                                     font=("Courier", 10), justify="center")
         self.coord_label.pack(pady=6)
+
+        self.show_category()
 
     # ── SCREENSHOT + DRAW ─────────────────────────────────────────────────────
     def refresh(self):
@@ -244,7 +376,7 @@ class CalibrationApp:
         self._draw_all(img)
         dw = int(self.img_w * self.display_scale)
         dh = int(self.img_h * self.display_scale)
-        img_rgb = img.convert("RGB").resize((dw, dh), Image.LANCZOS)
+        img_rgb = img.convert("RGB").resize((dw, dh), RESAMPLE_LANCZOS)
         self.photo = ImageTk.PhotoImage(img_rgb)
         self.canvas.config(width=dw, height=dh)
         self.canvas.delete("all")
@@ -271,7 +403,7 @@ class CalibrationApp:
         for region_key, color in RECT_REGIONS:
             rect(region_key, color)
 
-        for _, key, color, btype in BAR_KEYS:
+        for _, key, color, btype in self.get_active_bar_keys():
             val = ui.get(key)
             if val is None:
                 continue
@@ -323,10 +455,10 @@ class CalibrationApp:
             ("menu_button",     "#FFFFFF", "Menu"),
             ("appraise_button", "#FFFF00", "Appraise"),
             ("back_button",     "#FF6600", "Back"),
-            ("tag_option_btn", "#00FFFF", "Tag ⋮"),  # ← new
-            ("tag_keep", "#00FF44", "Tag Keep"),  # ← new
-            ("tag_transfer", "#FF3333", "Tag Transfer"),  # ← new
-            ("tag_review", "#FF9900", "Tag Review"),  # ← new
+            ("tag_option_btn", "#00FFFF", "Tag ⋮"),
+            ("tag_keep", "#00FF44", "Tag Keep"),
+            ("tag_transfer", "#FF3333", "Tag Transfer"),
+            ("tag_review", "#FF9900", "Tag Review"),
         ]:
             p = ui.get(cfg_key, {})
             dot(p.get("x", 0.5), p.get("y", 0.5), color,
@@ -338,7 +470,7 @@ class CalibrationApp:
                 "#00FF88", f"slot_{i}", f"Slot{i+1}")
 
         # Bar handles (squares)
-        for label, key, color, btype in BAR_KEYS:
+        for label, key, color, btype in self.get_active_bar_keys():
             val = ui.get(key)
             if val is None:
                 continue
@@ -400,7 +532,7 @@ class CalibrationApp:
                 candidates.append((dist, f"slot_{i}", "x", "y", i, "slot"))
 
         # Bars
-        for label, key, color, btype in BAR_KEYS:
+        for label, key, color, btype in self.get_active_bar_keys():
             val = ui.get(key)
             if val is None:
                 continue
@@ -444,12 +576,12 @@ class CalibrationApp:
             ui["pokemon_slots"][cfg_key]["y"] = round(ry, 3)
         elif htype == "hline":
             ui[cfg_key] = round(ry, 3)
-            if cfg_key in self.bar_vars:
+            if hasattr(self, 'bar_vars') and cfg_key in self.bar_vars:
                 self.bar_vars[cfg_key][0].set(ry)
                 self.bar_vars[cfg_key][1].config(text=f"{ry:.3f}")
         elif htype == "vline":
             ui[cfg_key] = round(rx, 3)
-            if cfg_key in self.bar_vars:
+            if hasattr(self, 'bar_vars') and cfg_key in self.bar_vars:
                 self.bar_vars[cfg_key][0].set(rx)
                 self.bar_vars[cfg_key][1].config(text=f"{rx:.3f}")
 
@@ -484,7 +616,8 @@ class CalibrationApp:
     def _bar_slider(self, key, var):
         val = var.get()
         self.cfg["ui"][key] = round(val, 3)
-        self.bar_vars[key][1].config(text=f"{val:.3f}")
+        if hasattr(self, 'bar_vars') and key in self.bar_vars:
+            self.bar_vars[key][1].config(text=f"{val:.3f}")
         self._redraw()
 
     def save(self):
@@ -510,13 +643,13 @@ class CalibrationApp:
         elif htype == "hline":
             new_val = round(max(0, min(1, ui[cfg_key] + dy)), 3)
             ui[cfg_key] = new_val
-            if cfg_key in self.bar_vars:
+            if hasattr(self, 'bar_vars') and cfg_key in self.bar_vars:
                 self.bar_vars[cfg_key][0].set(new_val)
                 self.bar_vars[cfg_key][1].config(text=f"{new_val:.3f}")
         elif htype == "vline":
             new_val = round(max(0, min(1, ui[cfg_key] + dx)), 3)
             ui[cfg_key] = new_val
-            if cfg_key in self.bar_vars:
+            if hasattr(self, 'bar_vars') and cfg_key in self.bar_vars:
                 self.bar_vars[cfg_key][0].set(new_val)
                 self.bar_vars[cfg_key][1].config(text=f"{new_val:.3f}")
 
