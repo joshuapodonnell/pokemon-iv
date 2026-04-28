@@ -6,8 +6,10 @@ import os
 import sys
 import time
 import traceback
-import pytesseract
 import re
+import pytesseract
+from pytesseract import Output
+from PIL import ImageEnhance, ImageDraw, Image
 
 from ocr_parser import (
     resolvespeciesname,
@@ -39,6 +41,140 @@ def parseargs():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def detect_description_lines(raw_crop, debug=False, debug_path=None):
+    w, h = raw_crop.size
+    img = raw_crop.resize((w * 3, h * 3), Image.LANCZOS).convert("L")
+    img = ImageEnhance.Contrast(img).enhance(2.0)
+
+    data = pytesseract.image_to_data(
+        img,
+        config="--psm 6 --oem 3",
+        output_type=Output.DICT,
+    )
+
+    line_map = {}
+    n = len(data["text"])
+    for i in range(n):
+        text = (data["text"][i] or "").strip()
+        if not text:
+            continue
+
+        try:
+            conf = float(data["conf"][i])
+        except Exception:
+            conf = -1
+
+        if conf < 20:
+            continue
+
+        key = (
+            data["block_num"][i],
+            data["par_num"][i],
+            data["line_num"][i],
+        )
+        entry = line_map.setdefault(key, {
+            "words": [],
+            "conf": [],
+            "left": 10**9,
+            "top": 10**9,
+            "right": -1,
+            "bottom": -1,
+        })
+
+        l = data["left"][i]
+        t = data["top"][i]
+        ww = data["width"][i]
+        hh = data["height"][i]
+
+        entry["words"].append(text)
+        entry["conf"].append(conf)
+        entry["left"] = min(entry["left"], l)
+        entry["top"] = min(entry["top"], t)
+        entry["right"] = max(entry["right"], l + ww)
+        entry["bottom"] = max(entry["bottom"], t + hh)
+
+    lines = []
+    for v in line_map.values():
+        text = " ".join(v["words"]).strip()
+        avg_conf = sum(v["conf"]) / max(1, len(v["conf"]))
+        width = v["right"] - v["left"]
+        height = v["bottom"] - v["top"]
+        alnum = sum(ch.isalnum() for ch in text)
+
+        if alnum < 4:
+            continue
+        if avg_conf < 35 and width < w * 0.45 * 3:
+            continue
+
+        lines.append({
+            "text": text,
+            "top": v["top"],
+            "bottom": v["bottom"],
+            "height": height,
+            "width": width,
+            "avg_conf": avg_conf,
+        })
+
+    lines.sort(key=lambda x: x["top"])
+
+    if not lines:
+        return 2, "", []
+
+    median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
+    max_gap = max(18, int(median_h * 1.25))
+
+    anchor_idx = None
+    for i, line in enumerate(lines):
+        txt = line["text"].lower()
+        if "caught" in txt or re.search(r"\b\d{1,2}/\d{1,2}/\d{4}\b", txt):
+            anchor_idx = i
+            break
+
+    if anchor_idx is None:
+        # fallback: biggest contiguous run of lines
+        runs = []
+        start = 0
+        for i in range(1, len(lines)):
+            gap = lines[i]["top"] - lines[i - 1]["bottom"]
+            if gap > max_gap:
+                runs.append((start, i - 1))
+                start = i
+        runs.append((start, len(lines) - 1))
+        best = max(runs, key=lambda ab: ab[1] - ab[0] + 1)
+        keep = lines[best[0]:best[1] + 1]
+    else:
+        lo = hi = anchor_idx
+        while lo > 0:
+            gap = lines[lo]["top"] - lines[lo - 1]["bottom"]
+            if gap > max_gap:
+                break
+            lo -= 1
+        while hi < len(lines) - 1:
+            gap = lines[hi + 1]["top"] - lines[hi]["bottom"]
+            if gap > max_gap:
+                break
+            hi += 1
+        keep = lines[lo:hi + 1]
+
+    raw_text = " ".join(line["text"] for line in keep)
+    num_lines = max(2, min(5, len(keep)))
+
+    if debug and debug_path:
+        dbg = img.convert("RGB")
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(dbg)
+        keep_tops = {line["top"] for line in keep}
+        for line in lines:
+            color = "red" if line["top"] in keep_tops else "gray"
+            draw.rectangle(
+                (line["left"], line["top"], line["left"] + line["width"], line["bottom"]),
+                outline=color,
+                width=2
+            )
+            draw.line((0, line["top"], dbg.size[0], line["top"]), fill=color, width=2)
+        dbg.save(debug_path)
+
+    return num_lines, raw_text, keep
 
 def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
     prevbars = None
@@ -135,41 +271,60 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             img_initial = capture_window(cfg["mirror_region"])
             raw_crop = getrelativeregion(img_initial, ui["name_region"])
 
-            # Make sure we use the same OCR config as resolvespeciesname
-            raw_text_raw = pytesseract.image_to_string(
-                raw_crop.convert("L"), config="--psm 6 --oem 3"
-            ).strip()
+            W, H = raw_crop.size
+            crop_upscaled = raw_crop.resize((W * 3, H * 3), Image.Resampling.LANCZOS).convert("L")
+            crop_upscaled = ImageEnhance.Contrast(crop_upscaled).enhance(2.0)
 
-            # Filter lines: only keep lines that are part of the catch description
-            # (ignore HP text, Name label, empty lines, random artifacts)
-            lines = raw_text_raw.split('\n')
-            catch_desc_lines = []
-            found_start = False
-            for line in lines:
-                cleaned = line.strip()
-                if not cleaned: continue
-                # The description block starts with the Pokémon name/ID line or "This"
-                if "This" in cleaned or re.search(r'\bwas caught\b', cleaned, re.IGNORECASE) or found_start:
-                    found_start = True
-                    catch_desc_lines.append(cleaned)
+            # Get bounding boxes for every word
+            ocr_data = pytesseract.image_to_data(
+                crop_upscaled, config="--psm 6 --oem 3", output_type=Output.DICT
+            )
 
-            # If we couldn't isolate it, fallback to total length / 45 chars per line
-            if not catch_desc_lines:
-                total_len = len(" ".join(lines))
-                num_lines = max(2, min(5, (total_len // 45) + 1))
+            # Reconstruct string for caught date parsing
+            words = [text.strip() for text in ocr_data['text'] if text.strip()]
+            raw_text = " ".join(words)
+
+            tops = []
+            for i, text in enumerate(ocr_data['text']):
+                if text.strip():
+                    tops.append(ocr_data['top'][i])
+
+            tops = sorted(tops)
+
+            # Cluster words that share a similar Y-coordinate (within 15px at 3x scale)
+            unique_y_clusters = []
+            last_y = -100
+            for y in tops:
+                if y - last_y > 15:
+                    unique_y_clusters.append(y)
+                    last_y = y
+
+            # The top text line is the Pokémon's name / HP. The lines below are the description.
+            # So the number of description lines is Total Clusters - 1
+            if len(unique_y_clusters) > 0:
+                desc_lines = len(unique_y_clusters) - 1
             else:
-                num_lines = max(2, min(5, len(catch_desc_lines)))
+                desc_lines = 0
 
-            raw_text = " ".join(catch_desc_lines)
+            # Safely clamp between 2 and 5
+            num_lines = max(2, min(5, desc_lines))
 
             if args.debug:
                 os.makedirs("screenshots", exist_ok=True)
                 img_initial.save(f"screenshots/appraisal{visit_num:03d}.png")
                 raw_crop.save(f"screenshots/nameregion{visit_num:03d}.png")
-                log.info(f"  Name region raw OCR ({num_lines} lines isolated from {len(lines)}): {raw_text!r}")
+                log.info(f"  Name region OCR: {raw_text!r}")
+                log.info(f"  Detected physical lines: {num_lines} (Total clusters: {len(unique_y_clusters)})")
+
+                # Draw exactly where we detected the text rows
+                debug_crop = crop_upscaled.copy().convert("RGB")
+                draw = ImageDraw.Draw(debug_crop)
+                for i, y in enumerate(unique_y_clusters):
+                    color = "red" if i > 0 else "gray"  # Grey for the name title line, red for the ones we count
+                    draw.line((0, y, W * 3, y), fill=color, width=2)
+                debug_crop.save(f"screenshots/nameregion_lines_{visit_num:03d}.png")
 
             # ── WAIT FOR BARS & READ ──────────────────────────────────────────
-            # Use readappraisalbarsdebug if debug flag is active so it dumps the exact slice
             read_fn = readappraisalbarsdebug if args.debug else readappraisalbars
 
             img = waitforbarsstableimage(

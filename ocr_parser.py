@@ -240,7 +240,7 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float,
 
         # Save the exact strip we are analyzing for debug purposes
         sw, sh = barstrip.size
-        barstrip = barstrip.resize((sw * 3, sh * 3), Image.LANCZOS)
+        barstrip = barstrip.resize((sw * 3, sh * 3), Image.Resampling.LANCZOS)
 
         # Draw on the strip where the horizontal line checks are occurring
         from PIL import ImageDraw
