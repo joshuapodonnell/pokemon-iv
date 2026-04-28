@@ -101,7 +101,7 @@ class PokemonDBViewer(tk.Tk):
         self.rank_limit_combo.pack(side=tk.LEFT)
         self.rank_limit_combo.bind("<<ComboboxSelected>>", self.on_query_select)
 
-        tk.Button(query_frame, text="Apply Preset", command=self.on_query_select).pack(side=tk.LEFT, padx=8)
+        tk.Button(query_frame, text="Load Preset", command=self.on_query_select).pack(side=tk.LEFT, padx=8)
         tk.Button(query_frame, text="Run Query", command=self.run_query, bg="#4CAF50").pack(side=tk.RIGHT, padx=5)
         tk.Button(query_frame, text="Export CSV", command=self.export_csv).pack(side=tk.RIGHT, padx=5)
 
