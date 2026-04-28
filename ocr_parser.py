@@ -49,6 +49,31 @@ def getrelativeregion(img, region):
         y2 = y1 + int(region["h"] * H)
     return img.crop((x1, y1, x2, y2))
 
+def normalize_species_name(name: str) -> str:
+    if not name:
+        return name
+
+    text = " ".join(name.replace("\n", " ").split()).strip()
+
+    special_patterns = [
+        (r".*\bSinistea\b.*", "Sinistea"),
+        (r".*\bPolteageist\b.*", "Polteageist"),
+        (r".*\bSinistcha\b.*", "Sinistcha"),
+        (r".*\bPoltchageist\b.*", "Poltchageist"),
+        (r".*\bPumpkaboo\b.*", "Pumpkaboo"),
+        (r".*\bGiratina\b.*Origin.*", "GiratinaOrigin Forme"),
+        (r".*\bGiratina\b.*Altered.*", "GiratinaAltered Forme"),
+    ]
+
+    for pattern, normalized in special_patterns:
+        if re.match(pattern, text, re.IGNORECASE):
+            return normalized
+
+    for known in SPECIESDB:
+        if re.search(rf"\b{re.escape(known)}\b", text, re.IGNORECASE):
+            return known
+
+    return text
 
 # ---------------------------------------------------------------------------
 # Individual field parsers
@@ -154,8 +179,9 @@ def resolvespeciesname(
         log.debug(f"resolvespeciesname: name OCR best prefix match → {best}")
         return best
 
-    log.debug(f"resolvespeciesname: using raw OCR name {ocr_name!r}")
-    return ocr_name.title()
+    normalized = normalize_species_name(ocr_name)
+    log.debug(f"resolvespeciesname using normalized OCR name {normalized!r} from raw {ocr_name!r}")
+    return normalized
 
 
 # ---------------------------------------------------------------------------

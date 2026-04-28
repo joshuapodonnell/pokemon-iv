@@ -357,7 +357,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, None)
             iv_data["caught_date"] = caught_date
-            iv_data["needs_review"] = (cp == 0)
+            iv_data["needs_review"] = (cp < 10 or not name or name == "Unknown")
 
             pvp_all = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
             pvp = pvp_all[name]
@@ -416,14 +416,19 @@ def report_displaced(conn):
 
 # ── Pass 2: Tag ───────────────────────────────────────────────────────────────
 
-def pass2_tag(args, cfg, conn, tap):
+def pass2_tag(args, cfg, conn, tap, session_ids):
     ui = cfg["ui"]
 
-    new_rows = conn.execute("""
+    if not session_ids:
+        log.info("Pass 2: nothing new to tag.")
+        return
+
+    placeholders = ",".join("?" * len(session_ids))
+    new_rows = conn.execute(f"""
         SELECT * FROM pokemon
-        WHERE tag IS NULL
+        WHERE id IN ({placeholders})
         ORDER BY id
-    """).fetchall()
+    """, session_ids).fetchall()
     new_rows = [dict(r) for r in new_rows]
 
     if not new_rows:
@@ -526,7 +531,7 @@ def runbot(args):
             report_displaced(conn)
 
         if not args.dry_run and tags_are_calibrated(cfg["ui"]):
-            pass2_tag(args, cfg, conn, tap)
+            pass2_tag(args, cfg, conn, tap, session_ids)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
         else:
