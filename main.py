@@ -43,7 +43,7 @@ def parseargs():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def detect_description_lines(raw_crop, debug=False, debug_path=None):
     w, h = raw_crop.size
-    img = raw_crop.resize((w * 3, h * 3), Image.LANCZOS).convert("L")
+    img = raw_crop.resize((w * 3, h * 3), Image.Resampling.LANCZOS).convert("L")
     img = ImageEnhance.Contrast(img).enhance(2.0)
 
     data = pytesseract.image_to_data(
@@ -108,6 +108,8 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
 
         lines.append({
             "text": text,
+            "left": v["left"],
+            "right": v["right"],
             "top": v["top"],
             "bottom": v["bottom"],
             "height": height,
@@ -271,58 +273,18 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             img_initial = capture_window(cfg["mirror_region"])
             raw_crop = getrelativeregion(img_initial, ui["name_region"])
 
-            W, H = raw_crop.size
-            crop_upscaled = raw_crop.resize((W * 3, H * 3), Image.Resampling.LANCZOS).convert("L")
-            crop_upscaled = ImageEnhance.Contrast(crop_upscaled).enhance(2.0)
-
-            # Get bounding boxes for every word
-            ocr_data = pytesseract.image_to_data(
-                crop_upscaled, config="--psm 6 --oem 3", output_type=Output.DICT
+            num_lines, raw_text, kept_lines = detect_description_lines(
+                raw_crop,
+                debug=args.debug,
+                debug_path=f"screenshots/nameregion_lines_{visit_num:03d}.png" if args.debug else None,
             )
-
-            # Reconstruct string for caught date parsing
-            words = [text.strip() for text in ocr_data['text'] if text.strip()]
-            raw_text = " ".join(words)
-
-            tops = []
-            for i, text in enumerate(ocr_data['text']):
-                if text.strip():
-                    tops.append(ocr_data['top'][i])
-
-            tops = sorted(tops)
-
-            # Cluster words that share a similar Y-coordinate (within 15px at 3x scale)
-            unique_y_clusters = []
-            last_y = -100
-            for y in tops:
-                if y - last_y > 15:
-                    unique_y_clusters.append(y)
-                    last_y = y
-
-            # The top text line is the Pokémon's name / HP. The lines below are the description.
-            # So the number of description lines is Total Clusters - 1
-            if len(unique_y_clusters) > 0:
-                desc_lines = len(unique_y_clusters) - 1
-            else:
-                desc_lines = 0
-
-            # Safely clamp between 2 and 5
-            num_lines = max(2, min(5, desc_lines))
 
             if args.debug:
                 os.makedirs("screenshots", exist_ok=True)
                 img_initial.save(f"screenshots/appraisal{visit_num:03d}.png")
                 raw_crop.save(f"screenshots/nameregion{visit_num:03d}.png")
                 log.info(f"  Name region OCR: {raw_text!r}")
-                log.info(f"  Detected physical lines: {num_lines} (Total clusters: {len(unique_y_clusters)})")
-
-                # Draw exactly where we detected the text rows
-                debug_crop = crop_upscaled.copy().convert("RGB")
-                draw = ImageDraw.Draw(debug_crop)
-                for i, y in enumerate(unique_y_clusters):
-                    color = "red" if i > 0 else "gray"  # Grey for the name title line, red for the ones we count
-                    draw.line((0, y, W * 3, y), fill=color, width=2)
-                debug_crop.save(f"screenshots/nameregion_lines_{visit_num:03d}.png")
+                log.info(f"  Detected physical lines: {num_lines}")
 
             # ── WAIT FOR BARS & READ ──────────────────────────────────────────
             read_fn = readappraisalbarsdebug if args.debug else readappraisalbars
