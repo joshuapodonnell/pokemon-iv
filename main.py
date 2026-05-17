@@ -272,9 +272,9 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
             cp_text    = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
             hp         = parsehp(ocrregion(getrelativeregion(base_img, ui["hp_region"])))
-            type_text  = ocrregion(getrelativeregion(base_img, ui["typeregion"]))
-            weight_text = ocrregion(getrelativeregion(base_img, ui["weightregion"]))
-            height_text = ocrregion(getrelativeregion(base_img, ui["heightregion"]))
+            type_text  = ocrregion(getrelativeregion(base_img, ui["type_region"]))
+            weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
+            height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
             cp         = parsecp(cp_text)
 
             # ── VLM base-screen fallback ──────────────────────────────────────
@@ -320,7 +320,9 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             # ── 3. OCR NAME & IVS ────────────────────────────────────────────
             name_crop     = getrelativeregion(appraisal_img, ui['name_region'])
             raw_name_text = pytesseract.image_to_string(name_crop, config='--psm 6 --oem 3').strip()
-            name          = resolvespeciesname(raw_name_text, type_text, weight_text, height_text)
+            log.debug(f"[OCR RAW] name_region text → {raw_name_text!r}")
+            name = resolvespeciesname(appraisal_img, ui, cp)
+            log.debug(f"[OCR RESOLVED] → {name!r}")
 
             bar_strip = getrelativeregion(appraisal_img, ui['bar_region'])
             bars      = parseivbars(bar_strip)
@@ -422,13 +424,18 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
                             f"(name={name!r}, bars={bars}) – forcing REVIEW tag.")
                 cp_valid = False      # guarantees the REVIEW branch below
 
-            # ── 5. INSERT & EVALUATE ──────────────────────────────────────────
+            # ── 5. INSERT & EVALUATE ────────────────────────────x──────────────
             # Guard: unpack bars only when we have a clean tuple
             if bars and len(bars) == 3 and None not in bars:
                 atk_iv, def_iv, sta_iv = bars
             else:
                 atk_iv = def_iv = sta_iv = 0   # sentinel – will be REVIEW anyway
-
+            if args.debug:
+                log.info(
+                    f"[SCAN] {name} | CP={cp} | "
+                    f"ATK={atk_iv} DEF={def_iv} STA={sta_iv} | "
+                    f"IV%={round((atk_iv + def_iv + sta_iv) / 45 * 100, 1)}%"
+                )
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
 
             all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
@@ -475,7 +482,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             else:
                 tap.tap(ui['tag_review']['x'],   ui['tag_review']['y'])
 
-            tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
+            tap.tap(ui['appraisal_done']['x'],ui['appraisal_done']['y'], base_delay=cfg['timing']['after_tap'])
 
             # ── 8. SWIPE TO NEXT ──────────────────────────────────────────────
             tap.swipe_left()
