@@ -10,6 +10,7 @@ import re
 import pytesseract
 from pytesseract import Output
 from PIL import ImageEnhance, ImageDraw, Image
+import vision_agent
 
 from ocr_parser import (
     resolvespeciesname,
@@ -133,7 +134,6 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
             break
 
     if anchor_idx is None:
-        # fallback: biggest contiguous run of lines
         runs = []
         start = 0
         for i in range(1, len(lines)):
@@ -177,6 +177,7 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         dbg.save(debug_path)
 
     return num_lines, raw_text, keep
+
 
 def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
     prevbars = None
@@ -227,6 +228,19 @@ def reloadcalibration(cfg):
         log.warning(f"calibration reload failed (using current values): {e}")
 
 
+def _is_valid_base_parse(cp, hp, typetext, weighttext, heighttext, name=None):
+    """Return True when the base-screen OCR looks trustworthy."""
+    if cp is None or cp <= 0:
+        return False
+    if hp is None or hp <= 0:
+        return False
+    if not typetext or typetext.strip().lower() in ("", "unknown"):
+        return False
+    if weighttext == "" and heighttext == "":
+        return False
+    return True
+
+
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs):
@@ -253,64 +267,174 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
         for visit_num in range(1, args.limit + 1):
             log.info(f"--- Scanning Pokemon {visit_num} ---")
 
-            # 1. OCR BASE SCREEN (Bright screen, perfect contrast)
+            # ── 1. OCR BASE SCREEN ────────────────────────────────────────────
             base_img = capture_window(cfg['mirror_region'])
 
-            cp_crop = getrelativeregion(base_img, ui['cp_region'])
-            cp_text = ocrregion(cp_crop)
-            cp = parsecp(cp_text)
+            cp_text    = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
+            hp         = parsehp(ocrregion(getrelativeregion(base_img, ui["hp_region"])))
+            type_text  = ocrregion(getrelativeregion(base_img, ui["typeregion"]))
+            weight_text = ocrregion(getrelativeregion(base_img, ui["weightregion"]))
+            height_text = ocrregion(getrelativeregion(base_img, ui["heightregion"]))
+            cp         = parsecp(cp_text)
 
-            hp_crop = getrelativeregion(base_img, ui['hp_region'])
-            hp = parsehp(ocrregion(hp_crop))
+            # ── VLM base-screen fallback ──────────────────────────────────────
+            _base_vlm_used = False
+            _bvlm = {}
 
-            # Get form identifiers BEFORE the dark overlay hits!
-            type_text = ocrregion(getrelativeregion(base_img, ui['type_region']))
-            weight_text = ocrregion(getrelativeregion(base_img, ui['weight_region']))
-            height_text = ocrregion(getrelativeregion(base_img, ui['height_region']))
+            if not _is_valid_base_parse(cp, hp, type_text, weight_text, height_text):
+                log.info("Base-screen OCR suspect – calling VisionAgent")
+                _bvlm = vision_agent.analyze_base_screen(base_img)
 
-            # 2. OPEN APPRAISAL
-            tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+                if vision_agent.is_reliable(_bvlm):
+                    _base_vlm_used = True
+                    if _bvlm.get("cp",     {}).get("confidence", 0) > 0.75:
+                        cp_text     = _bvlm["cp"]["text"]
+                        cp          = parsecp(cp_text) or cp
+                    if _bvlm.get("hp",     {}).get("confidence", 0) > 0.75:
+                        hp          = parsehp(_bvlm["hp"]["text"]) or hp
+                    if _bvlm.get("type1",  {}).get("confidence", 0) > 0.75:
+                        type_text   = _bvlm["type1"]["text"]
+                    if _bvlm.get("weight", {}).get("confidence", 0) > 0.75:
+                        weight_text = _bvlm["weight"]["text"]
+                    if _bvlm.get("height", {}).get("confidence", 0) > 0.75:
+                        height_text = _bvlm["height"]["text"]
+                    log.info(f"VLM base result: cp={cp} hp={hp} type={type_text} "
+                             f"conf={_bvlm['confidence']:.2f}")
+                else:
+                    log.warning(f"VLM base-screen confidence too low "
+                                f"({_bvlm.get('confidence', 0):.2f}), keeping OCR values")
+            # ─────────────────────────────────────────────────────────────────
+
+            # ── 2. OPEN APPRAISAL ─────────────────────────────────────────────
+            tap.tap(ui['menu_button']['x'],   ui['menu_button']['y'],   base_delay=cfg['timing']['after_tap'])
             tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
             tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
-            # Wait for the IV bars to settle
+
             appraisal_img = waitforbarsstableimage(
-                lambda: capture_window(cfg['mirror_region']),  # ← Wrap it in a lambda
+                lambda: capture_window(cfg['mirror_region']),
                 readappraisalbars,
                 ui,
-                cfg
+                cfg,
             )
-            # 3. OCR NAME & IVS (Bypasses nicknames)
-            name_crop = getrelativeregion(appraisal_img, ui['name_region'])
-            raw_name_text = pytesseract.image_to_string(name_crop, config='--psm 6 --oem 3').strip()
 
-            # Resolve Galarian/Alolan using the bright text we grabbed in Step 1
-            name = resolvespeciesname(raw_name_text, type_text, weight_text, height_text)
+            # ── 3. OCR NAME & IVS ────────────────────────────────────────────
+            name_crop     = getrelativeregion(appraisal_img, ui['name_region'])
+            raw_name_text = pytesseract.image_to_string(name_crop, config='--psm 6 --oem 3').strip()
+            name          = resolvespeciesname(raw_name_text, type_text, weight_text, height_text)
 
             bar_strip = getrelativeregion(appraisal_img, ui['bar_region'])
-            bars = parseivbars(bar_strip)
-            atk_iv, def_iv, sta_iv = bars
+            bars      = parseivbars(bar_strip)
 
-            # 4. DATA VALIDATION (The Sanity Check)
-            # Reject physically impossible CPs, or CPs below the absolute game minimum (10)
+            # ── VLM appraisal fallback ────────────────────────────────────────
+            _appraisal_vlm_used = False
+            _avlm = {}
+            _name_needs_vlm = (name is None or name == "Unknown")
+            _bars_need_vlm  = (bars is None or None in (bars or [None]))
+
+            if _name_needs_vlm or _bars_need_vlm:
+                log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
+                         f"– calling VisionAgent")
+                _avlm = vision_agent.analyze_appraisal_screen(appraisal_img)
+
+                if vision_agent.is_reliable(_avlm):
+                    _appraisal_vlm_used = True
+
+                    if _name_needs_vlm:
+                        vlm_name = _avlm.get("name", {}).get("text", "")
+                        if vlm_name:
+                            resolved = resolvespeciesname(
+                                vlm_name, type_text, weight_text, height_text)
+                            if resolved and resolved != "Unknown":
+                                log.info(f"VLM corrected name: {name!r} → {resolved!r}")
+                                name          = resolved
+                                raw_name_text = vlm_name
+
+                    if _bars_need_vlm:
+                        vlm_bars = vision_agent.extract_bar_values(_avlm)
+                        if vlm_bars is not None:
+                            log.info(f"VLM provided bars: {vlm_bars}")
+                            bars = vlm_bars
+
+                    log.info(f"VLM appraisal conf={_avlm.get('confidence', 0):.2f}")
+                else:
+                    log.warning(f"VLM appraisal confidence too low "
+                                f"({_avlm.get('confidence', 0):.2f})")
+            # ─────────────────────────────────────────────────────────────────
+
+            # ── PATCH 5: Last-resort VLM recovery ────────────────────────────
+            _still_broken = (
+                name in (None, "Unknown")
+                or bars is None
+                or None in (bars or [None])
+            )
+
+            if _still_broken and not _appraisal_vlm_used:
+                log.warning("Attempting last-resort VisionAgent recovery …")
+                partial = {
+                    "cp":     str(cp) if cp else "",
+                    "hp":     str(hp) if hp else "",
+                    "name":   name or "",
+                    "type1":  type_text or "",
+                    "weight": weight_text or "",
+                    "height": height_text or "",
+                }
+                _rvlm = vision_agent.recover_failed_parse(base_img, appraisal_img, partial)
+
+                if vision_agent.is_reliable(_rvlm):
+                    log.info(f"Recovery VLM result (conf={_rvlm['confidence']:.2f}): {_rvlm}")
+
+                    if name in (None, "Unknown"):
+                        vlm_name_r = _rvlm.get("name", {}).get("text", "")
+                        if vlm_name_r:
+                            resolved_r = resolvespeciesname(
+                                vlm_name_r, type_text, weight_text, height_text)
+                            if resolved_r and resolved_r != "Unknown":
+                                name = resolved_r
+
+                    if bars is None or None in (bars or [None]):
+                        vlm_bars_r = vision_agent.extract_bar_values(_rvlm)
+                        if vlm_bars_r is not None:
+                            bars = vlm_bars_r
+
+                    if not cp or cp <= 0:
+                        cp_text_r = _rvlm.get("cp", {}).get("text", "")
+                        cp = parsecp(cp_text_r) or cp
+                else:
+                    log.warning(f"Recovery VLM also unreliable "
+                                f"(conf={_rvlm.get('confidence', 0):.2f})")
+
+            # Re-evaluate after all VLM attempts
+            _still_broken = (
+                name in (None, "Unknown")
+                or bars is None
+                or None in (bars or [None])
+            )
+            # ─────────────────────────────────────────────────────────────────
+
+            # ── 4. DATA VALIDATION ────────────────────────────────────────────
             cp_valid = True
-            if cp > 5500 or cp < 10:
+            if cp is None or cp > 5500 or cp < 10:
                 log.warning(f"Impossible CP read: {cp}. Forcing REVIEW tag.")
                 cp_valid = False
 
-            # 5. INSERT & EVALUATE
+            if _still_broken:
+                log.warning(f"Could not resolve name/bars after all fallbacks "
+                            f"(name={name!r}, bars={bars}) – forcing REVIEW tag.")
+                cp_valid = False      # guarantees the REVIEW branch below
+
+            # ── 5. INSERT & EVALUATE ──────────────────────────────────────────
+            # Guard: unpack bars only when we have a clean tuple
+            if bars and len(bars) == 3 and None not in bars:
+                atk_iv, def_iv, sta_iv = bars
+            else:
+                atk_iv = def_iv = sta_iv = 0   # sentinel – will be REVIEW anyway
+
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
 
             all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
-
-            pvp = all_rankings.get(name, {
-                "great": {},
-                "ultra": {},
-            })
-
+            pvp = all_rankings.get(name, {"great": {}, "ultra": {}})
             evo_rankings = {
-                species_name: leagues
-                for species_name, leagues in all_rankings.items()
-                if species_name != name
+                s: l for s, l in all_rankings.items() if s != name
             }
 
             poke_id = insert_pokemon(conn, iv_data)
@@ -319,50 +443,42 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             if not cp_valid:
                 decision = {
                     "action": "REVIEW",
-                    "reasons": ["Impossible CP read"],
+                    "reasons": ["Impossible CP read" if (cp is None or cp > 5500 or cp < 10)
+                                else "Could not resolve name or IV bars"],
                     "beats_existing": False,
                     "existing_best": None,
                     "existing_top": [],
                 }
             else:
                 decision = evaluate_catch(
-                    conn,
-                    name,
-                    cp,
-                    atk_iv,
-                    def_iv,
-                    sta_iv,
-                    iv_data["iv_pct"],
-                    pvp,
-                    evo_rankings,
+                    conn, name, cp,
+                    atk_iv, def_iv, sta_iv,
+                    iv_data["iv_pct"], pvp, evo_rankings,
                     current_id=poke_id,
                 )
 
-            action = decision["action"]
+            action  = decision["action"]
             reasons = decision["reasons"]
-
             log.info(f"Result: {action} ({reasons})")
 
-            # 6. CLOSE APPRAISAL (Tap screen center to dismiss leader)
+            # ── 6. CLOSE APPRAISAL ────────────────────────────────────────────
             tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
 
-            # 7. APPLY TAG IN-GAME
-            # Open Menu -> Tap Tag -> Tap appropriate color -> Close Menu
-            tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
-            tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
+            # ── 7. APPLY TAG IN-GAME ──────────────────────────────────────────
+            tap.tap(ui['menu_button']['x'],      ui['menu_button']['y'],      base_delay=cfg['timing']['after_tap'])
+            tap.tap(ui['tag_option_btn']['x'],   ui['tag_option_btn']['y'],   base_delay=cfg['timing']['after_tap'])
 
             if action == "KEEP":
-                tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])
+                tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
             elif action == "TRANSFER":
                 tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
             else:
-                tap.tap(ui['tag_review']['x'], ui['tag_review']['y'])
+                tap.tap(ui['tag_review']['x'],   ui['tag_review']['y'])
 
-            # Tap upper area to close the tag slide-up menu
             tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
 
-            # 8. SWIPE TO NEXT POKEMON
-            tap.swipe_left() # Or swipe_left(), returning you to the bright base screen!
+            # ── 8. SWIPE TO NEXT ──────────────────────────────────────────────
+            tap.swipe_left()
 
             if args.mode == "newcatch":
                 break
@@ -433,8 +549,8 @@ def pass2_tag(args, cfg, conn, tap, session_ids):
     tagged = 0
     try:
         for idx, row in enumerate(new_rows):
-            name = row["name"]
-            cp = row["cp"]
+            name   = row["name"]
+            cp     = row["cp"]
             iv_pct = row["iv_pct"] or 0
 
             pvp = {
@@ -475,8 +591,9 @@ def pass2_tag(args, cfg, conn, tap, session_ids):
 
 
 def micro_pass_2_cleanup(conn, tap, ui, cfg):
-    # Fetch only the Pokémon that got outranked during Pass 1
-    demoted_rows = conn.execute("SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1").fetchall()
+    demoted_rows = conn.execute(
+        "SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1"
+    ).fetchall()
 
     if not demoted_rows:
         log.info("No Pokémon were demoted. Pass 2 skipped! You are done.")
@@ -484,37 +601,28 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg):
 
     log.info(f"Micro Pass 2: Cleaning up {len(demoted_rows)} demoted Pokémon...")
 
-    # Assume the bot is backed out to the Pokémon storage grid screen
     for p in demoted_rows:
         log.info(f"Demoting {p['name']} (CP {p['cp']}, HP {p['hp']}) to TRANSFER...")
 
-        # 1. Tap the Search Icon
         tap.tap(ui['search_icon']['x'], ui['search_icon']['y'], base_delay=cfg['timing']['after_tap'])
-
-        # 2. Type exact stats to find it instantly
         search_str = f"{p['name']}&cp{p['cp']}&hp{p['hp']}"
         tap.type_text(search_str)
-        time.sleep(1.5)  # Wait for results to filter
+        time.sleep(1.5)
 
-        # 3. Tap the first (and only) result in the grid
-        tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'], base_delay=cfg['timing']['aftertap'])
+        tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'],
+                base_delay=cfg['timing']['aftertap'])
 
-        # 4. Swap the tag from KEEP to TRANSFER
-        tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+        tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],    base_delay=cfg['timing']['after_tap'])
         tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
+        tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
+        tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
+        tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
 
-        tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])  # Tap to REMOVE keep tag
-        tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])  # Tap to ADD transfer tag
-
-        tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])  # Close tag menu
-
-        # 5. Back out to the search grid and clear the search
-        # bottom of page
-        tap.tap(ui['back_button']['x'], ui['back_button']['y'], base_delay=cfg['timing']['after_tap'])
-        # top left
+        tap.tap(ui['back_button']['x'],  ui['back_button']['y'],  base_delay=cfg['timing']['after_tap'])
         tap.tap(ui['clear_search']['x'], ui['clear_search']['y'], base_delay=cfg['timing']['after_tap'])
 
     log.info("Micro Pass 2 Complete.")
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -524,9 +632,9 @@ def runbot(args):
     from tap_controller import TapController
     from iv_calculator import compute_ivs
 
-    cfg = loadconfig()
+    cfg  = loadconfig()
     conn = get_db()
-    tap = TapController(cfg)
+    tap  = TapController(cfg)
 
     try:
         bounds = get_mirror_window_bounds()
@@ -554,7 +662,6 @@ def runbot(args):
             report_displaced(conn)
 
         if not args.dry_run and tags_are_calibrated(cfg["ui"]):
-            #pass2_tag(args, cfg, conn, tap, session_ids)
             micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
@@ -566,7 +673,7 @@ def runbot(args):
         traceback.print_exc()
     finally:
         elapsed = (time.time() - starttime) / 60
-        stats = get_stats(conn)
+        stats   = get_stats(conn)
         log.info("=" * 50)
         log.info(f"Session: {len(session_ids) if 'session_ids' in dir() else 0} cataloged, "
                  f"{errors if 'errors' in dir() else 0} errors, {elapsed:.1f} min")
