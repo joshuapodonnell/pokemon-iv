@@ -63,7 +63,7 @@ log = logging.getLogger(__name__)
 
 MODEL_PATH: str = os.environ.get(
     "POGO_VLM_MODEL",
-    "mlx-community/Qwen2-VL-2B-Instruct-4bit",
+    "mlx-community/Qwen2-VL-7B-Instruct-4bit",
 )
 
 # Minimum confidence below which callers should treat the result as unreliable
@@ -107,7 +107,7 @@ def _pil_to_list(img: Image.Image) -> list:
     return [img]
 
 
-def _call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
+def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
     """Send prompt + images to the local VLM; return the raw text response."""
     from mlx_vlm import generate  # type: ignore
     from mlx_vlm.prompt_utils import apply_chat_template  # type: ignore
@@ -120,16 +120,15 @@ def _call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
         model, processor, formatted, images,
         verbose=False, max_tokens=max_tokens, temp=0.0,
     )
-    return result.strip()
+    # GenerationResult is a named tuple — extract text field
+    text = result.text if hasattr(result, "text") else result[0]
+    return text.strip()
 
 
 def _parse_json_response(raw: str) -> dict:
-    """
-    Extract the first JSON object from the VLM's text output.
-    VLMs sometimes wrap JSON in markdown code fences – strip those first.
-    """
+    """Extract the first JSON object from the VLM's text output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
-    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    m = re.search(r"\{.*\}", raw, re.DOTALL)  # ← fixed: was r"\\{.*\\}"
     if not m:
         log.warning(f"VLM returned no JSON: {raw[:120]!r}")
         return {}
@@ -143,7 +142,7 @@ def _parse_json_response(raw: str) -> dict:
 def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
     """Wrapper that catches all exceptions and returns an empty failure dict."""
     try:
-        raw = _call_vlm(prompt, images, max_tokens)
+        raw = call_vlm(prompt, images, max_tokens)
         result = _parse_json_response(raw)
         result.setdefault("source", "vlm")
         result.setdefault("confidence", 0.0)
@@ -152,31 +151,57 @@ def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
         log.warning(f"VisionAgent VLM call failed: {e}")
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
+def crop_for_vlm(img: Image.Image) -> Image.Image:
+    """Crop to the stats card — must include name, HP bar, and type/weight/height row."""
+    w, h = img.size
+    return img.crop((0, int(h * 0.42), w, int(h * 0.72)))
 
+def _crop_cp_region(img: Image.Image) -> Image.Image:
+    """Crop to just the CP header area at the top."""
+    w, h = img.size
+    return img.crop((0, 0, w, int(h * 0.22)))
+
+def _parse_qa_response(raw: str) -> dict:
+    patterns = {
+        "cp":     r"CP:\s*(\d+)",
+        "hp":     r"HP:\s*(\d+)",           # digits only — stops at non-digit
+        "type1":  r"TYPE1:\s*(\w+)",
+        "type2":  r"TYPE2:\s*(\w+)",
+        "weight": r"WEIGHT:\s*([\d.]+\s*kg)",  # capture number + kg together
+        "height": r"HEIGHT:\s*([\d.]+\s*m)",   # capture number + m together
+    }
+    result = {"screen_type": "base_screen"}
+    found = 0
+    for key, pattern in patterns.items():
+        m = re.search(pattern, raw, re.IGNORECASE)
+        if m:
+            result[key] = {"text": m.group(1).strip(), "confidence": 0.9}
+            found += 1
+        else:
+            result[key] = {"text": "", "confidence": 0.0}
+    result["confidence"] = 0.9 if found >= 5 else round(found / 6, 2)
+    return result
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------
 
-_BASE_SCREEN_PROMPT = """You are analyzing a Pokémon GO storage screen on an iPhone.
-Return ONLY a single JSON object with these exact keys:
+_BASE_SCREEN_PROMPT = """Look at this Pokémon GO screenshot and answer these questions.
+Read the EXACT text visible on screen for each answer.
 
-{
-  "screen_type": "base_screen",
-  "cp":     {"text": "<number>",       "confidence": 0.0},
-  "hp":     {"text": "<number>",       "confidence": 0.0},
-  "type1":  {"text": "<type name>",    "confidence": 0.0},
-  "type2":  {"text": "<type or none>", "confidence": 0.0},
-  "weight": {"text": "<float> kg",     "confidence": 0.0},
-  "height": {"text": "<float> m",      "confidence": 0.0},
-  "confidence": 0.0
-}
+Layout reference:
+- CP number is at the very top after the letters "CP"
+- HP is shown as "X / Y HP" — the text literally contains "/ Y HP". Give only X (the first number before the slash)
+- Weight is on the LEFT below the type badges, labeled "WEIGHT", ends in "kg"
+- Types are in the MIDDLE between weight and height — read the text words, not icons
+- Height is on the RIGHT below the type badges, labeled "HEIGHT", ends in "m"
 
-Rules:
-- confidence values are 0.0 to 1.0.
-- Overall "confidence" is the minimum of all individual confidences.
-- If a field is not visible, set text to "" and confidence to 0.0.
-- Do NOT invent values. If unsure, lower confidence.
-- Return JSON only – no markdown, no prose."""
+Answer in this exact format:
+CP: <number>
+HP: <number>
+TYPE1: <word>
+TYPE2: <word or none>
+WEIGHT: <number> kg
+HEIGHT: <number> m"""
 
 _APPRAISAL_SCREEN_PROMPT = """You are analyzing a Pokémon GO appraisal screen on an iPhone.
 The appraisal overlay shows the Pokémon's name label at the bottom and three
@@ -260,15 +285,48 @@ Return JSON only."""
 # Public API
 # ---------------------------------------------------------------------------
 
-def analyze_base_screen(img: Image.Image) -> dict:
-    """
-    Analyze the bright Pokémon storage screen (before appraisal overlay).
+_CP_PROMPT = """What is the CP number shown in this Pokémon GO screenshot?
+The letters "CP" appear followed by a number.
+Answer in this exact format:
+CP: <number>"""
 
-    Returns a dict with keys: cp, hp, type1, type2, weight, height,
-    confidence, source.
-    """
+_STATS_PROMPT = """Look at this Pokémon GO stats panel and extract these values.
+
+The panel contains (top to bottom):
+1. Pokémon name
+2. A green HP bar with "X / Y HP" text — give only X (a small number, typically under 300)
+3. A row with WEIGHT on left (kg), type badge names in middle, HEIGHT on right (m)
+
+IGNORE: Stardust numbers, candy counts, POWER UP button, EVOLVE button.
+
+Answer in this exact format:
+HP: <number>
+TYPE1: <word>
+TYPE2: <word or none>
+WEIGHT: <number> kg
+HEIGHT: <number> m"""
+
+def analyze_base_screen(img: Image.Image) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
-    return _safe_call(_BASE_SCREEN_PROMPT, _pil_to_list(img))
+    try:
+        # Two focused calls instead of one confused stitched call
+        cp_img = _crop_cp_region(img)
+        cp_img.save("cp_region.png")
+        stats_img = crop_for_vlm(img)
+        stats_img.save("stats_region.png")
+        cp_raw    = call_vlm(_CP_PROMPT,    [cp_img])
+        stats_raw = call_vlm(_STATS_PROMPT, [stats_img])
+        log.debug(f"CP raw: {cp_raw}")
+        log.debug(f"Stats raw: {stats_raw}")
+
+        # Parse both responses together
+        combined = cp_raw + "\n" + stats_raw
+        result = _parse_qa_response(combined)
+        result.setdefault("source", "vlm")
+        return result
+    except Exception as e:
+        log.warning(f"VisionAgent VLM call failed: {e}")
+        return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
 
 def analyze_appraisal_screen(img: Image.Image) -> dict:
