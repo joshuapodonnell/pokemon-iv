@@ -50,7 +50,7 @@ import json
 import logging
 import os
 import re
-import time
+import requests
 from typing import Optional
 
 from PIL import Image
@@ -61,41 +61,14 @@ log = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL_PATH: str = os.environ.get(
-    "POGO_VLM_MODEL",
-    "mlx-community/Qwen2-VL-7B-Instruct-4bit",
-)
+# Put your Windows PC's local IP address and the LM Studio port here
+WINDOWS_PC_IP = "192.168.1.229"   # <-- your PC's local IP (find with `ipconfig` on Windows)
+API_PORT = "11434"
+API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
+VLM_MODEL = "qwen2.5vl:7b"        # must match what you pulled in ollama
 
-# Minimum confidence below which callers should treat the result as unreliable
-# and fall through to the needsreview path.
 CONFIDENCE_THRESHOLD: float = 0.75
-
-# Maximum number of output tokens; keep small to reduce latency.
 MAX_TOKENS: int = 400
-
-# ---------------------------------------------------------------------------
-# Lazy model loader – load once, reuse across calls
-# ---------------------------------------------------------------------------
-
-_model = None
-_processor = None
-
-
-def _load_model():
-    global _model, _processor
-    if _model is not None:
-        return _model, _processor
-    try:
-        from mlx_vlm import load  # type: ignore
-        log.info(f"Loading VLM: {MODEL_PATH} …")
-        t0 = time.time()
-        _model, _processor = load(MODEL_PATH)
-        log.info(f"VLM loaded in {time.time() - t0:.1f}s")
-    except ImportError:
-        raise RuntimeError(
-            "mlx-vlm is not installed. Run: pip install -U mlx-vlm"
-        )
-    return _model, _processor
 
 
 # ---------------------------------------------------------------------------
@@ -103,32 +76,56 @@ def _load_model():
 # ---------------------------------------------------------------------------
 
 def _pil_to_list(img: Image.Image) -> list:
-    """Return the image wrapped in a list as mlx_vlm.generate expects."""
+    """Pass through the PIL image for the API."""
     return [img]
 
 
 def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
-    """Send prompt + images to the local VLM; return the raw text response."""
-    from mlx_vlm import generate  # type: ignore
-    from mlx_vlm.prompt_utils import apply_chat_template  # type: ignore
+    """Send prompt + image to the Windows PC API server."""
+    img = images[0]
 
-    model, processor = _load_model()
-    formatted = apply_chat_template(
-        processor, model.config, prompt, num_images=len(images)
-    )
-    result = generate(
-        model, processor, formatted, images,
-        verbose=False, max_tokens=max_tokens, temp=0.0,
-    )
-    # GenerationResult is a named tuple — extract text field
-    text = result.text if hasattr(result, "text") else result[0]
-    return text.strip()
+    # Convert PIL Image to base64 string
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+    # Standard OpenAI API format payload
+    payload = {
+        "model": VLM_MODEL,  # LM Studio ignores this, but it's required by the API spec
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{img_b64}"}
+                    }
+                ]
+            }
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.0
+    }
+
+    try:
+        response = requests.post(API_URL, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        # Extract the text from the response
+        text = data["choices"][0]["message"]["content"]
+        return text.strip()
+
+    except requests.exceptions.RequestException as e:
+        log.error(f"Failed to connect to Windows PC API: {e}")
+        raise RuntimeError(f"VLM API Error: {e}")
 
 
 def _parse_json_response(raw: str) -> dict:
     """Extract the first JSON object from the VLM's text output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
-    m = re.search(r"\{.*\}", raw, re.DOTALL)  # ← fixed: was r"\\{.*\\}"
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
     if not m:
         log.warning(f"VLM returned no JSON: {raw[:120]!r}")
         return {}
@@ -137,6 +134,9 @@ def _parse_json_response(raw: str) -> dict:
     except json.JSONDecodeError as e:
         log.warning(f"VLM JSON parse error: {e}  raw={raw[:120]!r}")
         return {}
+
+
+# ... keep the rest of your vision_agent.py exactly the same below this point ...
 
 
 def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
