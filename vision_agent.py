@@ -109,7 +109,7 @@ def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
     }
 
     try:
-        response = requests.post(API_URL, json=payload, timeout=30)
+        response = requests.post(API_URL, json=payload, timeout=120)
         response.raise_for_status()
         data = response.json()
 
@@ -135,10 +135,6 @@ def _parse_json_response(raw: str) -> dict:
         log.warning(f"VLM JSON parse error: {e}  raw={raw[:120]!r}")
         return {}
 
-
-# ... keep the rest of your vision_agent.py exactly the same below this point ...
-
-
 def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
     """Wrapper that catches all exceptions and returns an empty failure dict."""
     try:
@@ -152,18 +148,38 @@ def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
 def crop_for_vlm(img: Image.Image) -> Image.Image:
-    """Crop to the stats card — must include name, HP bar, and type/weight/height row."""
     w, h = img.size
-    return img.crop((0, int(h * 0.42), w, int(h * 0.72)))
+    # Start at ~44% (below name/HP), end at ~65% (above stardust/candy row)
+    return img.crop((0, int(h * 0.44), w, int(h * 0.65)))
 
 def _crop_cp_region(img: Image.Image) -> Image.Image:
-    """Crop to just the CP header area at the top."""
+    """Crop to just the CP header area at the top, upscaled for clarity."""
     w, h = img.size
-    return img.crop((0, 0, w, int(h * 0.22)))
+    crop = img.crop((0, 0, w, int(h * 0.22)))
+    # Upscale 2x so digits are large and unambiguous
+    new_w, new_h = crop.width * 2, crop.height * 2
+    return crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
+def _crop_hp_region(img: Image.Image) -> Image.Image:
+    """Crop to just the name + HP bar row."""
+    w, h = img.size
+    return img.crop((0, int(h * 0.40), w, int(h * 0.52)))
 
+def _crop_type_region(img: Image.Image) -> Image.Image:
+    """Crop to just the weight/type/height row — no name, no nickname."""
+    w, h = img.size
+    return img.crop((0, int(h * 0.52), w, int(h * 0.65)))
+VALID_TYPES = {
+    "normal", "fire", "water", "electric", "grass", "ice", "fighting",
+    "poison", "ground", "flying", "psychic", "bug", "rock", "ghost",
+    "dragon", "dark", "steel", "fairy"
+}
+
+def _validate_type(text: str) -> str:
+    """Return the type if valid, empty string if hallucinated."""
+    return text if text.lower() in VALID_TYPES else ""
 def _parse_qa_response(raw: str) -> dict:
     patterns = {
-        "cp":     r"CP:\s*(\d+)",
+        "cp": r"CP:\s*(\d{2,4})",  # enforce 2-4 digits exactly
         "hp":     r"HP:\s*(\d+)",           # digits only — stops at non-digit
         "type1":  r"TYPE1:\s*(\w+)",
         "type2":  r"TYPE2:\s*(\w+)",
@@ -285,19 +301,33 @@ Return JSON only."""
 # Public API
 # ---------------------------------------------------------------------------
 
-_CP_PROMPT = """What is the CP number shown in this Pokémon GO screenshot?
-The letters "CP" appear followed by a number.
-Answer in this exact format:
+_CP_PROMPT = """This is a Pokémon GO screenshot. Find the Combat Power (CP) value.
+
+It appears as large white numbers near the top center of the screen, 
+immediately after the small letters "cp" or "CP".
+
+The CP number is ALWAYS between 10 and 9999.
+Read ALL the digits — do not stop early.
+
+Examples of valid answers: CP: 117, CP: 1989, CP: 677, CP: 3421
+
+Answer in this exact format with nothing else:
 CP: <number>"""
 
 _STATS_PROMPT = """Look at this Pokémon GO stats panel and extract these values.
 
+IMPORTANT: There are circular colored icons showing type badges. 
+IGNORE the icons completely. 
+Read ONLY the TEXT WORD written beneath the icons (e.g. "FAIRY", "ELECTRIC", "DRAGON").
+The type text is always a single English word in capital letters under the icon.
+
 The panel contains (top to bottom):
 1. Pokémon name
-2. A green HP bar with "X / Y HP" text — give only X (a small number, typically under 300)
-3. A row with WEIGHT on left (kg), type badge names in middle, HEIGHT on right (m)
+2. HP shown as "X / Y HP" — give only X
+3. A row: WEIGHT (kg) on left | type ICON with TEXT LABEL in middle | HEIGHT (m) on right
+   → Read the text label under the icon, not the icon itself
 
-IGNORE: Stardust numbers, candy counts, POWER UP button, EVOLVE button.
+IGNORE: Stardust, candy counts, POWER UP, EVOLVE, NEW RECORD banners.
 
 Answer in this exact format:
 HP: <number>
@@ -306,24 +336,90 @@ TYPE2: <word or none>
 WEIGHT: <number> kg
 HEIGHT: <number> m"""
 
+_HP_PROMPT = """This is a crop from a Pokémon GO stats card showing the Pokémon name and HP bar.
+
+Find the HP value shown as "X / Y HP" — a green bar with two numbers and the letters HP.
+Return ONLY the first number (X), the current HP before the slash.
+
+The number is typically between 10 and 500.
+Ignore the Pokémon name, nickname, or any other text.
+
+Answer in this exact format with nothing else:
+HP: <number>"""
+
+
+_TYPE_PROMPT = """This is a crop from a Pokémon GO stats card showing ONLY the weight/type/height row.
+
+The row has exactly three columns:
+- LEFT:   a number followed by "kg" — this is the WEIGHT
+- MIDDLE: one or two circular colored icons, each with a word beneath it — these are the TYPES
+- RIGHT:  a number followed by "m" — this is the HEIGHT
+
+Read the TEXT WORD beneath each circular icon in the middle column.
+Each word will be one of these exact words (never abbreviated):
+NORMAL, FIRE, WATER, ELECTRIC, GRASS, ICE, FIGHTING, POISON, GROUND,
+FLYING, PSYCHIC, BUG, ROCK, GHOST, DRAGON, DARK, STEEL, FAIRY
+
+If there is ONE type icon, set TYPE2 to NONE.
+If there are TWO type icons, read both words left to right.
+
+Answer in this exact format with nothing else:
+TYPE1: <word>
+TYPE2: <word or NONE>
+WEIGHT: <number> kg
+HEIGHT: <number> m"""
+
 def analyze_base_screen(img: Image.Image) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
-        # Two focused calls instead of one confused stitched call
-        cp_img = _crop_cp_region(img)
-        cp_img.save("cp_region.png")
-        stats_img = crop_for_vlm(img)
-        stats_img.save("stats_region.png")
-        cp_raw    = call_vlm(_CP_PROMPT,    [cp_img])
-        stats_raw = call_vlm(_STATS_PROMPT, [stats_img])
-        log.debug(f"CP raw: {cp_raw}")
-        log.debug(f"Stats raw: {stats_raw}")
+        cp_img   = _crop_cp_region(img)
+        hp_img   = _crop_hp_region(img)
+        type_img = _crop_type_region(img)
 
-        # Parse both responses together
-        combined = cp_raw + "\n" + stats_raw
-        result = _parse_qa_response(combined)
-        result.setdefault("source", "vlm")
+        # Save debug crops
+        cp_img.save("cp_region.png")
+        hp_img.save("hp_region.png")
+        type_img.save("type_region.png")
+
+        cp_raw   = call_vlm(_CP_PROMPT,   [cp_img])
+        hp_raw   = call_vlm(_HP_PROMPT,   [hp_img])
+        type_raw = call_vlm(_TYPE_PROMPT, [type_img])
+
+        print(f"DEBUG cp_raw:   {cp_raw!r}")
+        print(f"DEBUG hp_raw:   {hp_raw!r}")
+        print(f"DEBUG type_raw: {type_raw!r}")
+
+        cp_result   = _parse_qa_response(cp_raw)
+        hp_result   = _parse_qa_response(hp_raw)
+        type_result = _parse_qa_response(type_raw)
+
+        result = {
+            "screen_type": "base_screen",
+            "cp":     cp_result.get("cp",       {"text": "", "confidence": 0.0}),
+            "hp":     hp_result.get("hp",        {"text": "", "confidence": 0.0}),
+            "type1":  type_result.get("type1",   {"text": "", "confidence": 0.0}),
+            "type2":  type_result.get("type2",   {"text": "", "confidence": 0.0}),
+            "weight": type_result.get("weight",  {"text": "", "confidence": 0.0}),
+            "height": type_result.get("height",  {"text": "", "confidence": 0.0}),
+            "source": "vlm",
+        }
+
+        # Validate types — reject hallucinations
+        for key in ("type1", "type2"):
+            t = result[key].get("text", "").lower()
+            if t and t not in ("none", "") and t not in VALID_TYPES:
+                log.warning(f"VLM returned invalid type '{t}' — rejecting")
+                result[key] = {"text": "", "confidence": 0.0}
+
+        # Confidence based on how many fields were populated
+        fields_found = sum(
+            1 for k in ("cp", "hp", "type1", "weight", "height")
+            if result.get(k, {}).get("text")
+        )
+        result["confidence"] = 0.9 if fields_found >= 5 else round(fields_found / 5, 2)
+
         return result
+
     except Exception as e:
         log.warning(f"VisionAgent VLM call failed: {e}")
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
