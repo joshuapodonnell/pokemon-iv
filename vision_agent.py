@@ -173,6 +173,10 @@ VALID_TYPES = {
     "poison", "ground", "flying", "psychic", "bug", "rock", "ghost",
     "dragon", "dark", "steel", "fairy"
 }
+def _crop_candy_region(img: Image.Image) -> Image.Image:
+    """Crop to the stardust/candy row — below weight/type/height, above POWER UP."""
+    w, h = img.size
+    return img.crop((0, int(h * 0.65), w, int(h * 0.78)))
 
 def _validate_type(text: str) -> str:
     """Return the type if valid, empty string if hallucinated."""
@@ -197,6 +201,26 @@ def _parse_qa_response(raw: str) -> dict:
             result[key] = {"text": "", "confidence": 0.0}
     result["confidence"] = 0.9 if found >= 5 else round(found / 6, 2)
     return result
+
+def _parse_candy_response(raw: str) -> dict:
+    patterns = {
+        "candy":          r"CANDY:\s*([\d,]+)",
+        "candy_xl":       r"CANDY_XL:\s*([\d,]+)",
+        "candy_species":  r"CANDY_SPECIES:\s*(.+)",
+    }
+    result = {}
+    for key, pattern in patterns.items():
+        m = re.search(pattern, raw, re.IGNORECASE)
+        if m:
+            text = m.group(1).strip()
+            # Strip commas from numbers
+            if key in ("candy", "candy_xl"):
+                text = text.replace(",", "")
+            result[key] = {"text": text, "confidence": 0.9}
+        else:
+            result[key] = {"text": "", "confidence": 0.0}
+    return result
+
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------
@@ -369,29 +393,53 @@ TYPE2: <word or NONE>
 WEIGHT: <number> kg
 HEIGHT: <number> m"""
 
+_CANDY_PROMPT = """This is a crop from a Pokémon GO stats card showing the resource row.
+
+This row contains 2-4 items in this order:
+1. STARDUST — a large number with a purple/pink icon, labeled "STARDUST"
+2. CANDY — a number with a round icon, labeled "<SPECIES> CANDY"
+3. CANDY XL — a number with a square icon, labeled "<SPECIES> CANDY XL"
+4. Sometimes a MEGA ENERGY or PRIMAL ENERGY count appears as a 4th item
+
+Extract only the CANDY and CANDY XL numbers (ignore stardust).
+The species name in the label tells you which Pokémon this is.
+
+Answer in this exact format with nothing else:
+CANDY: <number>
+CANDY_XL: <number>
+CANDY_SPECIES: <species name>"""
+
 def analyze_base_screen(img: Image.Image) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
         cp_img   = _crop_cp_region(img)
         hp_img   = _crop_hp_region(img)
         type_img = _crop_type_region(img)
+        candy_img = _crop_candy_region(img)
+
 
         # Save debug crops
         cp_img.save("cp_region.png")
         hp_img.save("hp_region.png")
         type_img.save("type_region.png")
+        candy_img.save("candy_region.png")
 
         cp_raw   = call_vlm(_CP_PROMPT,   [cp_img])
         hp_raw   = call_vlm(_HP_PROMPT,   [hp_img])
         type_raw = call_vlm(_TYPE_PROMPT, [type_img])
+        candy_raw = call_vlm(_CANDY_PROMPT, [candy_img])
+
+
 
         print(f"DEBUG cp_raw:   {cp_raw!r}")
         print(f"DEBUG hp_raw:   {hp_raw!r}")
         print(f"DEBUG type_raw: {type_raw!r}")
+        print(f"DEBUG candy_raw: {candy_raw!r}")
 
         cp_result   = _parse_qa_response(cp_raw)
         hp_result   = _parse_qa_response(hp_raw)
         type_result = _parse_qa_response(type_raw)
+        candy_result = _parse_candy_response(candy_raw)
 
         result = {
             "screen_type": "base_screen",
@@ -401,6 +449,9 @@ def analyze_base_screen(img: Image.Image) -> dict:
             "type2":  type_result.get("type2",   {"text": "", "confidence": 0.0}),
             "weight": type_result.get("weight",  {"text": "", "confidence": 0.0}),
             "height": type_result.get("height",  {"text": "", "confidence": 0.0}),
+            "candy": candy_result.get("candy", {"text": "", "confidence": 0.0}),
+            "candy_xl": candy_result.get("candy_xl", {"text": "", "confidence": 0.0}),
+            "candy_species": candy_result.get("candy_species", {"text": "", "confidence": 0.0}),
             "source": "vlm",
         }
 
