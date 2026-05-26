@@ -200,7 +200,7 @@ def ocrnameregion(img, ui):
     return ""
 
 
-def resolve_species_name(
+def resolvespeciesname(
         img: Image.Image,
         ui: dict,
         cp: int,
