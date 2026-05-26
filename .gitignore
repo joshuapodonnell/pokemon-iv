@@ -4,3 +4,6 @@
 /calibration_screenshot.png
 /pokemon_ivs.db
 /screenshots/
+/test_ocr.py
+/test_evaluator.py
+/debug_crop.py
