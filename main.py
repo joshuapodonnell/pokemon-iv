@@ -727,7 +727,7 @@ def run_bot(args):
     tap  = TapController(cfg)
 
     # ── Pause controller ──────────────────────────────────────────────
-    pause = PauseController()
+    pause = PauseController(pause_key='f9', quit_key='f10')
     pause.start()
     # ─────────────────────────────────────────────────────────────────
 
