@@ -7,11 +7,11 @@
 # - Classic rankings: rank 1 = best possible IV combo for that league
 #
 # This module computes stat product rankings for a Pokémon at a given league cap.
-
+import logging
 import math
 from iv_calculator import CPM, BASE_STATS, calc_cp
 from evolution_chains import get_evolutions
-
+log = logging.getLogger(__name__)
 LEAGUE_CAPS = {
     "great":  1500,
     "ultra":  2500,
@@ -37,7 +37,9 @@ def all_league_rankings_with_evos(
 
     # Rankings for the Pokémon itself
     results[pokemon_name] = all_league_rankings(pokemon_name, iv_atk, iv_def, iv_sta)
-
+    evos = get_evolutions(pokemon_name)
+    if not evos:
+        log.debug(f"pvp_rankings: no evolutions found for {pokemon_name!r} — check EVOLUTION_CHAINS")
     # Rankings for each evolved form with the same IVs
     for evo in get_evolutions(pokemon_name):
         results[evo] = all_league_rankings(evo, iv_atk, iv_def, iv_sta)
