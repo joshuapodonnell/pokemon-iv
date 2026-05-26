@@ -357,7 +357,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
 
             # ── 3. OCR NAME & IVS ────────────────────────────────────────────
-            name = resolvespeciesname(img, ui, cp)
+            name = resolvespeciesname(img, ui, cp, type_text)
             caught_date = parse_caught_date(raw_text)
             if not name or name == "Unknown":
                 log.warning(f"#{visit_num + 1} Species ID failed (cp={cp})")

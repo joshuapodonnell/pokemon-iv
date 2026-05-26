@@ -21,7 +21,54 @@ ALLTYPES = [
     "Dragon", "Dark", "Steel", "Fairy",
 ]
 
-
+VARIANT_TYPE_MAP = {
+    ("Slowpoke",    "Poison"):          "Slowpoke (Galarian)",
+    ("Slowbro",     "Poison"):          "Slowbro (Galarian)",
+    ("Slowking",    "Poison"):          "Slowking (Galarian)",
+    ("Meowth",      "Steel"):           "Meowth (Galarian)",
+    ("Meowth",      "Dark"):            "Meowth (Alolan)",
+    ("Persian",     "Dark"):            "Persian (Alolan)",
+    ("Perrserker",  "Steel"):           "Perrserker",        # only exists as Galarian Meowth evo
+    ("Farfetch'd",  "Fighting"):        "Farfetch'd (Galarian)",
+    ("Sirfetch'd",  "Fighting"):        "Sirfetch'd",        # only Galarian evo, no ambiguity
+    ("Weezing",     "Fairy"):           "Weezing (Galarian)",
+    ("Ponyta",      "Psychic"):         "Ponyta (Galarian)",
+    ("Rapidash",    "Fairy"):           "Rapidash (Galarian)",
+    ("Voltorb",     "Grass"):           "Voltorb (Hisuian)",
+    ("Electrode",   "Grass"):           "Electrode (Hisuian)",
+    ("Growlithe",   "Rock"):            "Growlithe (Hisuian)",
+    ("Arcanine",    "Rock"):            "Arcanine (Hisuian)",
+    ("Typhlosion",  "Ghost"):           "Typhlosion (Hisuian)",
+    ("Samurott",    "Dark"):            "Samurott (Hisuian)",
+    ("Decidueye",   "Fighting"):        "Decidueye (Hisuian)",
+    ("Qwilfish",    "Dark"):            "Qwilfish (Hisuian)",
+    ("Overqwil",    "Dark"):            "Overqwil",
+    ("Sneasel",     "Fighting"):        "Sneasel (Hisuian)",
+    ("Sneasler",    "Fighting"):        "Sneasler",
+    ("Avalugg",     "Rock"):            "Avalugg (Hisuian)",
+    ("Zorua",       "Normal"):          "Zorua (Hisuian)",
+    ("Zoroark",     "Normal"):          "Zoroark (Hisuian)",
+    ("Braviary",    "Psychic"):         "Braviary (Hisuian)",
+    ("Lilligant",   "Fighting"):        "Lilligant (Hisuian)",
+    ("Goodra",      "Steel"):           "Goodra (Hisuian)",
+    ("Sliggoo",     "Steel"):           "Sliggoo (Hisuian)",
+    ("Basculin",    "Fighting"):        "Basculin (White-Striped)",
+    ("Basculegion", "Ghost"):           "Basculegion",
+    ("Diglett",     "Steel"):           "Diglett (Alolan)",
+    ("Dugtrio",     "Steel"):           "Dugtrio (Alolan)",
+    ("Geodude",     "Electric"):        "Geodude (Alolan)",
+    ("Graveler",    "Electric"):        "Graveler (Alolan)",
+    ("Golem",       "Electric"):        "Golem (Alolan)",
+    ("Grimer",      "Dark"):            "Grimer (Alolan)",
+    ("Muk",         "Dark"):            "Muk (Alolan)",
+    ("Exeggutor",   "Dragon"):          "Exeggutor (Alolan)",
+    ("Marowak",     "Ghost"):           "Marowak (Alolan)",
+    ("Raichu",      "Psychic"):         "Raichu (Alolan)",
+    ("Sandshrew",   "Ice"):             "Sandshrew (Alolan)",
+    ("Sandslash",   "Ice"):             "Sandslash (Alolan)",
+    ("Vulpix",      "Ice"):             "Vulpix (Alolan)",
+    ("Ninetales",   "Fairy"):           "Ninetales (Alolan)",
+}
 # ---------------------------------------------------------------------------
 # OCR helpers
 # ---------------------------------------------------------------------------
@@ -153,10 +200,11 @@ def ocrnameregion(img, ui):
     return ""
 
 
-def resolvespeciesname(
+def resolve_species_name(
         img: Image.Image,
         ui: dict,
         cp: int,
+        type_text: str,
 ) -> str:
     """Combine type/weight/height species ID with direct name OCR for best accuracy."""
 
@@ -168,20 +216,32 @@ def resolvespeciesname(
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
             log.debug(f"resolvespeciesname: name OCR exact match → {known}")
-            return known
+            canonical = known
+            break
+    else:
+        matches = [k for k in SPECIESDB if k.lower().startswith(ocr_lower)]
+        if len(matches) == 1:
+            canonical = matches[0]
+        elif matches:
+            canonical = min(matches, key=len)
+        else:
+            canonical = normalize_species_name(ocr_name)
 
-    matches = [k for k in SPECIESDB if k.lower().startswith(ocr_lower)]
-    if len(matches) == 1:
-        log.debug(f"resolvespeciesname: name OCR prefix match → {matches[0]}")
-        return matches[0]
-    if matches:
-        best = min(matches, key=len)
-        log.debug(f"resolvespeciesname: name OCR best prefix match → {best}")
-        return best
+    # ── Variant resolution ──────────────────────────────────────────
+    if type_text:
+        # type_text may be "Water Psychic", "Poison", "Fire Rock", etc.
+        # Check each word since we key on the *distinguishing* type only
+        type_words = [t.strip().title() for t in type_text.split()]
+        base = canonical.split(" (")[0]  # strip any existing suffix before re-resolving
+        for type_word in type_words:
+            variant = VARIANT_TYPE_MAP.get((base, type_word))
+            if variant:
+                log.debug(f"resolvespeciesname: variant resolved {canonical!r} → {variant!r} via type {type_word!r}")
+                return variant
 
-    normalized = normalize_species_name(ocr_name)
-    log.debug(f"resolvespeciesname using normalized OCR name {normalized!r} from raw {ocr_name!r}")
-    return normalized
+    log.debug(f"resolvespeciesname: resolved to {canonical!r}")
+    return canonical
+
 
 
 # ---------------------------------------------------------------------------
