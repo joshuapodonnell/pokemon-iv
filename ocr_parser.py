@@ -207,13 +207,13 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, line
             sta_y = ui.get(f"sta_bar_y_{lines}lines", ui.get("sta_bar_y", 0.857))
 
         bar_ys = {
-            "atk": (atk_y, "orange"),
-            "def": (def_y, "pink"),
-            "sta": (sta_y, "orange"),
+            "atk": atk_y,
+            "def": def_y,
+            "sta": sta_y,
         }
 
         results = {}
-        for stat, (yrel, color) in bar_ys.items():
+        for stat, yrel in bar_ys.items():
             filled = 0
             py = int(yrel * H)
             for seg in range(bar_segments):
@@ -224,9 +224,8 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, line
                     sample_y = max(0, min(py + dy, H - 1))
                     pixel = img.getpixel((px, sample_y))
                     r, g, b = pixel[0], pixel[1], pixel[2]
-                    if color == "orange" and r > 190 and 110 < g < 190 and b < 100:
-                        votes += 1
-                    elif color == "pink" and r > 155 and g < 145 and r > g + 25:
+                    brightness = (r + g + b) / 3
+                    if brightness >= barfillbrightness:
                         votes += 1
                 if votes >= 2:
                     filled += 1

@@ -31,7 +31,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def parseargs():
+def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--debug", action="store_true")
@@ -179,31 +179,31 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
     return num_lines, raw_text, keep
 
 
-def waitforbarsstableimage(capturefn, readfn, ui, cfg, timeout=4.0, poll=0.3):
-    prevbars = None
-    previmg = None
+def wait_for_bars_stable_image(capture_fn, read_fn, ui, cfg, timeout=4.0, poll=0.3):
+    prev_bars = None
+    prev_img = None
     deadline = time.time() + timeout
     while time.time() < deadline:
         time.sleep(poll)
-        img = capturefn()
-        bars = readfn(img, ui, cfg.get("bar_fill_brightness", 160))
-        if bars == prevbars and prevbars is not None:
-            return previmg
-        prevbars = bars
-        previmg = img
-    return previmg
+        img = capture_fn()
+        bars = read_fn(img, ui, cfg.get("bar_fill_brightness", 160))
+        if bars == prev_bars and prev_bars is not None:
+            return prev_img
+        prev_bars = bars
+        prev_img = img
+    return prev_img
 
 
-def tapnextarrow(tap, ui, cfg):
-    arrowx = ui.get("nextarrow", {}).get("x", 0.93)
-    arrowy = ui.get("nextarrow", {}).get("y", 0.80)
-    tap.tap(arrowx, arrowy, base_delay=cfg["timing"].get("afterswipe", 1.2))
+def tap_next_arrow(tap, ui, cfg):
+    arrow_x = ui.get("next_arrow", {}).get("x", 0.93)
+    arrow_y = ui.get("next_arrow", {}).get("y", 0.80)
+    tap.tap(arrow_x, arrow_y, base_delay=cfg["timing"].get("after_swipe", 1.2))
 
 
-def retryreadcp(capturefn, ui, cfg, max_attempts=5):
+def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     img = None
     for attempt in range(1, max_attempts + 1):
-        img = capturefn()
+        img = capture_fn()
         cp_img = getrelativeregion(img, ui["cp_region"])
         cp_text = ocrregion(cp_img)
         cp = parsecp(cp_text)
@@ -217,12 +217,12 @@ def retryreadcp(capturefn, ui, cfg, max_attempts=5):
     return 0, img
 
 
-def reloadcalibration(cfg):
+def reload_calibration(cfg):
     try:
         with open("calibration.json") as f:
             fresh = json.load(f)
         if "ui" in fresh: cfg["ui"] = fresh["ui"]
-        if "barfillbrightness" in fresh: cfg["barfillbrightness"] = fresh["barfillbrightness"]
+        if "bar_fill_brightness" in fresh: cfg["bar_fill_brightness"] = fresh["bar_fill_brightness"]
         if "timing" in fresh: cfg["timing"] = fresh["timing"]
     except Exception as e:
         log.warning(f"calibration reload failed (using current values): {e}")
@@ -260,7 +260,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
         log.info(f"Tapping {'last' if args.mode == 'newcatch' else 'first'} slot")
         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
 
-    reloadcalibration(cfg)
+    reload_calibration(cfg)
     ui = cfg["ui"]
 
     try:
@@ -310,7 +310,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
             tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
 
-            appraisal_img = waitforbarsstableimage(
+            appraisal_img = wait_for_bars_stable_image(
                 lambda: capture_window(cfg['mirror_region']),
                 readappraisalbars,
                 ui,
@@ -617,7 +617,7 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg):
         time.sleep(1.5)
 
         tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'],
-                base_delay=cfg['timing']['aftertap'])
+                base_delay=cfg['timing']['after_tap'])
 
         tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],    base_delay=cfg['timing']['after_tap'])
         tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
@@ -633,7 +633,7 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def runbot(args):
+def run_bot(args):
     from config import loadconfig
     from screen_capture import capture_window, get_mirror_window_bounds
     from tap_controller import TapController
@@ -654,7 +654,7 @@ def runbot(args):
     if not tags_are_calibrated(cfg["ui"]):
         log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
 
-    starttime = time.time()
+    start_time = time.time()
     log.info("=" * 50)
     log.info(f"Pokémon GO IV Cataloger — Mode: {args.mode}")
     log.info(f"Limit: {args.limit or 'unlimited'}")
@@ -679,7 +679,7 @@ def runbot(args):
         log.error(f"Unexpected error: {e}")
         traceback.print_exc()
     finally:
-        elapsed = (time.time() - starttime) / 60
+        elapsed = (time.time() - start_time) / 60
         stats   = get_stats(conn)
         log.info("=" * 50)
         log.info(f"Session: {len(session_ids) if 'session_ids' in dir() else 0} cataloged, "
@@ -690,4 +690,4 @@ def runbot(args):
 
 
 if __name__ == "__main__":
-    runbot(parseargs())
+    run_bot(parse_args())
