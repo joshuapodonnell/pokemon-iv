@@ -504,7 +504,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             evo_rankings = {
                 s: l for s, l in all_rankings.items() if s != name
             }
-
+            iv_data["pvp"] = pvp
             poke_id = insert_pokemon(conn, iv_data)
             insert_evo_rankings(conn, poke_id, evo_rankings)
 
