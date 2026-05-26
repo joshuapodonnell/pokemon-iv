@@ -269,13 +269,17 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
             # ── 1. OCR BASE SCREEN ────────────────────────────────────────────
             base_img = capture_window(cfg['mirror_region'])
-
             cp_text    = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
-            hp         = parsehp(ocrregion(getrelativeregion(base_img, ui["hp_region"])))
             type_text  = ocrregion(getrelativeregion(base_img, ui["type_region"]))
             weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
             height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
             cp         = parsecp(cp_text)
+
+            hp_img = getrelativeregion(base_img, ui["hp_region"])
+            try:
+                hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
+            except (ValueError, TypeError):
+                hp = 0
 
             # ── VLM base-screen fallback ──────────────────────────────────────
             _base_vlm_used = False
@@ -308,24 +312,81 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             # ── 2. OPEN APPRAISAL ─────────────────────────────────────────────
             tap.tap(ui['menu_button']['x'],   ui['menu_button']['y'],   base_delay=cfg['timing']['after_tap'])
             tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
-            tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
+            tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
 
-            appraisal_img = wait_for_bars_stable_image(
-                lambda: capture_window(cfg['mirror_region']),
-                readappraisalbars,
-                ui,
-                cfg,
+            # ── DETERMINE LAYOUT FROM TEXT LINES ──────────────────────────────
+            img_initial = capture_window(cfg["mirror_region"])
+            raw_crop = getrelativeregion(img_initial, ui["name_region"])
+
+            num_lines, raw_text, kept_lines = detect_description_lines(
+                raw_crop,
+                debug=args.debug,
+                debug_path=f"screenshots/nameregion_lines_{visit_num:03d}.png" if args.debug else None,
             )
 
-            # ── 3. OCR NAME & IVS ────────────────────────────────────────────
-            name_crop     = getrelativeregion(appraisal_img, ui['name_region'])
-            raw_name_text = pytesseract.image_to_string(name_crop, config='--psm 6 --oem 3').strip()
-            log.debug(f"[OCR RAW] name_region text → {raw_name_text!r}")
-            name = resolvespeciesname(appraisal_img, ui, cp)
-            log.debug(f"[OCR RESOLVED] → {name!r}")
+            if args.debug:
+                os.makedirs("screenshots", exist_ok=True)
+                img_initial.save(f"screenshots/appraisal{visit_num:03d}.png")
+                raw_crop.save(f"screenshots/nameregion{visit_num:03d}.png")
+                log.info(f"  Name region OCR: {raw_text!r}")
+                log.info(f"  Detected physical lines: {num_lines}")
 
-            bar_strip = getrelativeregion(appraisal_img, ui['bar_region'])
-            bars      = parseivbars(bar_strip)
+            # ── WAIT FOR BARS & READ ──────────────────────────────────────────
+            read_fn = readappraisalbarsdebug if args.debug else readappraisalbars
+
+            img = wait_for_bars_stable_image(
+                lambda: capture_window(cfg["mirror_region"]),
+                lambda im, u, b: read_fn(im, u, b, lines=num_lines),
+                ui, cfg,
+            )
+
+            if img is None:
+                log.warning(f"#{visit_num + 1} Could not capture stable image. Skipping.")
+                errors += 1
+                if not args.dry_run:
+                    tap_next_arrow(tap, ui, cfg)
+                continue
+
+            cp, img = retry_read_cp(
+                lambda: capture_window(cfg["mirror_region"]),
+                ui, cfg, max_attempts=5,
+            )
+            # ── 3. OCR NAME & IVS ────────────────────────────────────────────
+            name = resolvespeciesname(img, ui, cp)
+            caught_date = parse_caught_date(raw_text)
+            if not name or name == "Unknown":
+                log.warning(f"#{visit_num + 1} Species ID failed (cp={cp})")
+                name = "Unknown"
+
+            # Dynamic bar strip extraction for legacy parseivbars
+            offset = (num_lines - 2) * 0.027
+            dynamic_bar_region = {
+                "x1": ui["bar_region"]["x1"],
+                "y1": ui["bar_region"]["y1"] - offset,
+                "x2": ui["bar_region"]["x2"],
+                "y2": ui["bar_region"]["y2"] - offset,
+            }
+            bar_strip = getrelativeregion(img, dynamic_bar_region)
+
+            if args.debug:
+                bar_strip.save(f"screenshots/barstrip{visit_num:03d}.png")
+
+            bars = parseivbars(bar_strip, args.debug)
+
+            if not bars:
+                log.warning(f"#{visit_num + 1} Bar read failed for {name}. Skipping.")
+                errors += 1
+                if not args.dry_run:
+                    tap_next_arrow(tap, ui, cfg)
+                continue
+
+            atk_iv, def_iv, sta_iv = (
+                (bars["atk"], bars["def"], bars["sta"])
+                if isinstance(bars, dict)
+                else (bars[0], bars[1], bars[2])
+            )
+
+            visit_num += 1
 
             # ── VLM appraisal fallback ────────────────────────────────────────
             _appraisal_vlm_used = False
@@ -336,7 +397,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
             if _name_needs_vlm or _bars_need_vlm:
                 log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
                          f"– calling VisionAgent")
-                _avlm = vision_agent.analyze_appraisal_screen(appraisal_img)
+                _avlm = vision_agent.analyze_appraisal_screen(img_initial)
 
                 if vision_agent.is_reliable(_avlm):
                     _appraisal_vlm_used = True
@@ -380,7 +441,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
                     "weight": weight_text or "",
                     "height": height_text or "",
                 }
-                _rvlm = vision_agent.recover_failed_parse(base_img, appraisal_img, partial)
+                _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
 
                 if vision_agent.is_reliable(_rvlm):
                     log.info(f"Recovery VLM result (conf={_rvlm['confidence']:.2f}): {_rvlm}")
@@ -425,11 +486,6 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
                 cp_valid = False      # guarantees the REVIEW branch below
 
             # ── 5. INSERT & EVALUATE ────────────────────────────x──────────────
-            # Guard: unpack bars only when we have a clean tuple
-            if bars and len(bars) == 3 and None not in bars:
-                atk_iv, def_iv, sta_iv = bars
-            else:
-                atk_iv = def_iv = sta_iv = 0   # sentinel – will be REVIEW anyway
             if args.debug:
                 log.info(
                     f"[SCAN] {name} | CP={cp} | "
