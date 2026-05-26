@@ -11,7 +11,7 @@ import pytesseract
 from pytesseract import Output
 from PIL import ImageEnhance, ImageDraw, Image
 import vision_agent
-
+from pause_controller import PauseController
 from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
@@ -250,7 +250,9 @@ def crop_cp_region(img: Image.Image) -> Image.Image:
 
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
-def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs):
+def pass1_catalog(args, cfg, conn,
+                  tap, capture_window, readappraisalbars,
+                  compute_ivs, pause):
     ui = cfg["ui"]
     session_ids = []
     visit_num = 0
@@ -272,6 +274,14 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
     try:
         for visit_num in range(1, args.limit + 1):
+
+            # ── Pause / quit check ────────────────────────────────────
+            pause.wait_if_paused()
+            if pause.should_stop():
+                log.info("Clean stop requested — ending Pass 1.")
+                break
+            # ─────────────────────────────────────────────────────────
+
             log.info(f"--- Scanning Pokemon {visit_num} ---")
 
             # ── 1. OCR BASE SCREEN ────────────────────────────────────────────
@@ -581,7 +591,7 @@ def report_displaced(conn):
 
 # ── Pass 2: Tag ───────────────────────────────────────────────────────────────
 
-def pass2_tag(args, cfg, conn, tap, session_ids):
+def pass2_tag(args, cfg, conn, tap, session_ids, pause):
     ui = cfg["ui"]
 
     if not session_ids:
@@ -617,6 +627,12 @@ def pass2_tag(args, cfg, conn, tap, session_ids):
     tagged = 0
     try:
         for idx, row in enumerate(new_rows):
+            # ── Pause / quit check ────────────────────────────────────
+            pause.wait_if_paused()
+            if pause.should_stop():
+                log.info("Clean stop requested — ending Pass 2.")
+                break
+            # ─────────────────────────────────────────────────────────
             name   = row["name"]
             cp     = row["cp"]
             iv_pct = row["iv_pct"] or 0
@@ -658,7 +674,7 @@ def pass2_tag(args, cfg, conn, tap, session_ids):
     log.info(f"Pass 2 complete: {tagged} Pokémon tagged.")
 
 
-def micro_pass_2_cleanup(conn, tap, ui, cfg):
+def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
     demoted_rows = conn.execute(
         "SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1"
     ).fetchall()
@@ -670,6 +686,12 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg):
     log.info(f"Micro Pass 2: Cleaning up {len(demoted_rows)} demoted Pokémon...")
 
     for p in demoted_rows:
+        # ── Pause / quit check ────────────────────────────────────
+        pause.wait_if_paused()
+        if pause.should_stop():
+            log.info("Clean stop requested — ending Pass 2.")
+            break
+        # ─────────────────────────────────────────────────────────
         log.info(f"Demoting {p['name']} (CP {p['cp']}, HP {p['hp']}) to TRANSFER...")
 
         tap.tap(ui['search_icon']['x'], ui['search_icon']['y'], base_delay=cfg['timing']['after_tap'])
@@ -704,6 +726,11 @@ def run_bot(args):
     conn = get_db()
     tap  = TapController(cfg)
 
+    # ── Pause controller ──────────────────────────────────────────────
+    pause = PauseController()
+    pause.start()
+    # ─────────────────────────────────────────────────────────────────
+
     try:
         bounds = get_mirror_window_bounds()
         cfg["mirror_region"] = bounds
@@ -723,14 +750,14 @@ def run_bot(args):
 
     try:
         session_ids, errors = pass1_catalog(
-            args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs
+            args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs, pause
         )
 
         if not args.dry_run and session_ids:
             report_displaced(conn)
 
         if not args.dry_run and tags_are_calibrated(cfg["ui"]):
-            micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg)
+            micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
         else:
