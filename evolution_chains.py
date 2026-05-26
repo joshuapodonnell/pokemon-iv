@@ -1,7 +1,7 @@
 # evolution_chains.py — Maps species to their evolved forms for PvP ranking projection
 # Only includes evolutions that are PvP-relevant (i.e., fit under GL/UL caps)
 # IVs are PRESERVED through evolution in Pokémon GO
-
+import re
 EVOLUTION_CHAINS = {
     # Kanto
     "Bulbasaur":    ["Ivysaur", "Venusaur"],
@@ -63,7 +63,7 @@ EVOLUTION_CHAINS = {
     "Drowzee":      ["Hypno"],
     "Krabby":       ["Kingler"],
     "Voltorb":      ["Electrode"],
-    "Exeggcute":    ["Exeggutor"],
+    # Intentionally omitted and defined in regional section "Exeggcute":    ["Exeggutor"],
     "Cubone":       ["Marowak"],
     "Horsea":       ["Seadra", "Kingdra"],
     "Seadra":       ["Kingdra"],
@@ -402,8 +402,85 @@ EVOLUTION_CHAINS = {
     "Panpour":      ["Simipour"],
     "Pansage":      ["Simisage"],
     "Pansear":      ["Simisear"],
+    # ── Regional Variants ────────────────────────────────────────────
+
+    # Alolan
+    "Rattata (Alolan)": ["Raticate (Alolan)"],
+    "Sandshrew (Alolan)": ["Sandslash (Alolan)"],
+    "Vulpix (Alolan)": ["Ninetales (Alolan)"],
+    "Diglett (Alolan)": ["Dugtrio (Alolan)"],
+    "Meowth (Alolan)": ["Persian (Alolan)"],
+    "Geodude (Alolan)": ["Graveler (Alolan)", "Golem (Alolan)"],
+    "Graveler (Alolan)": ["Golem (Alolan)"],
+    "Grimer (Alolan)": ["Muk (Alolan)"],
+    "Exeggcute": ["Exeggutor", "Exeggutor (Alolan)"],  # same base, two evos
+    "Raichu (Alolan)": [],  # final form, no further evo
+    "Marowak (Alolan)": [],
+    "Persian (Alolan)": [],
+    "Ninetales (Alolan)": [],
+    "Sandslash (Alolan)": [],
+    "Dugtrio (Alolan)": [],
+    "Golem (Alolan)": [],
+    "Muk (Alolan)": [],
+    "Exeggutor (Alolan)": [],
+    "Raticate (Alolan)": [],
+
+    # Galarian
+    "Meowth (Galarian)": ["Perrserker"],
+    "Ponyta (Galarian)": ["Rapidash (Galarian)"],
+    "Slowpoke (Galarian)": ["Slowbro (Galarian)", "Slowking (Galarian)"],
+    "Farfetch'd (Galarian)": ["Sirfetch'd"],
+    "Weezing (Galarian)": [],
+    "Mr. Mime (Galarian)": ["Mr. Rime"],
+    "Corsola (Galarian)": ["Cursola"],
+    "Zigzagoon (Galarian)": ["Linoone (Galarian)", "Obstagoon"],
+    "Linoone (Galarian)": ["Obstagoon"],
+    "Darumaka (Galarian)": ["Darmanitan (Galarian)"],
+    "Yamask (Galarian)": ["Runerigus"],
+    "Stunfisk (Galarian)": [],
+    "Perrserker": [],
+    "Rapidash (Galarian)": [],
+    "Slowbro (Galarian)": [],
+    "Slowking (Galarian)": [],
+    "Sirfetch'd": [],
+    "Mr. Rime": [],
+    "Cursola": [],
+    "Obstagoon": [],
+    "Runerigus": [],
+    "Darmanitan (Galarian)": [],
+
+    # Hisuian
+    "Growlithe (Hisuian)": ["Arcanine (Hisuian)"],
+    "Voltorb (Hisuian)": ["Electrode (Hisuian)"],
+    "Typhlosion (Hisuian)": [],
+    "Samurott (Hisuian)": [],
+    "Lilligant (Hisuian)": [],
+    "Zorua (Hisuian)": ["Zoroark (Hisuian)"],
+    "Braviary (Hisuian)": [],
+    "Sliggoo (Hisuian)": ["Goodra (Hisuian)"],
+    "Goodra (Hisuian)": [],
+    "Avalugg (Hisuian)": [],
+    "Decidueye (Hisuian)": [],
+    "Sneasel (Hisuian)": ["Sneasler"],
+    "Qwilfish (Hisuian)": ["Overqwil"],
+    "Arcanine (Hisuian)": [],
+    "Electrode (Hisuian)": [],
+    "Zoroark (Hisuian)": [],
+    "Sneasler": [],
+    "Overqwil": [],
+    "Basculegion": [],
+
+    # Paldean
+    "Wooper (Paldean)": ["Clodsire"],
+    "Tauros (Paldean)": [],  # combat/blaze/aqua breeds — no evo
+    "Clodsire": [],
 }
+
+def normalize_name(name: str) -> str:
+    result = name.strip().title()
+    # Fix apostrophe mangling: "Farfetch'D" → "Farfetch'd"
+    return re.sub(r"'([A-Z])", lambda m: "'" + m.group(1).lower(), result)
 
 def get_evolutions(species: str) -> list[str]:
     """Return the list of evolved forms for a species. Empty list if none/unknown."""
-    return EVOLUTION_CHAINS.get(species.strip().title(), [])
+    return EVOLUTION_CHAINS.get(normalize_name(species), [])

@@ -9,15 +9,15 @@
 # This module computes stat product rankings for a Pokémon at a given league cap.
 import logging
 import math
+
 from iv_calculator import CPM, BASE_STATS, calc_cp
-from evolution_chains import get_evolutions
+from evolution_chains import get_evolutions, normalize_name
 log = logging.getLogger(__name__)
 LEAGUE_CAPS = {
     "great":  1500,
     "ultra":  2500,
     "master": 10000,  # no cap — 15/15/15 is always rank 1
 }
-
 
 
 def all_league_rankings_with_evos(
@@ -83,7 +83,7 @@ def rank_ivs_for_league(pokemon_name: str, iv_atk: int, iv_def: int, iv_sta: int
           "sp_pct_of_max": float,    # stat product as % of rank-1 combo
         }
     """
-    name_key = pokemon_name.strip().title()
+    name_key = normalize_name(pokemon_name)
     stats = BASE_STATS.get(name_key)
     cp_cap = LEAGUE_CAPS.get(league, 1500)
 
