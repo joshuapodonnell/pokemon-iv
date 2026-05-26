@@ -393,91 +393,91 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
 
             visit_num += 1
 
-            # # ── VLM appraisal fallback ────────────────────────────────────────
-            # _appraisal_vlm_used = False
-            # _avlm = {}
-            # _name_needs_vlm = (name is None or name == "Unknown")
-            # _bars_need_vlm  = (bars is None or None in (bars or [None]))
-            #
-            # if _name_needs_vlm or _bars_need_vlm:
-            #     log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
-            #              f"– calling VisionAgent")
-            #     _avlm = vision_agent.analyze_appraisal_screen(img_initial)
-            #
-            #     if vision_agent.is_reliable(_avlm):
-            #         _appraisal_vlm_used = True
-            #
-            #         if _name_needs_vlm:
-            #             vlm_name = _avlm.get("name", {}).get("text", "")
-            #             if vlm_name:
-            #                 resolved = resolvespeciesname(
-            #                     vlm_name, type_text, weight_text, height_text)
-            #                 if resolved and resolved != "Unknown":
-            #                     log.info(f"VLM corrected name: {name!r} → {resolved!r}")
-            #                     name          = resolved
-            #                     raw_name_text = vlm_name
-            #
-            #         if _bars_need_vlm:
-            #             vlm_bars = vision_agent.extract_bar_values(_avlm)
-            #             if vlm_bars is not None:
-            #                 log.info(f"VLM provided bars: {vlm_bars}")
-            #                 bars = vlm_bars
-            #
-            #         log.info(f"VLM appraisal conf={_avlm.get('confidence', 0):.2f}")
-            #     else:
-            #         log.warning(f"VLM appraisal confidence too low "
-            #                     f"({_avlm.get('confidence', 0):.2f})")
-            # # ─────────────────────────────────────────────────────────────────
-            #
-            # # ── PATCH 5: Last-resort VLM recovery ────────────────────────────
-            # _still_broken = (
-            #     name in (None, "Unknown")
-            #     or bars is None
-            #     or None in (bars or [None])
-            # )
-            #
-            # if _still_broken and not _appraisal_vlm_used:
-            #     log.warning("Attempting last-resort VisionAgent recovery …")
-            #     partial = {
-            #         "cp":     str(cp) if cp else "",
-            #         "hp":     str(hp) if hp else "",
-            #         "name":   name or "",
-            #         "type1":  type_text or "",
-            #         "weight": weight_text or "",
-            #         "height": height_text or "",
-            #     }
-            #     _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
-            #
-            #     if vision_agent.is_reliable(_rvlm):
-            #         log.info(f"Recovery VLM result (conf={_rvlm['confidence']:.2f}): {_rvlm}")
-            #
-            #         if name in (None, "Unknown"):
-            #             vlm_name_r = _rvlm.get("name", {}).get("text", "")
-            #             if vlm_name_r:
-            #                 resolved_r = resolvespeciesname(
-            #                     vlm_name_r, type_text, weight_text, height_text)
-            #                 if resolved_r and resolved_r != "Unknown":
-            #                     name = resolved_r
-            #
-            #         if bars is None or None in (bars or [None]):
-            #             vlm_bars_r = vision_agent.extract_bar_values(_rvlm)
-            #             if vlm_bars_r is not None:
-            #                 bars = vlm_bars_r
-            #
-            #         if not cp or cp <= 0:
-            #             cp_text_r = _rvlm.get("cp", {}).get("text", "")
-            #             cp = parsecp(cp_text_r) or cp
-            #     else:
-            #         log.warning(f"Recovery VLM also unreliable "
-            #                     f"(conf={_rvlm.get('confidence', 0):.2f})")
-            #
-            # # Re-evaluate after all VLM attempts
-            # _still_broken = (
-            #     name in (None, "Unknown")
-            #     or bars is None
-            #     or None in (bars or [None])
-            # )
-            # # ─────────────────────────────────────────────────────────────────
+            # ── VLM appraisal fallback ────────────────────────────────────────
+            _appraisal_vlm_used = False
+            _avlm = {}
+            _name_needs_vlm = (name is None or name == "Unknown")
+            _bars_need_vlm  = (bars is None or None in (bars or [None]))
+
+            if _name_needs_vlm or _bars_need_vlm:
+                log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
+                         f"– calling VisionAgent")
+                _avlm = vision_agent.analyze_appraisal_screen(img_initial)
+
+                if vision_agent.is_reliable(_avlm):
+                    _appraisal_vlm_used = True
+
+                    if _name_needs_vlm:
+                        vlm_name = _avlm.get("name", {}).get("text", "")
+                        if vlm_name:
+                            resolved = resolvespeciesname(
+                                vlm_name, type_text, weight_text, height_text)
+                            if resolved and resolved != "Unknown":
+                                log.info(f"VLM corrected name: {name!r} → {resolved!r}")
+                                name          = resolved
+                                raw_name_text = vlm_name
+
+                    if _bars_need_vlm:
+                        vlm_bars = vision_agent.extract_bar_values(_avlm)
+                        if vlm_bars is not None:
+                            log.info(f"VLM provided bars: {vlm_bars}")
+                            bars = vlm_bars
+
+                    log.info(f"VLM appraisal conf={_avlm.get('confidence', 0):.2f}")
+                else:
+                    log.warning(f"VLM appraisal confidence too low "
+                                f"({_avlm.get('confidence', 0):.2f})")
+            # ─────────────────────────────────────────────────────────────────
+
+            # ── PATCH 5: Last-resort VLM recovery ────────────────────────────
+            _still_broken = (
+                name in (None, "Unknown")
+                or bars is None
+                or None in (bars or [None])
+            )
+
+            if _still_broken and not _appraisal_vlm_used:
+                log.warning("Attempting last-resort VisionAgent recovery …")
+                partial = {
+                    "cp":     str(cp) if cp else "",
+                    "hp":     str(hp) if hp else "",
+                    "name":   name or "",
+                    "type1":  type_text or "",
+                    "weight": weight_text or "",
+                    "height": height_text or "",
+                }
+                _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
+
+                if vision_agent.is_reliable(_rvlm):
+                    log.info(f"Recovery VLM result (conf={_rvlm['confidence']:.2f}): {_rvlm}")
+
+                    if name in (None, "Unknown"):
+                        vlm_name_r = _rvlm.get("name", {}).get("text", "")
+                        if vlm_name_r:
+                            resolved_r = resolvespeciesname(
+                                vlm_name_r, type_text, weight_text, height_text)
+                            if resolved_r and resolved_r != "Unknown":
+                                name = resolved_r
+
+                    if bars is None or None in (bars or [None]):
+                        vlm_bars_r = vision_agent.extract_bar_values(_rvlm)
+                        if vlm_bars_r is not None:
+                            bars = vlm_bars_r
+
+                    if not cp or cp <= 0:
+                        cp_text_r = _rvlm.get("cp", {}).get("text", "")
+                        cp = parsecp(cp_text_r) or cp
+                else:
+                    log.warning(f"Recovery VLM also unreliable "
+                                f"(conf={_rvlm.get('confidence', 0):.2f})")
+
+            # Re-evaluate after all VLM attempts
+            _still_broken = (
+                name in (None, "Unknown")
+                or bars is None
+                or None in (bars or [None])
+            )
+            # ─────────────────────────────────────────────────────────────────
 
             # ── 4. DATA VALIDATION ────────────────────────────────────────────
             cp_valid = True
@@ -485,10 +485,10 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
                 log.warning(f"Impossible CP read: {cp}. Forcing REVIEW tag.")
                 cp_valid = False
 
-            # if _still_broken:
-            #     log.warning(f"Could not resolve name/bars after all fallbacks "
-            #                 f"(name={name!r}, bars={bars}) – forcing REVIEW tag.")
-            #     cp_valid = False      # guarantees the REVIEW branch below
+            if _still_broken:
+                log.warning(f"Could not resolve name/bars after all fallbacks "
+                            f"(name={name!r}, bars={bars}) – forcing REVIEW tag.")
+                cp_valid = False      # guarantees the REVIEW branch below
 
             # ── 5. INSERT & EVALUATE ────────────────────────────x──────────────
             if args.debug:
@@ -498,7 +498,7 @@ def pass1_catalog(args, cfg, conn, tap, capture_window, readappraisalbars, compu
                     f"IV%={round((atk_iv + def_iv + sta_iv) / 45 * 100, 1)}%"
                 )
             iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
-
+            iv_data['caught_date'] = caught_date
             all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
             pvp = all_rankings.get(name, {"great": {}, "ultra": {}})
             evo_rankings = {
