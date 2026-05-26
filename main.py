@@ -10,7 +10,9 @@ import re
 import pytesseract
 from pytesseract import Output
 from PIL import ImageEnhance, ImageDraw, Image
+from freeze_detector import FreezeDetector
 import vision_agent
+import numpy as np
 from pause_controller import PauseController
 from ocr_parser import (
     resolvespeciesname,
@@ -248,6 +250,40 @@ def crop_cp_region(img: Image.Image) -> Image.Image:
     new_w, new_h = crop.width * 2, crop.height * 2
     return crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
+def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
+                   max_attempts: int = 3) -> bool:
+    """
+    Attempt to recover from a frozen iPhone Mirroring session.
+    Returns True if the screen started changing again.
+    """
+    ui = cfg["ui"]
+
+    for attempt in range(1, max_attempts + 1):
+        log.warning(f"[FREEZE] Recovery attempt {attempt}/{max_attempts}...")
+
+        # Try tapping the center of the screen to wake it
+        tap.tap(0.5, 0.5, base_delay=2.0)
+
+        img = capture_window(cfg["mirror_region"])
+        small = np.array(img.resize((64, 128)).convert("L"), dtype=np.int16)
+
+        if freeze._last_pixels is not None:
+            diff  = np.abs(small - freeze._last_pixels)
+            ratio = int(np.sum(diff < 8)) / diff.size
+            if ratio < freeze._threshold:
+                log.info(f"[FREEZE] Screen changed after tap — recovered!")
+                freeze.reset()
+                return True
+
+        # Escalate: tap back button to escape any stuck screen
+        if attempt == 2:
+            log.warning("[FREEZE] Trying back button...")
+            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"], base_delay=2.0)
+
+        time.sleep(3.0)
+
+    log.error("[FREEZE] All recovery attempts failed.")
+    return False
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn,
@@ -257,7 +293,7 @@ def pass1_catalog(args, cfg, conn,
     session_ids = []
     visit_num = 0
     errors = 0
-
+    freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
     log.info("── Pass 1: Cataloging ──────────────────────────────────────────")
     log.info("Set the in-game search to 'age0', navigate to storage, then wait.")
     for i in range(3, 0, -1):
@@ -285,7 +321,15 @@ def pass1_catalog(args, cfg, conn,
             log.info(f"--- Scanning Pokemon {visit_num} ---")
 
             # ── 1. OCR BASE SCREEN ────────────────────────────────────────────
-            base_img = capture_window(cfg['mirror_region'])
+            # ── Freeze check ──────────────────────────────────────────
+            base_img = capture_window(cfg["mirror_region"])
+            if freeze.update(base_img):
+                recovered = _handle_freeze(tap, cfg, capture_window, freeze)
+                if not recovered:
+                    log.error("[FREEZE] Could not recover — stopping bot.")
+                    break
+                continue  # re-scan this slot after recovery
+            # ─────────────────────────────────────────────────────────
             cp_text    = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
             log.info(f"raw cp_text: {cp_text}")
             type_text  = ocrregion(getrelativeregion(base_img, ui["type_region"]))
@@ -684,6 +728,8 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
         return
 
     log.info(f"Micro Pass 2: Cleaning up {len(demoted_rows)} demoted Pokémon...")
+    from screen_capture import capture_window
+    freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
 
     for p in demoted_rows:
         # ── Pause / quit check ────────────────────────────────────
@@ -692,6 +738,15 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
             log.info("Clean stop requested — ending Pass 2.")
             break
         # ─────────────────────────────────────────────────────────
+         # ── Freeze check ──────────────────────────────────────────────
+        img = capture_window(cfg["mirror_region"])
+        if freeze.update(img):
+            recovered = _handle_freeze(tap, cfg, capture_window, freeze)
+            if not recovered:
+                log.error("[FREEZE] Could not recover in micro Pass 2 — stopping.")
+                break
+            continue  # retry this Pokémon after recovery
+        # ─────────────────────────────────────────────────────────────
         log.info(f"Demoting {p['name']} (CP {p['cp']}, HP {p['hp']}) to TRANSFER...")
 
         tap.tap(ui['search_icon']['x'], ui['search_icon']['y'], base_delay=cfg['timing']['after_tap'])
