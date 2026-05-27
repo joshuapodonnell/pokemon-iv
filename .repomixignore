@@ -1,0 +1,13 @@
+data/
+old_calibrate/
+.idea/
+test_ocr.py
+test_vlm.py
+screenshots/
+iv_images/
+species_lookup.json
+__pycache__/
+.venv/
+venv/
+.descriptions.xml
+errors/

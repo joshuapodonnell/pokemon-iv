@@ -772,12 +772,12 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def run_bot(args):
-    from config import loadconfig
+    from config import load_config
     from screen_capture import capture_window, get_mirror_window_bounds
     from tap_controller import TapController
     from iv_calculator import compute_ivs
 
-    cfg  = loadconfig()
+    cfg  = load_config()
     conn = get_db()
     tap  = TapController(cfg)
 

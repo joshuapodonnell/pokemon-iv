@@ -3,71 +3,71 @@ import os
 
 CONFIGFILE = os.path.join(os.path.dirname(__file__), "calibration.json")
 
-DEFAULTCONFIG = {
-    "mirrorregion": {"x": 0, "y": 0, "w": 400, "h": 860},
+DEFAULT_CONFIG = {
+    "mirror_region": {"x": 0, "y": 0, "w": 400, "h": 860},
     "ui": {
         # Pokémon list screen
-        "firstpokemon":   {"x": 0.50, "y": 0.18},
-        "nextpokemon":    {"x": 0.50, "y": 0.18},
-        "swipestart":     {"x": 0.50, "y": 0.75},
-        "swipeend":       {"x": 0.50, "y": 0.25},
+        "first_pokemon":   {"x": 0.50, "y": 0.18},
+        "next_pokemon":    {"x": 0.50, "y": 0.18},
+        "swipe_start":     {"x": 0.50, "y": 0.75},
+        "swipe_end":       {"x": 0.50, "y": 0.25},
         # Pokémon detail screen
-        "appraisebutton": {"x": 0.50, "y": 0.92},
-        "menubutton":     {"x": 0.88, "y": 0.92},
-        "backbutton":     {"x": 0.06, "y": 0.06},
+        "appraise_button": {"x": 0.50, "y": 0.92},
+        "menu_button":     {"x": 0.88, "y": 0.92},
+        "back_button":     {"x": 0.06, "y": 0.06},
         # Appraisal screen
-        "appraisalnext":  {"x": 0.50, "y": 0.88},
-        "appraisaldone":  {"x": 0.50, "y": 0.88},
-        "nextarrow":      {"x": 0.93, "y": 0.80},
+        "appraisal_next":  {"x": 0.50, "y": 0.88},
+        "appraisal_done":  {"x": 0.50, "y": 0.88},
+        "next_arrow":      {"x": 0.93, "y": 0.80},
         # IV bar scan lines (y = vertical centre of each bar row, relative to window)
-        "atkbary": 0.62,
-        "defbary": 0.69,
-        "stabary": 0.76,
-        "barxstart": 0.28,
-        "barxend":   0.94,
-        "barsegments": 15,
+        "atk_bar_y": 0.62,
+        "def_bar_y": 0.69,
+        "sta_bar_y": 0.76,
+        "bar_x_start": 0.28,
+        "bar_x_end":   0.94,
+        "bar_segments": 15,
         # OCR regions — x1/y1/x2/y2 relative to window
-        "nameregion":  {"x1": 0.10, "y1": 0.10, "x2": 0.90, "y2": 0.20},
-        "cpregion":    {"x1": 0.25, "y1": 0.04, "x2": 0.75, "y2": 0.12},
-        "hpregion":    {"x1": 0.10, "y1": 0.52, "x2": 0.90, "y2": 0.60},
-        "dustregion":  {"x1": 0.10, "y1": 0.56, "x2": 0.90, "y2": 0.64},
-        "typeregion":  {"x1": 0.10, "y1": 0.30, "x2": 0.90, "y2": 0.40},
-        "weightregion":{"x1": 0.10, "y1": 0.42, "x2": 0.55, "y2": 0.50},
-        "heightregion":{"x1": 0.55, "y1": 0.42, "x2": 0.90, "y2": 0.50},
+        "name_region":  {"x1": 0.10, "y1": 0.10, "x2": 0.90, "y2": 0.20},
+        "cp_region":    {"x1": 0.25, "y1": 0.04, "x2": 0.75, "y2": 0.12},
+        "hp_region":    {"x1": 0.10, "y1": 0.52, "x2": 0.90, "y2": 0.60},
+        "dust_region":  {"x1": 0.10, "y1": 0.56, "x2": 0.90, "y2": 0.64},
+        "type_region":  {"x1": 0.10, "y1": 0.30, "x2": 0.90, "y2": 0.40},
+        "weight_region":{"x1": 0.10, "y1": 0.42, "x2": 0.55, "y2": 0.50},
+        "height_region":{"x1": 0.55, "y1": 0.42, "x2": 0.90, "y2": 0.50},
         # Pokémon list slots
-        "pokemonslots": [
+        "pokemon_slots": [
             {"x": 0.201, "y": 0.286},
             {"x": 0.502, "y": 0.286},
             {"x": 0.809, "y": 0.283},
         ],
-        "listswipestart": {"x": 0.5, "y": 0.7},
-        "listswipeend":   {"x": 0.5, "y": 0.28},
+        "list_swipe_start": {"x": 0.5, "y": 0.7},
+        "list_swipe_end":   {"x": 0.5, "y": 0.28},
     },
-    "barfillbrightness": 160,
+    "bar_fill_brightness": 160,
     "timing": {
-        "aftertap":       1.5,
-        "afterswipe":     1.2,
-        "afterappraise":  2.0,
-        "betweenpokemon": 1.5,
-        "ocrsettle":      0.8,
+        "after_tap":       1.5,
+        "after_swipe":     1.2,
+        "after_appraise":  2.0,
+        "between_pokemon": 1.5,
+        "ocr_settle":      0.8,
     },
     "randomization": {
-        "tapjitterpx":    4,
-        "timingsigma":    0.3,
-        "mindelayfactor": 0.5,
-        "maxdelayfactor": 3.0,
-        "shortbreakevery": [50, 200],
-        "shortbreakdur":   [15, 120],
-        "longbreakevery":  [400, 600],
-        "longbreakdur":    [120, 480],
-        "sessionmaxmin":   [45, 90],
+        "tap_jitter_px":    4,
+        "timing_sigma":    0.3,
+        "min_delay_factor": 0.5,
+        "max_delay_factor": 3.0,
+        "short_break_every": [50, 200],
+        "short_break_dur":   [15, 120],
+        "long_break_every":  [400, 600],
+        "long_break_dur":    [120, 480],
+        "session_max_min":   [45, 90],
     },
 }
 
 
-def loadconfig() -> dict:
+def load_config() -> dict:
     """Load config: start from DEFAULTCONFIG, overlay saved calibration.json values."""
-    cfg = _deepcopy(DEFAULTCONFIG)
+    cfg = _deepcopy(DEFAULT_CONFIG)
     if os.path.exists(CONFIGFILE):
         try:
             with open(CONFIGFILE) as f:
@@ -78,7 +78,7 @@ def loadconfig() -> dict:
     return cfg
 
 
-def saveconfig(cfg: dict) -> None:
+def save_config(cfg: dict) -> None:
     """Persist the current config dict to calibration.json."""
     with open(CONFIGFILE, "w") as f:
         json.dump(cfg, f, indent=2)
