@@ -281,13 +281,22 @@ def _is_valid_base_parse(cp, hp, typetext, weighttext, heighttext, name=None):
         return False
     return True
 
+
 def crop_cp_region(img: Image.Image) -> Image.Image:
-    """Crop to just the CP header area at the top, upscaled for clarity."""
+    """Crop to just the CP number — exclude status bar and arc dot."""
     w, h = img.size
-    crop = img.crop((0, 0, w, int(h * 0.22)))
-    # Upscale 2x so digits are large and unambiguous
-    new_w, new_h = crop.width * 2, crop.height * 2
-    return crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    # Skip the top ~8% (status bar) and bottom of the CP zone
+    # CP number lives roughly between 8%-18% vertically
+    # Horizontally centered — exclude the star/camera icons on the right
+    top = int(h * 0.10)
+    bottom = int(h * 0.18)
+    left = int(w * 0.20)  # skip left edge noise
+    right = int(w * 0.80)  # skip star icon on right
+
+    crop = img.crop((left, top, right, bottom))
+    # Upscale 3x — tighter crop means we can go bigger
+    return crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
 
 def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
                    max_attempts: int = 3) -> bool:
