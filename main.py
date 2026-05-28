@@ -223,6 +223,36 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for review")
     return 0, img
 
+def _reconcile_cp(ocr_cp: int | None, vlm_cp: int | None) -> int | None:
+    if ocr_cp is None:
+        return vlm_cp
+    if vlm_cp is None:
+        return ocr_cp
+    if ocr_cp == vlm_cp:
+        return ocr_cp
+
+    ocr_s, vlm_s = str(ocr_cp), str(vlm_cp)
+
+    if len(vlm_s) == len(ocr_s) + 1:
+        if vlm_s.startswith(ocr_s):
+            # VLM duplicated trailing digit (67 → 677)
+            log.info(f"CP reconcile: VLM {vlm_cp} has spurious trailing digit vs OCR {ocr_cp} — trusting OCR")
+            return ocr_cp
+        if vlm_s.endswith(ocr_s):
+            # VLM added leading digit (arc dot: 194 → 1941)
+            log.info(f"CP reconcile: VLM {vlm_cp} has spurious leading digit vs OCR {ocr_cp} — trusting OCR")
+            return ocr_cp
+
+    if len(ocr_s) == len(vlm_s) + 1:
+        if ocr_s.startswith(vlm_s) or ocr_s.endswith(vlm_s):
+            # OCR has extra digit, VLM is shorter — trust VLM
+            log.info(f"CP reconcile: OCR {ocr_cp} has extra digit vs VLM {vlm_cp} — trusting VLM")
+            return vlm_cp
+
+    # Same digit count, different value — VLM wins (OCR prefix errors
+    # like 'p67', 'ce194' corrupt the value but not digit count)
+    log.info(f"CP reconcile: same length OCR={ocr_cp} VLM={vlm_cp} — trusting VLM")
+    return vlm_cp
 
 def reload_calibration(cfg):
     try:
@@ -438,13 +468,15 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── Collect VLM CP consensus (should be ready by now) ─────────────────
     try:
         vlm_cp = _cp_vlm_future.result(timeout=60)
-        if vlm_cp and vlm_cp != cp:
-            log.info(f"VLM CP correction: {cp} → {vlm_cp} (raw ocr was {cp_text!r})")
-            cp = vlm_cp
+        reconciled = _reconcile_cp(cp, vlm_cp)
+        if reconciled != cp:
+            log.info(f"VLM CP correction: {cp} → {reconciled} (raw ocr was {cp_text!r})")
+            cp = reconciled
         else:
             log.debug(f"VLM CP confirmed: {cp}")
     except Exception as e:
         log.warning(f"VLM CP consensus failed: {e} — keeping OCR value")
+
     # ─────────────────────────────────────────────────────────────────────
 
     # ── 3. OCR NAME & IVS ────────────────────────────────────────────────
