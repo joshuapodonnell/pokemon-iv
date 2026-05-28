@@ -155,7 +155,7 @@ def _pil_to_list(img: Image.Image) -> list:
 # How long to wait for the remote PC to *accept* the connection.
 # Keep this short so failures are detected in ~3 s, not 120 s.
 REMOTE_CONNECT_TIMEOUT = 3    # seconds
-REMOTE_READ_TIMEOUT    = 120  # seconds (model inference can be slow)
+REMOTE_READ_TIMEOUT    = 180  # seconds (model inference can be slow)
 
 _remote_available: bool | None = None  # None = untested
 
@@ -692,3 +692,43 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
             int(x2 * img_w), int(y2 * img_h),
         )
     return result
+
+
+REMOTE_WARMUP_TIMEOUT = 180  # 3 minutes — enough for 32B to load into VRAM
+
+def warmup_remote() -> bool:
+    """
+    Send a trivial text-only request to Ollama to force the model to load
+    into VRAM before scanning begins. Returns True if remote is ready.
+    """
+    global _remote_available
+    log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 32B…")
+
+    payload = {
+        "model": VLM_MODEL,
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with the word READY and nothing else."}]}],
+        "max_tokens": 5,
+        "temperature": 0.0,
+    }
+    try:
+        response = requests.post(
+            API_URL,
+            json=payload,
+            timeout=(REMOTE_CONNECT_TIMEOUT, REMOTE_WARMUP_TIMEOUT),
+        )
+        response.raise_for_status()
+        _remote_available = True
+        log.info("[VLM] Remote model warmed up and ready.")
+        return True
+    except requests.exceptions.ConnectionError:
+        log.warning("[VLM] Remote PC unreachable during warmup — will use local model.")
+        _remote_available = False
+        return False
+    except requests.exceptions.Timeout:
+        log.warning(f"[VLM] Remote warmup timed out after {REMOTE_WARMUP_TIMEOUT}s — will use local model.")
+        _remote_available = False
+        return False
+    except Exception as e:
+        log.warning(f"[VLM] Remote warmup failed: {e} — will use local model.")
+        _remote_available = False
+        return False

@@ -975,7 +975,7 @@ def run_bot(args):
     from screen_capture import capture_window, get_mirror_window_bounds
     from tap_controller import TapController
     from iv_calculator import compute_ivs
-
+    import vision_agent
     cfg  = load_config()
     conn = get_db()
     tap  = TapController(cfg)
@@ -1002,6 +1002,18 @@ def run_bot(args):
     log.info(f"Limit: {args.limit or 'unlimited'}")
     log.info("=" * 50)
 
+
+    log.info("Warming up VLM — scanning will begin once model is ready…")
+    vlm_ready = vision_agent.warmup_remote()
+    if vlm_ready:
+        log.info("VLM ready on remote PC.")
+    else:
+        log.warning("VLM falling back to local M1 model (2B).")
+
+    # Then the existing countdown
+    for i in range(3, 0, -1):
+        log.info(f"Starting in {i}s…")
+        time.sleep(1)
     try:
         session_ids, errors = pass1_catalog(
             args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs, pause
