@@ -128,6 +128,11 @@ def normalize_species_name(name: str) -> str:
 
 def parsecp(text: str) -> int:
     """Extract CP integer from OCR text like 'CP 310' or '310'."""
+    if not text:
+        return 0
+    # Slash in CP text = misread 7, treat as failed parse
+    if "/" in text:
+        return 0
     m = re.search(r"(\d{1,4})", text)
     try:
         return int(m.group(1)) if m else 0

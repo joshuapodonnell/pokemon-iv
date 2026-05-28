@@ -223,7 +223,11 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for review")
     return 0, img
 
-def _reconcile_cp(ocr_cp: int | None, vlm_cp: int | None) -> int | None:
+def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
+    # If OCR raw text had a slash, it's a known-bad read — trust VLM unconditionally
+    if "/" in ocr_raw or "\\" in ocr_raw:
+        log.info(f"CP reconcile: OCR raw {ocr_raw!r} has slash (misread 7) — trusting VLM {vlm_cp}")
+        return vlm_cp
     if ocr_cp is None:
         return vlm_cp
     if vlm_cp is None:
@@ -333,11 +337,7 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
     return frames
 
 
-def _vlm_cp_consensus(frames: list) -> int | None:
-    """
-    Run VLM on each frame, collect parsed CP values, return the most
-    common value that appears in at least half the frames.
-    """
+def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
     from collections import Counter
     votes = []
     for i, frame in enumerate(frames):
@@ -347,17 +347,28 @@ def _vlm_cp_consensus(frames: list) -> int | None:
             cp     = parsecp(parsed.get("cp", {}).get("text", ""))
             if cp:
                 votes.append(cp)
-                log.debug(f"  CP frame {i+1}: {cp}")
         except Exception as e:
             log.debug(f"  CP frame {i+1} failed: {e}")
 
     if not votes:
         return None
 
-    # Most common value — require it to appear in at least 2 frames
+    log.info(f"VLM CP consensus: all votes: {votes}")
+
+    # If OCR gave us a digit count anchor, filter VLM votes to matching length
+    if ocr_cp and ocr_cp > 0:
+        ocr_len = len(str(ocr_cp))
+        matching = [v for v in votes if len(str(v)) == ocr_len]
+        if matching:
+            best, count = Counter(matching).most_common(1)[0]
+            log.info(f"VLM CP (digit-filtered to {ocr_len} digits): {best} ({count}/{len(matching)} matching votes)")
+            return best
+        # No votes matched OCR digit count — OCR digit count is probably wrong
+        # Fall through to unfiltered consensus
+
     best, count = Counter(votes).most_common(1)[0]
-    log.info(f"VLM CP consensus: {best} ({count}/{len(frames)} votes) — all votes: {votes}")
-    return best if count >= 2 else max(votes)  # fallback: trust the highest value
+    log.info(f"VLM CP consensus: {best} ({count}/{len(votes)} votes)")
+    return best if count >= 2 else None
 # ── Core scan logic ───────────────────────────────────────────────────────────
 
 def scan_one_pokemon(visit_num, args, cfg, conn,
@@ -384,6 +395,12 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
     cp          = parsecp(cp_text)
+    # Flag if the raw text contains a slash — likely a 7 misread
+    _ocr_has_slash = "/" in cp_text or "\\" in cp_text
+    _ocr_cp_clean = cp and cp > 0 and not _ocr_has_slash
+
+    if _ocr_has_slash:
+        log.info(f"CP text contains slash — likely misread 7, forcing VLM")
 
     # ── Submit VLM CP consensus check in background ───────────────────────
     def _capture_and_consensus():
@@ -391,7 +408,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             capture_window, cfg, n=5, interval=0.4,
             debug=args.debug, visit_num=visit_num,  # ← pass through
         )
-        return _vlm_cp_consensus(frames)
+        return _vlm_cp_consensus(frames, ocr_cp=cp)  # cp is the OCR parse
 
     _cp_vlm_future = _vlm_executor.submit(_capture_and_consensus)
     # ─────────────────────────────────────────────────────────────────────
@@ -468,7 +485,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── Collect VLM CP consensus (should be ready by now) ─────────────────
     try:
         vlm_cp = _cp_vlm_future.result(timeout=60)
-        reconciled = _reconcile_cp(cp, vlm_cp)
+        reconciled = _reconcile_cp(cp, vlm_cp, ocr_raw=cp_text)
         if reconciled != cp:
             log.info(f"VLM CP correction: {cp} → {reconciled} (raw ocr was {cp_text!r})")
             cp = reconciled
