@@ -114,7 +114,9 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         if avg_conf < 40:
             continue
         aspect = width / max(1, height)
-        if aspect < 2.5:  # text lines are always much wider than tall
+        # Allow confident short lines (e.g. a date fragment or short city name)
+        # even if their aspect ratio is low; only block low-confidence narrow hits
+        if aspect < 2.5 and avg_conf < 70:
             continue
 
         lines.append({
@@ -133,20 +135,35 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
     if not lines:
         return 2, "", []
 
+    # Filter out lines whose height is anomalously large vs the median —
+    # loading-bar artefacts tend to produce oversized bounding boxes
     median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
-    # Filter out lines whose height is anomalously large (likely graphic elements)
-    if median_h > 0:
-        lines = [l for l in lines if l["height"] < median_h * 2.5]
-    max_gap = max(18, int(median_h * 1.25))
+    lines = [l for l in lines if l["height"] < median_h * 2.5]
 
+    if not lines:
+        return 2, "", []
+
+    # Recompute median from the cleaned set so max_gap reflects real text height
+    clean_median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
+    max_gap = max(18, int(clean_median_h * 1.25))
+
+    # Anchor on the "caught" line, the date, or the "around" location line —
+    # any of these three uniquely identifies the description block even when
+    # Tesseract splits "caught … date" and "around … location" into separate
+    # blocks due to contrast-enhanced mid-line breaks
     anchor_idx = None
     for i, line in enumerate(lines):
         txt = line["text"].lower()
-        if "caught" in txt or re.search(r"\b\d{1,2}/\d{1,2}/\d{4}\b", txt):
+        if (
+            "caught" in txt
+            or "around" in txt
+            or re.search(r"\b\d{1,2}/\d{1,2}/\d{4}\b", txt)
+        ):
             anchor_idx = i
             break
 
     if anchor_idx is None:
+        # No anchor found — fall back to the longest unbroken run of lines
         runs = []
         start = 0
         for i in range(1, len(lines)):
@@ -156,8 +173,9 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
                 start = i
         runs.append((start, len(lines) - 1))
         best = max(runs, key=lambda ab: ab[1] - ab[0] + 1)
-        keep = lines[best[0]:best[1] + 1]
+        keep = lines[best[0] : best[1] + 1]
     else:
+        # Expand outward from the anchor as long as lines are within max_gap
         lo = hi = anchor_idx
         while lo > 0:
             gap = lines[lo]["top"] - lines[lo - 1]["bottom"]
@@ -169,7 +187,7 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
             if gap > max_gap:
                 break
             hi += 1
-        keep = lines[lo:hi + 1]
+        keep = lines[lo : hi + 1]
 
     raw_text = " ".join(line["text"] for line in keep)
     num_lines = max(2, min(5, len(keep)))
@@ -184,13 +202,12 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
             draw.rectangle(
                 (line["left"], line["top"], line["left"] + line["width"], line["bottom"]),
                 outline=color,
-                width=2
+                width=2,
             )
             draw.line((0, line["top"], dbg.size[0], line["top"]), fill=color, width=2)
         dbg.save(debug_path)
 
     return num_lines, raw_text, keep
-
 
 def wait_for_bars_stable_image(capture_fn, read_fn, ui, cfg, timeout=4.0, poll=0.3):
     prev_bars = None
