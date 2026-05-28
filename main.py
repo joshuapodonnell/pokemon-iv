@@ -295,8 +295,11 @@ def crop_cp_region(img: Image.Image) -> Image.Image:
     right = int(w * 0.80)  # skip star icon on right
 
     crop = img.crop((left, top, right, bottom))
+
+
     # Upscale 3x — tighter crop means we can go bigger
     return crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
+
 
 def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
                    max_attempts: int = 3) -> bool:
@@ -337,7 +340,7 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
     frames = []
     for i in range(n):
         img = capture_fn(cfg["mirror_region"])
-        frame = crop_cp_region(img)
+        frame = getrelativeregion(img, cfg["ui"]["cp_region"])
         if debug:
             os.makedirs("screenshots", exist_ok=True)
             frame.save(f"screenshots/cp_vlm_{visit_num:03d}_frame{i+1}.png")
@@ -396,12 +399,13 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])  # reprocess path captures fresh
     cp_image = getrelativeregion(base_img, ui["cp_region"])
-    cp_image.save(f"screenshots/cp_{visit_num:03d}.png")
-    cp_text     = ocrregion(cp_image)
-    log.info(f"raw cp_text: {cp_text}")
     if args.debug:
         os.makedirs("screenshots", exist_ok=True)
-        crop_cp_region(base_img).save(f"screenshots/cp_ocr_{visit_num:03d}.png")
+        cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
+
+    cp_text     = ocrregion(cp_image)
+    log.info(f"raw cp_text: {cp_text}")
+
     type_text   = ocrregion(getrelativeregion(base_img, ui["type_region"]))
     weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
