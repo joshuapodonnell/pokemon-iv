@@ -65,7 +65,7 @@ log = logging.getLogger(__name__)
 WINDOWS_PC_IP = "192.168.1.229"   # <-- your PC's local IP (find with `ipconfig` on Windows)
 API_PORT = "11434"
 API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
-VLM_MODEL = "qwen2.5vl:7b"        # must match what you pulled in ollama
+VLM_MODEL = "qwen2.5vl:32b"        # must match what you pulled in ollama
 
 CONFIDENCE_THRESHOLD: float = 0.75
 MAX_TOKENS: int = 400
@@ -105,26 +105,6 @@ def _load_local_model():
             log.warning(f"[VLM-local] Could not load local model: {e}")
             _local_available = False
             return False
-
-def _load_local_model():
-    """Lazy-load the MLX model once; cached for the session."""
-    global _local_model, _local_processor, _local_available
-    with _local_model_lock:
-        if _local_model is not None:
-            return True
-        try:
-            from mlx_vlm import load
-            from mlx_vlm.utils import load_config  # noqa – verifies mlx_vlm is installed
-            log.info(f"[VLM-local] Loading {LOCAL_MODEL_PATH} …")
-            _local_model, _local_processor = load(LOCAL_MODEL_PATH)
-            _local_available = True
-            log.info("[VLM-local] Model ready.")
-            return True
-        except Exception as e:
-            log.warning(f"[VLM-local] Could not load local model: {e}")
-            _local_available = False
-            return False
-
 
 def _call_vlm_local(prompt: str, images: list) -> str:
     """Run inference on the local MLX model."""
@@ -459,15 +439,11 @@ Return JSON only."""
 # Public API
 # ---------------------------------------------------------------------------
 
-_CP_PROMPT = """This is a Pokémon GO screenshot. Find the Combat Power (CP) value.
+_CP_PROMPT = """This is a cropped Pokémon GO screenshot showing only the CP display.
 
-It appears as large white numbers near the top center of the screen, 
-immediately after the small letters "cp" or "CP".
-
-The CP number is ALWAYS between 10 and 9999.
-Read ALL the digits — do not stop early.
-
-Examples of valid answers: CP: 117, CP: 1989, CP: 677, CP: 3421
+Read the digits after 'cp'. The number is between 10 and 5500.
+If you are not certain about a digit, return 0.
+Do NOT guess. Do NOT add digits you are unsure about.
 
 Answer in this exact format with nothing else:
 CP: <number>"""
