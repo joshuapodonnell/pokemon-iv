@@ -289,6 +289,7 @@ def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
 def pass1_catalog(args, cfg, conn,
                   tap, capture_window, readappraisalbars,
                   compute_ivs, pause):
+    from screen_capture import capture_window, get_mirror_window_bounds
     ui = cfg["ui"]
     session_ids = []
     visit_num = 0
@@ -312,7 +313,16 @@ def pass1_catalog(args, cfg, conn,
         for visit_num in range(1, args.limit + 1):
 
             # ── Pause / quit check ────────────────────────────────────
-            pause.wait_if_paused()
+            if pause.wait_if_paused():  # returns True if it actually paused
+                reload_calibration(cfg)
+                try:
+                    bounds = get_mirror_window_bounds()
+                    cfg["mirror_region"] = bounds
+                    tap.mirror = bounds
+                    log.info(f"[RESUME] Re-detected window bounds: {bounds}")
+                except Exception as e:
+                    log.warning(f"[RESUME] Could not re-detect window bounds: {e}")
+                ui = cfg["ui"]
             if pause.should_stop():
                 log.info("Clean stop requested — ending Pass 1.")
                 break

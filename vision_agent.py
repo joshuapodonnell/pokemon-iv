@@ -85,7 +85,26 @@ _local_model = None
 _local_processor = None
 _local_model_lock = threading.Lock()
 _local_available: bool | None = None  # None = untested, True/False = known
+_local_config = None   # add this with the other globals at the top
 
+def _load_local_model():
+    global _local_model, _local_processor, _local_config, _local_available
+    with _local_model_lock:
+        if _local_model is not None:
+            return True
+        try:
+            from mlx_vlm import load
+            from mlx_vlm.utils import load_config
+            log.info(f"[VLM-local] Loading {LOCAL_MODEL_PATH} …")
+            _local_model, _local_processor = load(LOCAL_MODEL_PATH)
+            _local_config = load_config(LOCAL_MODEL_PATH)   # ← cache it here
+            _local_available = True
+            log.info("[VLM-local] Model ready.")
+            return True
+        except Exception as e:
+            log.warning(f"[VLM-local] Could not load local model: {e}")
+            _local_available = False
+            return False
 
 def _load_local_model():
     """Lazy-load the MLX model once; cached for the session."""
@@ -111,31 +130,39 @@ def _call_vlm_local(prompt: str, images: list) -> str:
     """Run inference on the local MLX model."""
     from mlx_vlm import generate
     from mlx_vlm.prompt_utils import apply_chat_template
+    from mlx_vlm.utils import load_config
+    import tempfile
 
-    img = images[0]  # same single-image convention as remote
+    img = images[0]
 
-    # mlx_vlm expects a file path or PIL Image depending on version;
-    # saving to a temp buffer is the safest cross-version approach.
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
+    # mlx-vlm's generate() expects a FILE PATH string, not a PIL Image or BytesIO.
+    # Write to a named temp file and pass the path.
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        img.save(tmp, format="PNG")
+        tmp_path = tmp.name
 
-    formatted = apply_chat_template(
-        _local_processor,
-        config=_local_model.config if hasattr(_local_model, "config") else {},
-        prompt=prompt,
-        num_images=1,
-    )
-    output = generate(
-        _local_model,
-        _local_processor,
-        image=buf,
-        prompt=formatted,
-        max_tokens=MAX_TOKENS,
-        temperature=0.0,
-        verbose=False,
-    )
-    return output.strip()
+    try:
+        config = load_config(LOCAL_MODEL_PATH)
+
+        formatted = apply_chat_template(
+            _local_processor,
+            config,
+            prompt,
+            num_images=1,
+        )
+
+        output = generate(
+            _local_model,
+            _local_processor,
+            formatted,        # prompt is the 3rd positional arg
+            [tmp_path],       # image list is the 4th positional arg — must be file paths
+            verbose=False,
+            max_tokens=MAX_TOKENS,
+            temperature=0.0,
+        )
+        return output.strip()
+    finally:
+        os.unlink(tmp_path)   # clean up the temp file
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
