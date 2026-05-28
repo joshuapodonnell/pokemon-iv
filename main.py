@@ -111,7 +111,10 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
 
         if alnum < 4:
             continue
-        if avg_conf < 35 and width < w * 0.45 * 3:
+        if avg_conf < 40:
+            continue
+        aspect = width / max(1, height)
+        if aspect < 2.5:  # text lines are always much wider than tall
             continue
 
         lines.append({
@@ -131,6 +134,9 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         return 2, "", []
 
     median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
+    # Filter out lines whose height is anomalously large (likely graphic elements)
+    if median_h > 0:
+        lines = [l for l in lines if l["height"] < median_h * 2.5]
     max_gap = max(18, int(median_h * 1.25))
 
     anchor_idx = None
