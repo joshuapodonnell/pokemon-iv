@@ -345,7 +345,15 @@ def pass1_catalog(args, cfg, conn,
             type_text  = ocrregion(getrelativeregion(base_img, ui["type_region"]))
             weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
             height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
-            cp         = parsecp(cp_text)
+            cp = parsecp(cp_text)
+
+            if cp is None or cp < 200:
+                log.info(f"CP reads suspiciously low ({cp}) — re-reading with VLM")
+                vlm_cp_raw = vision_agent.call_vlm(vision_agent._CP_PROMPT, [crop_cp_region(base_img)])
+                vlm_cp = parsecp(vision_agent._parse_qa_response(vlm_cp_raw).get("cp", {}).get("text", ""))
+                if vlm_cp and vlm_cp > (cp or 0):
+                    log.info(f"VLM corrected CP: {cp} → {vlm_cp}")
+                    cp = vlm_cp
 
             hp_img = getrelativeregion(base_img, ui["hp_region"])
             try:
