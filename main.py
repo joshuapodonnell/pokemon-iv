@@ -395,7 +395,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── 1. OCR BASE SCREEN ────────────────────────────────────────────────
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])  # reprocess path captures fresh
-    cp_text     = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
+    cp_image = getrelativeregion(base_img, ui["cp_region"])
+    cp_image.save(f"screenshots/cp_{visit_num:03d}.png")
+    cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text}")
     if args.debug:
         os.makedirs("screenshots", exist_ok=True)
