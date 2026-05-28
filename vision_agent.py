@@ -70,7 +70,72 @@ VLM_MODEL = "qwen2.5vl:7b"        # must match what you pulled in ollama
 CONFIDENCE_THRESHOLD: float = 0.75
 MAX_TOKENS: int = 400
 
+import threading
 
+# ---------------------------------------------------------------------------
+# Local MLX-VLM fallback (M1 Mac)
+# ---------------------------------------------------------------------------
+
+LOCAL_MODEL_PATH = os.environ.get(
+    "POGO_VLM_MODEL",
+    "mlx-community/Qwen2-VL-2B-Instruct-4bit"
+)
+
+_local_model = None
+_local_processor = None
+_local_model_lock = threading.Lock()
+_local_available: bool | None = None  # None = untested, True/False = known
+
+
+def _load_local_model():
+    """Lazy-load the MLX model once; cached for the session."""
+    global _local_model, _local_processor, _local_available
+    with _local_model_lock:
+        if _local_model is not None:
+            return True
+        try:
+            from mlx_vlm import load
+            from mlx_vlm.utils import load_config  # noqa – verifies mlx_vlm is installed
+            log.info(f"[VLM-local] Loading {LOCAL_MODEL_PATH} …")
+            _local_model, _local_processor = load(LOCAL_MODEL_PATH)
+            _local_available = True
+            log.info("[VLM-local] Model ready.")
+            return True
+        except Exception as e:
+            log.warning(f"[VLM-local] Could not load local model: {e}")
+            _local_available = False
+            return False
+
+
+def _call_vlm_local(prompt: str, images: list) -> str:
+    """Run inference on the local MLX model."""
+    from mlx_vlm import generate
+    from mlx_vlm.prompt_utils import apply_chat_template
+
+    img = images[0]  # same single-image convention as remote
+
+    # mlx_vlm expects a file path or PIL Image depending on version;
+    # saving to a temp buffer is the safest cross-version approach.
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    formatted = apply_chat_template(
+        _local_processor,
+        config=_local_model.config if hasattr(_local_model, "config") else {},
+        prompt=prompt,
+        num_images=1,
+    )
+    output = generate(
+        _local_model,
+        _local_processor,
+        image=buf,
+        prompt=formatted,
+        max_tokens=MAX_TOKENS,
+        temperature=0.0,
+        verbose=False,
+    )
+    return output.strip()
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -80,48 +145,86 @@ def _pil_to_list(img: Image.Image) -> list:
     return [img]
 
 
-def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
-    """Send prompt + image to the Windows PC API server."""
+# How long to wait for the remote PC to *accept* the connection.
+# Keep this short so failures are detected in ~3 s, not 120 s.
+REMOTE_CONNECT_TIMEOUT = 3    # seconds
+REMOTE_READ_TIMEOUT    = 120  # seconds (model inference can be slow)
+
+_remote_available: bool | None = None  # None = untested
+
+
+def _call_vlm_remote(prompt: str, images: list) -> str:
+    """Send to the Windows PC Ollama endpoint."""
     img = images[0]
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    # Convert PIL Image to base64 string
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-    # Standard OpenAI API format payload
     payload = {
-        "model": VLM_MODEL,  # LM Studio ignores this, but it's required by the API spec
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{img_b64}"}
-                    }
-                ]
-            }
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.0
+        "model": VLM_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
+            ]
+        }],
+        "max_tokens": MAX_TOKENS,
+        "temperature": 0.0,
     }
 
-    try:
-        response = requests.post(API_URL, json=payload, timeout=120)
-        response.raise_for_status()
-        data = response.json()
-
-        # Extract the text from the response
-        text = data["choices"][0]["message"]["content"]
-        return text.strip()
-
-    except requests.exceptions.RequestException as e:
-        log.error(f"Failed to connect to Windows PC API: {e}")
-        raise RuntimeError(f"VLM API Error: {e}")
+    response = requests.post(
+        API_URL,
+        json=payload,
+        timeout=(REMOTE_CONNECT_TIMEOUT, REMOTE_READ_TIMEOUT),
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
 
 
+def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
+    """
+    Try the remote Windows PC first.
+    On any connection error, fall back to the local MLX model.
+    Raises RuntimeError only if BOTH backends fail.
+    """
+    global _remote_available
+
+    # ── 1. Try remote (skip if already known-down this session) ──────────
+    if _remote_available is not False:
+        try:
+            result = _call_vlm_remote(prompt, images)
+            if _remote_available is not True:
+                log.info("[VLM] Remote PC is reachable — using remote inference.")
+            _remote_available = True
+            return result
+
+        except requests.exceptions.ConnectionError:
+            log.warning("[VLM] Remote PC unreachable (connection refused). "
+                        "Switching to local MLX model for this session.")
+            _remote_available = False
+
+        except requests.exceptions.Timeout:
+            log.warning(f"[VLM] Remote PC did not respond within "
+                        f"{REMOTE_CONNECT_TIMEOUT}s connect / "
+                        f"{REMOTE_READ_TIMEOUT}s read. "
+                        "Switching to local MLX model for this session.")
+            _remote_available = False
+
+        except requests.exceptions.RequestException as e:
+            log.warning(f"[VLM] Remote request failed ({e}). "
+                        "Trying local MLX model.")
+            _remote_available = False
+
+    # ── 2. Fall back to local MLX-VLM ────────────────────────────────────
+    if _load_local_model():
+        log.debug("[VLM-local] Running local inference.")
+        return _call_vlm_local(prompt, images)
+
+    raise RuntimeError(
+        "VLM unavailable: remote PC is down and local MLX model failed to load."
+    )
 def _parse_json_response(raw: str) -> dict:
     """Extract the first JSON object from the VLM's text output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
@@ -220,7 +323,11 @@ def _parse_candy_response(raw: str) -> dict:
         else:
             result[key] = {"text": "", "confidence": 0.0}
     return result
-
+def reset_remote_status():
+    """Call this to allow the next VLM call to re-probe the remote PC."""
+    global _remote_available
+    _remote_available = None
+    log.info("[VLM] Remote PC status reset — will probe on next call.")
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------

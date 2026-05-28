@@ -810,7 +810,7 @@ def run_bot(args):
 
         if not args.dry_run and session_ids:
             report_displaced(conn)
-
+        vision_agent.reset_remote_status()
         if not args.dry_run and tags_are_calibrated(cfg["ui"]):
             micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
