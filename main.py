@@ -289,12 +289,16 @@ def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
 
     log.error("[FREEZE] All recovery attempts failed.")
     return False
-def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4) -> list:
-    """Capture n CP crop frames spaced interval seconds apart."""
+def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
+                       debug=False, visit_num=0) -> list:
     frames = []
-    for _ in range(n):
+    for i in range(n):
         img = capture_fn(cfg["mirror_region"])
-        frames.append(crop_cp_region(img))
+        frame = crop_cp_region(img)
+        if debug:
+            os.makedirs("screenshots", exist_ok=True)
+            frame.save(f"screenshots/cp_vlm_{visit_num:03d}_frame{i+1}.png")
+        frames.append(frame)
         time.sleep(interval)
     return frames
 
@@ -343,6 +347,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         base_img = capture_window(cfg["mirror_region"])  # reprocess path captures fresh
     cp_text     = ocrregion(getrelativeregion(base_img, ui["cp_region"]))
     log.info(f"raw cp_text: {cp_text}")
+    if args.debug:
+        os.makedirs("screenshots", exist_ok=True)
+        crop_cp_region(base_img).save(f"screenshots/cp_ocr_{visit_num:03d}.png")
     type_text   = ocrregion(getrelativeregion(base_img, ui["type_region"]))
     weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
@@ -350,7 +357,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     # ── Submit VLM CP consensus check in background ───────────────────────
     def _capture_and_consensus():
-        frames = _capture_cp_frames(capture_window, cfg, n=5, interval=0.4)
+        frames = _capture_cp_frames(
+            capture_window, cfg, n=5, interval=0.4,
+            debug=args.debug, visit_num=visit_num,  # ← pass through
+        )
         return _vlm_cp_consensus(frames)
 
     _cp_vlm_future = _vlm_executor.submit(_capture_and_consensus)
@@ -589,10 +599,15 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     insert_evo_rankings(conn, poke_id, evo_rankings)
 
     if not cp_valid:
+        reasons = []
+        if cp is None or cp == 0 or cp > 5500:
+            reasons.append("Impossible CP read")
+        if _still_broken:
+            reasons.append("Could not resolve name or IV bars")
+
         decision = {
             "action": "REVIEW",
-            "reasons": ["Impossible CP read" if (cp is None or cp > 5500 or cp < 10)
-                        else "Could not resolve name or IV bars"],
+            "reasons": reasons,
             "beats_existing": False,
             "existing_best": None,
             "existing_top": [],
@@ -605,11 +620,27 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             current_id=poke_id,
         )
 
-    conn.commit()
+    tag_value = decision["action"]  # "KEEP", "TRANSFER", or "REVIEW"
+    reasons = "; ".join(decision.get("reasons") or []) or None
 
-    action  = decision["action"]
-    reasons = decision["reasons"]
-    log.info(f"Result: {action} ({reasons})")
+    conn.execute(
+        """
+        UPDATE pokemon
+           SET tag           = ?,
+               needs_review  = ?,
+               review_reason = ?
+         WHERE id = ?
+        """,
+        (
+            tag_value,
+            1 if tag_value == "REVIEW" else 0,
+            reasons,  # None for KEEP/TRANSFER rows → stored as SQL NULL
+            poke_id,
+        ),
+    )
+    conn.commit()
+    log.info(f"[TAG] {name} id={poke_id} → {tag_value}"
+             + (f" | reasons: {reasons}" if reasons else ""))
 
     # ── 6. CLOSE APPRAISAL ────────────────────────────────────────────────
     tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
@@ -618,12 +649,13 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],    base_delay=cfg['timing']['after_tap'])
     tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
 
-    if action == "KEEP":
-        tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
-    elif action == "TRANSFER":
+    # FIXED
+    if tag_value == "KEEP":
+        tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])
+    elif tag_value == "TRANSFER":
         tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
     else:
-        tap.tap(ui['tag_review']['x'],   ui['tag_review']['y'])
+        tap.tap(ui['tag_review']['x'], ui['tag_review']['y'])
 
     tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
             base_delay=cfg['timing']['after_tap'])
