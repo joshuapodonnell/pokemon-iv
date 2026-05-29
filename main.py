@@ -562,8 +562,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     # ── VLM appraisal fallback ────────────────────────────────────────────
     _name_needs_vlm = not name or name == "Unknown"
-    _bars_need_vlm  = not bars or None in (bars if isinstance(bars, list)
-                                           else bars.values())
+    _bars_need_vlm = not bars or None in (bars if isinstance(bars, (list, tuple)) else bars.values())
     _appraisal_vlm_used = False
 
     if _name_needs_vlm or _bars_need_vlm:
