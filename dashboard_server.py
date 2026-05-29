@@ -26,5 +26,13 @@ def stats():
     """).fetchone()
     return jsonify(dict(row))
 
+@app.route("/all")
+def list_all_pokemon():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT *
+        FROM pokemon ORDER BY id DESC
+    """).fetchall()
+    return jsonify([dict(r) for r in rows])
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8001)
