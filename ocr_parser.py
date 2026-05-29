@@ -2,7 +2,7 @@ import re
 import json
 import logging
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 import pytesseract
 
 log = logging.getLogger(__name__)
@@ -15,11 +15,32 @@ else:
     SPECIESDB = {}
     log.warning("species_lookup.json not found — run build_species_lookup.py first")
 
+
 ALLTYPES = [
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice", "Fighting",
     "Poison", "Ground", "Flying", "Psychic", "Bug", "Rock", "Ghost",
     "Dragon", "Dark", "Steel", "Fairy",
 ]
+
+def normalize_type_text(text):
+    if not text:
+        return ""
+    cleaned = re.sub(r"[^A-Za-z ]", "", text).strip().title()
+    words = cleaned.split()
+    valid = [w for w in words if w in ALLTYPES]
+    return " ".join(valid)
+
+def ocr_type_region(img):
+    w, h = img.size
+    crop = img.crop((int(w*0.18), 0, w, h))  # trim left icon area
+    crop = crop.resize((w*4, h*4), Image.Resampling.LANCZOS).convert("L")
+    crop = ImageEnhance.Contrast(crop).enhance(2.5)
+    crop = crop.point(lambda p: 255 if p > 160 else 0)
+    raw = pytesseract.image_to_string(
+        crop,
+        config="--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
+    ).strip()
+    return normalize_type_text(raw)
 
 VARIANT_TYPE_MAP = {
     ("Slowpoke",    "Poison"):          "Slowpoke (Galarian)",
@@ -68,6 +89,7 @@ VARIANT_TYPE_MAP = {
     ("Sandslash",   "Ice"):             "Sandslash (Alolan)",
     ("Vulpix",      "Ice"):             "Vulpix (Alolan)",
     ("Ninetales",   "Fairy"):           "Ninetales (Alolan)",
+    ("Zigzagoon",   "Dark"):            "Zigzagoon (Galarian)",
 }
 # ---------------------------------------------------------------------------
 # OCR helpers
@@ -233,15 +255,13 @@ def resolvespeciesname(
             canonical = normalize_species_name(ocr_name)
 
     # ── Variant resolution ──────────────────────────────────────────
+    type_text = normalize_type_text(type_text)
     if type_text:
-        # type_text may be "Water Psychic", "Poison", "Fire Rock", etc.
-        # Check each word since we key on the *distinguishing* type only
         type_words = [t.strip().title() for t in type_text.split()]
-        base = canonical.split(" (")[0]  # strip any existing suffix before re-resolving
+        base = canonical.split(" (")[0]
         for type_word in type_words:
             variant = VARIANT_TYPE_MAP.get((base, type_word))
             if variant:
-                log.debug(f"resolvespeciesname: variant resolved {canonical!r} → {variant!r} via type {type_word!r}")
                 return variant
 
     log.debug(f"resolvespeciesname: resolved to {canonical!r}")

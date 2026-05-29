@@ -439,14 +439,21 @@ Return JSON only."""
 # Public API
 # ---------------------------------------------------------------------------
 
-_CP_PROMPT = """This is a cropped Pokémon GO screenshot showing only the CP display.
+_CP_PROMPT = """Read the exact number shown after 'CP' in this Pokémon GO screenshot.
 
-Read the digits after 'cp'. The number is between 10 and 5500.
-If you are not certain about a digit, return 0.
-Do NOT guess. Do NOT add digits you are unsure about.
+Rules:
+- Report ONLY the digits you can clearly see
+- The number is between 10 and 5500
+- Do NOT add leading zeros
+- Do NOT add extra digits if the image is unclear
+- If you cannot read the number clearly, return: CP: 0
 
-Answer in this exact format with nothing else:
-CP: <number>"""
+Format: CP: <number>
+
+Examples:
+- If you see "CP161" clearly → CP: 161
+- If you see "CP12" or partial text → CP: 12
+- If the image is blurry or cut off → CP: 0"""
 
 _STATS_PROMPT = """Look at this Pokémon GO stats panel and extract these values.
 

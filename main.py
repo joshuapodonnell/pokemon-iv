@@ -19,7 +19,7 @@ from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseivbars, parse_caught_date,
-    readappraisalbars, readappraisalbarsdebug
+    readappraisalbars, readappraisalbarsdebug, ocr_type_region
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
@@ -460,10 +460,12 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
-    type_text   = ocrregion(getrelativeregion(base_img, ui["type_region"]))
+    type_img = getrelativeregion(base_img, ui["type_region"])
+    type_text = ocr_type_region(type_img)
     # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
     log.info(f"raw cp_text: {cp_text!r}")
+    log.info(f"raw type_text: {type_text!r}")
 
     cp = parsecp(cp_text)
     _ocr_has_slash = "/" in cp_text or "\\" in cp_text
@@ -601,7 +603,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── VLM appraisal fallback ────────────────────────────────────────────
     _name_needs_vlm = not name or name == "Unknown"
     vals = bars.values() if isinstance(bars, dict) else bars
-    _bars_need_vlm = not bars or any(v is None for v in vals)
+    _bars_need_vlm = False #not bars or any(v is None for v in vals)
     _appraisal_vlm_used = False
 
     if _name_needs_vlm or _bars_need_vlm:
