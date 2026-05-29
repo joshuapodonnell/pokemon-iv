@@ -219,7 +219,7 @@ def wait_for_bars_stable_image(capture_fn, read_fn, ui, cfg, timeout=4.0, poll=0
         img = capture_fn()
         bars = read_fn(img, ui, cfg.get("bar_fill_brightness", 160))
         if bars == prev_bars and prev_bars is not None:
-            return prev_img
+            return img
         prev_bars = bars
         prev_img = img
     return prev_img
@@ -514,7 +514,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=random.uniform(0.1, 0.2))
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=random.uniform(0.1, 0.2))
+            base_delay=random.uniform(0.2, 0.3))
 
     # ── Detect text layout ────────────────────────────────────────────────
     img_initial = capture_window(cfg["mirror_region"])
