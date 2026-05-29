@@ -7,9 +7,21 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw
 import json
-
+import logging
+import traceback
 CONFIG_FILE = "calibration.json"
+LOG_FILE = "calibration_viewer.log"
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger("calibration_viewer")
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
 except AttributeError:
@@ -99,12 +111,13 @@ TAG_DEFAULTS = {
 
 
 def load_config():
+    logger.debug("Loading config from %s", CONFIG_FILE)
     with open(CONFIG_FILE) as f:
         cfg = json.load(f)
 
     # Inject missing regions so the viewer works even before calibration
     ui = cfg.setdefault("ui", {})
-
+    logger.debug("Config loaded. UI keys: %s", sorted(ui.keys()))
     # Default text lines selection
     ui.setdefault("text_lines_layout", 2)
 
@@ -149,11 +162,16 @@ def save_config(cfg):
 
 def capture_screenshot(cfg):
     from screen_capture import capture_window, get_mirror_window_bounds
+    logger.debug("Starting screenshot capture")
     try:
         bounds = get_mirror_window_bounds()
         cfg["mirror_region"] = bounds
+        logger.debug("Mirror bounds from window detection: %s", bounds)
     except Exception:
+        logger.exception("Failed to get mirror window bounds; using fallback")
         bounds = cfg.get("mirror_region", {"x": 0, "y": 0, "w": 400, "h": 800})
+        img = capture_window(bounds)
+        logger.debug("Captured screenshot size: %s", getattr(img, "size", None))
     return capture_window(bounds)
 
 
