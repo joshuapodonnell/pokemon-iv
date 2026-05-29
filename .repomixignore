@@ -11,3 +11,7 @@ __pycache__/
 venv/
 .descriptions.xml
 errors/
+evolution_chains.py
+query_db_gui.py
+repomix-output.txt
+calibration_viewer.py

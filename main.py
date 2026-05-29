@@ -409,47 +409,27 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
 def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
-    """
-    Scan the Pokémon currently on screen, compute IVs, insert or update
-    the DB row, evaluate, and apply the in-game tag.
-
-    existing_id: if provided, UPDATE that row instead of INSERT (reprocess mode).
-    Returns (poke_id, decision) or (None, None) on failure.
-    """
     ui = cfg["ui"]
 
-    # ── 1. OCR BASE SCREEN ────────────────────────────────────────────────
+    # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
     if base_img is None:
-        base_img = capture_window(cfg["mirror_region"])  # reprocess path captures fresh
+        base_img = capture_window(cfg["mirror_region"])
+
     cp_image = getrelativeregion(base_img, ui["cp_region"])
     if args.debug:
         os.makedirs("screenshots", exist_ok=True)
         cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
-    log.info(f"raw cp_text: {cp_text}")
-
     type_text   = ocrregion(getrelativeregion(base_img, ui["type_region"]))
     weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
-    cp          = parsecp(cp_text)
-    # Flag if the raw text contains a slash — likely a 7 misread
+    log.info(f"raw cp_text: {cp_text!r}")
+
+    cp = parsecp(cp_text)
     _ocr_has_slash = "/" in cp_text or "\\" in cp_text
-    _ocr_cp_clean = cp and cp > 0 and not _ocr_has_slash
-
     if _ocr_has_slash:
-        log.info(f"CP text contains slash — likely misread 7, forcing VLM")
-
-    # ── Submit VLM CP consensus check in background ───────────────────────
-    def _capture_and_consensus():
-        frames = _capture_cp_frames(
-            capture_window, cfg, n=5, interval=0.4,
-            debug=args.debug, visit_num=visit_num,  # ← pass through
-        )
-        return _vlm_cp_consensus(frames, ocr_cp=cp)  # cp is the OCR parse
-
-    _cp_vlm_future = _vlm_executor.submit(_capture_and_consensus)
-    # ─────────────────────────────────────────────────────────────────────
+        log.info("CP text contains slash — OCR likely misread a 7")
 
     hp_img = getrelativeregion(base_img, ui["hp_region"])
     try:
@@ -457,10 +437,22 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     except (ValueError, TypeError):
         hp = 0
 
-    # ── VLM base-screen fallback ──────────────────────────────────────────
-    _base_vlm_used = False
-    _bvlm = {}
+    # ── Submit CP consensus BEFORE any taps, while base screen is still visible
+    # Capture frames immediately so all 5 land on the base screen
+    _cp_frames = _capture_cp_frames(
+        capture_window, cfg, n=5, interval=0.4,
+        debug=args.debug, visit_num=visit_num,
+    )
+    _ocr_cp_at_capture = cp  # snapshot before any mutation
 
+    def _run_consensus():
+        return _vlm_cp_consensus(_cp_frames, ocr_cp=_ocr_cp_at_capture)
+
+    _cp_vlm_future = _vlm_executor.submit(_run_consensus)
+    # ─────────────────────────────────────────────────────────────────────
+
+    # ── Base-screen VLM fallback (only if OCR is suspect) ─────────────────
+    _base_vlm_used = False
     if not _is_valid_base_parse(cp, hp, type_text, weight_text, height_text):
         log.info("Base-screen OCR suspect – calling VisionAgent")
         _bvlm = vision_agent.analyze_base_screen(base_img)
@@ -486,18 +478,22 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ─────────────────────────────────────────────────────────────────────
 
     # ── 2. OPEN APPRAISAL ─────────────────────────────────────────────────
-    tap.tap(ui['menu_button']['x'],     ui['menu_button']['y'],     base_delay=cfg['timing']['after_tap'])
-    tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
-    tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'], base_delay=cfg['timing']['after_appraise'])
+    tap.tap(ui['menu_button']['x'],     ui['menu_button']['y'],
+            base_delay=cfg['timing']['after_tap'])
+    tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
+            base_delay=cfg['timing']['after_appraise'])
+    tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
+            base_delay=cfg['timing']['after_appraise'])
 
-    # ── DETERMINE LAYOUT FROM TEXT LINES ─────────────────────────────────
+    # ── Detect text layout ────────────────────────────────────────────────
     img_initial = capture_window(cfg["mirror_region"])
     raw_crop    = getrelativeregion(img_initial, ui["name_region"])
 
     num_lines, raw_text, kept_lines = detect_description_lines(
         raw_crop,
         debug=args.debug,
-        debug_path=f"screenshots/nameregion_lines_{visit_num:03d}.png" if args.debug else None,
+        debug_path=(f"screenshots/nameregion_lines_{visit_num:03d}.png"
+                    if args.debug else None),
     )
 
     if args.debug:
@@ -507,34 +503,39 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info(f"  Name region OCR: {raw_text!r}")
         log.info(f"  Detected physical lines: {num_lines}")
 
-    # ── WAIT FOR BARS & READ ──────────────────────────────────────────────
-    read_fn = readappraisalbarsdebug if args.debug else readappraisalbars
-
+    # ── Wait for bars & read ──────────────────────────────────────────────
     img = wait_for_bars_stable_image(
         lambda: capture_window(cfg["mirror_region"]),
-        lambda im, u, b: read_fn(im, u, b, lines=num_lines),
+        lambda im, u, b: readappraisalbars(im, u, b, lines=num_lines),
         ui, cfg,
     )
+    if img is not None and args.debug:
+        readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160), lines=num_lines)
 
     if img is None:
         log.warning(f"#{visit_num} Could not capture stable image. Skipping.")
         return None, None
 
-    # ── Collect VLM CP consensus (should be ready by now) ─────────────────
-    try:
-        vlm_cp = _cp_vlm_future.result(timeout=60)
-        reconciled = _reconcile_cp(cp, vlm_cp, ocr_raw=cp_text)
-        if reconciled != cp:
-            log.info(f"VLM CP correction: {cp} → {reconciled} (raw ocr was {cp_text!r})")
-            cp = reconciled
-        else:
-            log.debug(f"VLM CP confirmed: {cp}")
-    except Exception as e:
-        log.warning(f"VLM CP consensus failed: {e} — keeping OCR value")
-
+    # ── Collect VLM CP consensus (frames were captured before any taps) ───
+    # Only apply if base-screen VLM didn't already produce a reliable CP
+    if not _base_vlm_used or not (cp and cp > 0):
+        try:
+            vlm_cp = _cp_vlm_future.result(timeout=60)
+            reconciled = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
+            if reconciled != cp:
+                log.info(f"VLM CP correction: {cp} → {reconciled} "
+                         f"(ocr_at_capture={_ocr_cp_at_capture}, raw={cp_text!r})")
+                cp = reconciled
+            else:
+                log.debug(f"VLM CP confirmed: {cp}")
+        except Exception as e:
+            log.warning(f"VLM CP consensus failed: {e} — keeping current value {cp}")
+    else:
+        log.debug(f"Skipping CP consensus — base VLM already produced cp={cp}")
+        _cp_vlm_future.cancel()
     # ─────────────────────────────────────────────────────────────────────
 
-    # ── 3. OCR NAME & IVS ────────────────────────────────────────────────
+    # ── 3. OCR NAME, BARS, CAUGHT DATE ───────────────────────────────────
     name        = resolvespeciesname(img, ui, cp, type_text)
     caught_date = parse_caught_date(raw_text)
     if not name or name == "Unknown":
@@ -556,23 +557,17 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     bars = parseivbars(bar_strip, args.debug)
 
     if not bars:
-        log.warning(f"#{visit_num} Bar read failed for {name}. Skipping.")
-        return None, None
-
-    atk_iv, def_iv, sta_iv = (
-        (bars["atk"], bars["def"], bars["sta"])
-        if isinstance(bars, dict)
-        else (bars[0], bars[1], bars[2])
-    )
+        log.warning(f"#{visit_num} Bar read failed for {name}")
 
     # ── VLM appraisal fallback ────────────────────────────────────────────
+    _name_needs_vlm = not name or name == "Unknown"
+    _bars_need_vlm  = not bars or None in (bars if isinstance(bars, list)
+                                           else bars.values())
     _appraisal_vlm_used = False
-    _avlm = {}
-    _name_needs_vlm = (name is None or name == "Unknown")
-    _bars_need_vlm  = (bars is None or None in (bars or [None]))
 
     if _name_needs_vlm or _bars_need_vlm:
-        log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) – calling VisionAgent")
+        log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
+                 f"– calling VisionAgent")
         _avlm = vision_agent.analyze_appraisal_screen(img_initial)
 
         if vision_agent.is_reliable(_avlm):
@@ -580,7 +575,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             if _name_needs_vlm:
                 vlm_name = _avlm.get("name", {}).get("text", "")
                 if vlm_name:
-                    resolved = resolvespeciesname(vlm_name, type_text, weight_text, height_text)
+                    # Use the correct resolvespeciesname signature: (img, ui, cp, type_text)
+                    resolved = resolvespeciesname(img, ui, cp, type_text)
                     if resolved and resolved != "Unknown":
                         log.info(f"VLM corrected name: {name!r} → {resolved!r}")
                         name = resolved
@@ -591,63 +587,74 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                     bars = vlm_bars
             log.info(f"VLM appraisal conf={_avlm.get('confidence', 0):.2f}")
         else:
-            log.warning(f"VLM appraisal confidence too low ({_avlm.get('confidence', 0):.2f})")
-    # ─────────────────────────────────────────────────────────────────────
+            log.warning(f"VLM appraisal confidence too low "
+                        f"({_avlm.get('confidence', 0):.2f})")
 
-    # ── Last-resort VLM recovery ──────────────────────────────────────────
+    # ── Last-resort recovery ──────────────────────────────────────────────
     _still_broken = (
         name in (None, "Unknown")
-        or bars is None
-        or None in (bars or [None])
+        or not bars
+        or None in (bars if isinstance(bars, list) else bars.values())
     )
 
     if _still_broken and not _appraisal_vlm_used:
         log.warning("Attempting last-resort VisionAgent recovery …")
         partial = {
-            "cp":     str(cp) if cp else "",
-            "hp":     str(hp) if hp else "",
-            "name":   name or "",
-            "type1":  type_text or "",
-            "weight": weight_text or "",
-            "height": height_text or "",
+            "cp":     str(cp)          if cp          else "",
+            "hp":     str(hp)          if hp          else "",
+            "name":   name             or "",
+            "type1":  type_text        or "",
+            "weight": weight_text      or "",
+            "height": height_text      or "",
         }
         _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
 
         if vision_agent.is_reliable(_rvlm):
-            log.info(f"Recovery VLM result (conf={_rvlm['confidence']:.2f}): {_rvlm}")
+            log.info(f"Recovery VLM (conf={_rvlm['confidence']:.2f}): {_rvlm}")
             if name in (None, "Unknown"):
                 vlm_name_r = _rvlm.get("name", {}).get("text", "")
                 if vlm_name_r:
-                    resolved_r = resolvespeciesname(vlm_name_r, type_text, weight_text, height_text)
+                    resolved_r = resolvespeciesname(img, ui, cp, type_text)
                     if resolved_r and resolved_r != "Unknown":
                         name = resolved_r
-            if bars is None or None in (bars or [None]):
+            if not bars or None in (bars if isinstance(bars, list) else bars.values()):
                 vlm_bars_r = vision_agent.extract_bar_values(_rvlm)
                 if vlm_bars_r is not None:
                     bars = vlm_bars_r
             if not cp or cp <= 0:
                 cp = parsecp(_rvlm.get("cp", {}).get("text", "")) or cp
         else:
-            log.warning(f"Recovery VLM also unreliable (conf={_rvlm.get('confidence', 0):.2f})")
+            log.warning(f"Recovery VLM also unreliable "
+                        f"(conf={_rvlm.get('confidence', 0):.2f})")
 
+    # ── Extract IVs after all fallbacks have had a chance to fix bars ─────
     _still_broken = (
         name in (None, "Unknown")
-        or bars is None
-        or None in (bars or [None])
+        or not bars
+        or None in (bars if isinstance(bars, list) else bars.values())
     )
+
+    if bars and not _still_broken:
+        atk_iv, def_iv, sta_iv = (
+            (bars["atk"], bars["def"], bars["sta"])
+            if isinstance(bars, dict)
+            else (bars[0], bars[1], bars[2])
+        )
+    else:
+        atk_iv = def_iv = sta_iv = 0
     # ─────────────────────────────────────────────────────────────────────
 
-    # ── 4. DATA VALIDATION ────────────────────────────────────────────────
+    # ── 4. VALIDATION ─────────────────────────────────────────────────────
     cp_valid = True
-    if cp is None or cp > 5500 or cp < 10:
-        log.warning(f"Impossible CP read: {cp}. Forcing REVIEW tag.")
+    if not cp or cp > 5500 or cp < 10:
+        log.warning(f"Impossible CP: {cp!r}. Forcing REVIEW.")
         cp_valid = False
     if _still_broken:
-        log.warning(f"Could not resolve name/bars after all fallbacks "
-                    f"(name={name!r}, bars={bars}) – forcing REVIEW tag.")
+        log.warning(f"Unresolved name/bars after all fallbacks "
+                    f"(name={name!r}, bars={bars}) – forcing REVIEW.")
         cp_valid = False
 
-    # ── 5. INSERT or UPDATE & EVALUATE ───────────────────────────────────
+    # ── 5. INSERT / UPDATE & EVALUATE ────────────────────────────────────
     log.info(
         f"[SCAN] {name} | CP={cp} | "
         f"ATK={atk_iv} DEF={def_iv} STA={sta_iv} | "
@@ -687,11 +694,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     if not cp_valid:
         reasons = []
-        if cp is None or cp == 0 or cp > 5500:
+        if not cp or cp <= 0 or cp > 5500:
             reasons.append("Impossible CP read")
         if _still_broken:
             reasons.append("Could not resolve name or IV bars")
-
         decision = {
             "action": "REVIEW",
             "reasons": reasons,
@@ -707,42 +713,32 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             current_id=poke_id,
         )
 
-    tag_value = decision["action"]  # "KEEP", "TRANSFER", or "REVIEW"
-    reasons = "; ".join(decision.get("reasons") or []) or None
+    tag_value = decision["action"]
+    reasons   = "; ".join(decision.get("reasons") or []) or None
 
-    conn.execute(
-        """
+    conn.execute("""
         UPDATE pokemon
-           SET tag           = ?,
-               needs_review  = ?,
-               review_reason = ?
-         WHERE id = ?
-        """,
-        (
-            tag_value,
-            1 if tag_value == "REVIEW" else 0,
-            reasons,  # None for KEEP/TRANSFER rows → stored as SQL NULL
-            poke_id,
-        ),
-    )
+           SET tag=?, needs_review=?, review_reason=?
+         WHERE id=?
+    """, (tag_value, 1 if tag_value == "REVIEW" else 0, reasons, poke_id))
     conn.commit()
+
     log.info(f"[TAG] {name} id={poke_id} → {tag_value}"
-             + (f" | reasons: {reasons}" if reasons else ""))
+             + (f" | {reasons}" if reasons else ""))
 
-    # ── 6. CLOSE APPRAISAL ────────────────────────────────────────────────
+    # ── 6. CLOSE APPRAISAL & APPLY TAG ───────────────────────────────────
     tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
+    tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],
+            base_delay=cfg['timing']['after_tap'])
+    tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'],
+            base_delay=cfg['timing']['after_tap'])
 
-    # ── 7. APPLY TAG IN-GAME ──────────────────────────────────────────────
-    tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],    base_delay=cfg['timing']['after_tap'])
-    tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
-
-    # FIXED
     if tag_value == "KEEP":
-        tap.tap(ui['tag_keep']['x'], ui['tag_keep']['y'])
+        tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
     elif tag_value == "TRANSFER":
         tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
     else:
-        tap.tap(ui['tag_review']['x'], ui['tag_review']['y'])
+        tap.tap(ui['tag_review']['x'],   ui['tag_review']['y'])
 
     tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
             base_delay=cfg['timing']['after_tap'])
