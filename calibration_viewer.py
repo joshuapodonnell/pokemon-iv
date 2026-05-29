@@ -109,6 +109,13 @@ TAG_DEFAULTS = {
     "tag_review":     {"x": 0.75, "y": 0.70},
 }
 
+TAG_FOREVER_FRIENDS = {
+    "tag_option_btn": {"x": 0.85, "y": 0.92},
+    "tag_keep_ff":       {"x": 0.25, "y": 0.70},
+    "tag_transfer_ff":   {"x": 0.50, "y": 0.70},
+    "tag_review_ff":     {"x": 0.75, "y": 0.70},
+}
+
 
 def load_config():
     logger.debug("Loading config from %s", CONFIG_FILE)
@@ -149,6 +156,9 @@ def load_config():
         if key not in ui:
             ui[key] = default
     for key, default in TAG_DEFAULTS.items():
+        if key not in ui:
+            ui[key] = default
+    for key, default in TAG_FOREVER_FRIENDS.items():
         if key not in ui:
             ui[key] = default
 
@@ -214,6 +224,12 @@ class CalibrationApp:
                 ("#00FFFF", "Tag ⋮ (option button)"),
                 ("#00FF44", "Tag Keep"),
                 ("#FF3333", "Tag Transfer"),
+                ("#FF9900", "Tag Review"),
+            ],
+            "Forever_Tags": [
+                ("#00FFFF", "Tag ⋮ (option button)"),
+                ("#FF3333", "Tag Keep"),
+                ("#FF9900", "Tag Transfer"),
                 ("#FF9900", "Tag Review"),
             ]
         }
@@ -482,6 +498,9 @@ class CalibrationApp:
             ("tag_keep", "#00FF44", "Tag Keep"),
             ("tag_transfer", "#FF3333", "Tag Transfer"),
             ("tag_review", "#FF9900", "Tag Review"),
+            ("tag_keep_ff", "#FF3333", "Tag Keep FF"),
+            ("tag_transfer_ff", "#FF9900", "Tag Transfer FF"),
+            ("tag_review_ff", "#FF9900", "Tag Review FF"),
         ]:
             p = ui.get(cfg_key, {})
             dot(p.get("x", 0.5), p.get("y", 0.5), color,
@@ -537,7 +556,7 @@ class CalibrationApp:
 
         # Points
         for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search",
-                        "tag_option_btn", "tag_keep", "tag_transfer", "tag_review"):
+                        "tag_option_btn", "tag_keep", "tag_transfer", "tag_review", "tag_keep_ff", "tag_transfer_ff", "tag_review_ff"):
             p = ui.get(cfg_key, {})
             hx = p.get("x", 0.5) * self.img_w * s
             hy = p.get("y", 0.5) * self.img_h * s
