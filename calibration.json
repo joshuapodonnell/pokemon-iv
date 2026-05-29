@@ -1,7 +1,7 @@
 {
   "mirror_region": {
-    "x": 1114,
-    "y": 83,
+    "x": 1123,
+    "y": 138,
     "w": 316,
     "h": 696
   },
@@ -151,6 +151,7 @@
     "atk_bar_y_5lines": 0.694,
     "def_bar_y_5lines": 0.733,
     "sta_bar_y_5lines": 0.775
+
   },
   "bar_fill_brightness": 160,
   "bar_segments": 15,
@@ -219,7 +220,7 @@
         "y": 0.85
       }
     },
-    "forever_friend": {
+    "ff": {
       "tag_menu_btn": {
         "x": 0.842,
         "y": 0.933
@@ -229,21 +230,24 @@
         "y": 0.65
       },
       "tag_keep": {
-        "x": 0.5,
-        "y": 0.35
+        "x": 0.202,
+        "y": 0.384
       },
       "tag_transfer": {
-        "x": 0.5,
-        "y": 0.45
+        "x": 0.196,
+        "y": 0.496
       },
       "tag_review": {
-        "x": 0.5,
-        "y": 0.55
+        "x": 0.212,
+        "y": 0.443
       },
       "tag_dismiss": {
         "x": 0.5,
         "y": 0.85
       }
     }
+  },
+  "account": {
+    "forever_friends_enabled": true
   }
 }

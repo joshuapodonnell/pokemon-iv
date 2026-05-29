@@ -48,7 +48,7 @@ def parse_args():
                    help="catalog: scan age0 box. newcatch: appraise most recent catch only.")
     p.add_argument(
         "--tag-layout",
-        choices=["standard", "forever_friend"],
+        choices=["standard", "ff"],
         default="standard",
         help="Choose which in-game tag menu layout to use."
     )
@@ -447,7 +447,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
     ui = cfg["ui"]
+    #log.info("args are {}".format(args))
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
+    #log.info("tag_layout is {}".format(tag_layout))
     # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])
@@ -779,10 +781,13 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             base_delay=cfg['timing']['after_tap'])
 
     if tag_value == "KEEP":
+        #log.info(f"keep tag coordinates: {tag_layout['tag_keep']['x']} {tag_layout['tag_keep']['y']}")
         tap.tap(tag_layout['tag_keep']['x'],     tag_layout['tag_keep']['y'])
     elif tag_value == "TRANSFER":
+        #log.info(f"transfer tag coordinates: {tag_layout['tag_transfer']['x']} {tag_layout['tag_transfer']['y']}")
         tap.tap(tag_layout['tag_transfer']['x'], tag_layout['tag_transfer']['y'])
     else:
+        #log.info(f"review tag coordinates: {tag_layout['tag_review']['x']} {tag_layout['tag_review']['y']}")
         tap.tap(tag_layout['tag_review']['x'],   tag_layout['tag_review']['y'])
 
     tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
