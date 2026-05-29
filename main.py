@@ -482,7 +482,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     tap.tap(ui['menu_button']['x'],     ui['menu_button']['y'],
             base_delay=cfg['timing']['after_tap'])
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=cfg['timing']['after_appraise'])
+            base_delay=random.uniform(0.1, 0.2))
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=random.uniform(0.1, 0.2))
 

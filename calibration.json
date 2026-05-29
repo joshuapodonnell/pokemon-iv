@@ -155,10 +155,10 @@
   "bar_fill_brightness": 160,
   "bar_segments": 15,
   "timing": {
-    "after_tap": 0.6,
-    "after_swipe": 0.5,
-    "after_appraise": 0.8,
-    "between_pokemon": 0.6,
+    "after_tap": 0.3,
+    "after_swipe": 0.3,
+    "after_appraise": 0.3,
+    "between_pokemon": 0.3,
     "ocr_settle": 0.3
   },
   "randomization": {
