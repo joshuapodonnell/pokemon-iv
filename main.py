@@ -376,14 +376,44 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
 
 def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
     from collections import Counter
+
     votes = []
+    ocr_len = len(str(ocr_cp)) if ocr_cp and ocr_cp > 0 else None
+
     for i, frame in enumerate(frames):
         try:
-            raw    = vision_agent.call_vlm(vision_agent._CP_PROMPT, [frame])
+            raw = vision_agent.call_vlm(vision_agent._CP_PROMPT, [frame])
             parsed = vision_agent._parse_qa_response(raw)
-            cp     = parsecp(parsed.get("cp", {}).get("text", ""))
-            if cp:
-                votes.append(cp)
+            cp = parsecp(parsed.get("cp", {}).get("text", ""))
+
+            if not cp:
+                continue
+
+            votes.append(cp)
+
+            # Early exit: if two votes already match, we're done.
+            counts = Counter(votes)
+
+            # Prefer OCR-length-matching votes when OCR gave us a usable anchor.
+            if ocr_len:
+                matching = [v for v in votes if len(str(v)) == ocr_len]
+                if len(matching) >= 2:
+                    mcounts = Counter(matching)
+                    best, count = mcounts.most_common(1)[0]
+                    if count >= 2:
+                        log.info(
+                            f"VLM CP early consensus (digit-filtered to {ocr_len} digits): "
+                            f"{best} ({count}/{len(matching)} matching votes, total votes={votes})"
+                        )
+                        return best
+
+            best, count = counts.most_common(1)[0]
+            if count >= 2:
+                log.info(
+                    f"VLM CP early consensus: {best} ({count}/{len(votes)} votes so far, total votes={votes})"
+                )
+                return best
+
         except Exception as e:
             log.debug(f"  CP frame {i+1} failed: {e}")
 
@@ -392,16 +422,15 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
 
     log.info(f"VLM CP consensus: all votes: {votes}")
 
-    # If OCR gave us a digit count anchor, filter VLM votes to matching length
-    if ocr_cp and ocr_cp > 0:
-        ocr_len = len(str(ocr_cp))
+    if ocr_len:
         matching = [v for v in votes if len(str(v)) == ocr_len]
         if matching:
             best, count = Counter(matching).most_common(1)[0]
-            log.info(f"VLM CP (digit-filtered to {ocr_len} digits): {best} ({count}/{len(matching)} matching votes)")
+            log.info(
+                f"VLM CP (digit-filtered to {ocr_len} digits): "
+                f"{best} ({count}/{len(matching)} matching votes)"
+            )
             return best
-        # No votes matched OCR digit count — OCR digit count is probably wrong
-        # Fall through to unfiltered consensus
 
     best, count = Counter(votes).most_common(1)[0]
     log.info(f"VLM CP consensus: {best} ({count}/{len(votes)} votes)")
