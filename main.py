@@ -13,6 +13,7 @@ from PIL import ImageEnhance, ImageDraw, Image
 from freeze_detector import FreezeDetector
 import vision_agent
 import numpy as np
+import random
 from pause_controller import PauseController
 from ocr_parser import (
     resolvespeciesname,
@@ -483,7 +484,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=cfg['timing']['after_appraise'])
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=cfg['timing']['after_appraise'])
+            base_delay=random.uniform(0.1, 0.3))
 
     # ── Detect text layout ────────────────────────────────────────────────
     img_initial = capture_window(cfg["mirror_region"])
