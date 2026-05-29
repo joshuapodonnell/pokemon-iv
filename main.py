@@ -562,7 +562,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     # ── VLM appraisal fallback ────────────────────────────────────────────
     _name_needs_vlm = not name or name == "Unknown"
-    _bars_need_vlm = not bars or None in (bars if isinstance(bars, (list, tuple)) else bars.values())
+    vals = bars.values() if isinstance(bars, dict) else bars
+    _bars_need_vlm = not bars or any(v is None for v in vals)
     _appraisal_vlm_used = False
 
     if _name_needs_vlm or _bars_need_vlm:
@@ -591,10 +592,18 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                         f"({_avlm.get('confidence', 0):.2f})")
 
     # ── Last-resort recovery ──────────────────────────────────────────────
+    # _still_broken = (
+    #     name in (None, "Unknown")
+    #     or not bars
+    #     or None in (bars if isinstance(bars, list) else bars.values())
+    # )
+    if isinstance(bars, dict):
+        bars = (bars.get("atk"), bars.get("def"), bars.get("sta"))
+
     _still_broken = (
-        name in (None, "Unknown")
-        or not bars
-        or None in (bars if isinstance(bars, list) else bars.values())
+            name in (None, "Unknown")
+            or not bars
+            or any(v is None for v in bars)
     )
 
     if _still_broken and not _appraisal_vlm_used:
@@ -628,10 +637,13 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                         f"(conf={_rvlm.get('confidence', 0):.2f})")
 
     # ── Extract IVs after all fallbacks have had a chance to fix bars ─────
+    if isinstance(bars, dict):
+        bars = (bars.get("atk"), bars.get("def"), bars.get("sta"))
+
     _still_broken = (
-        name in (None, "Unknown")
-        or not bars
-        or None in (bars if isinstance(bars, list) else bars.values())
+            name in (None, "Unknown")
+            or not bars
+            or any(v is None for v in bars)
     )
 
     if bars and not _still_broken:
