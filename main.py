@@ -441,7 +441,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── Submit CP consensus BEFORE any taps, while base screen is still visible
     # Capture frames immediately so all 5 land on the base screen
     _cp_frames = _capture_cp_frames(
-        capture_window, cfg, n=5, interval=0.4,
+        capture_window, cfg, n=5, interval=0.2,
         debug=args.debug, visit_num=visit_num,
     )
     _ocr_cp_at_capture = cp  # snapshot before any mutation
@@ -484,7 +484,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=cfg['timing']['after_appraise'])
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=random.uniform(0.1, 0.3))
+            base_delay=random.uniform(0.1, 0.2))
 
     # ── Detect text layout ────────────────────────────────────────────────
     img_initial = capture_window(cfg["mirror_region"])
@@ -592,11 +592,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                         f"({_avlm.get('confidence', 0):.2f})")
 
     # ── Last-resort recovery ──────────────────────────────────────────────
-    # _still_broken = (
-    #     name in (None, "Unknown")
-    #     or not bars
-    #     or None in (bars if isinstance(bars, list) else bars.values())
-    # )
     if isinstance(bars, dict):
         bars = (bars.get("atk"), bars.get("def"), bars.get("sta"))
 
