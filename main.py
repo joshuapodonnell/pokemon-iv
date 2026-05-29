@@ -500,9 +500,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
         if vision_agent.is_reliable(_bvlm):
             _base_vlm_used = True
-            if _bvlm.get("cp",     {}).get("confidence", 0) > 0.75:
-                cp_text     = _bvlm["cp"]["text"]
-                cp          = parsecp(cp_text) or cp
             if _bvlm.get("hp",     {}).get("confidence", 0) > 0.75:
                 hp          = parsehp(_bvlm["hp"]["text"]) or hp
             if _bvlm.get("type1",  {}).get("confidence", 0) > 0.75:
@@ -558,22 +555,24 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         return None, None
 
     # ── Collect VLM CP consensus (frames were captured before any taps) ───
-    # Only apply if base-screen VLM didn't already produce a reliable CP
-    if not _base_vlm_used or not (cp and cp > 0):
-        try:
-            vlm_cp = _cp_vlm_future.result(timeout=60)
-            reconciled = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
+    try:
+        vlm_cp = _cp_vlm_future.result(timeout=60)
+        reconciled = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
+
+        if reconciled and reconciled > 0:
             if reconciled != cp:
-                log.info(f"VLM CP correction: {cp} → {reconciled} "
-                         f"(ocr_at_capture={_ocr_cp_at_capture}, raw={cp_text!r})")
-                cp = reconciled
-            else:
-                log.debug(f"VLM CP confirmed: {cp}")
-        except Exception as e:
-            log.warning(f"VLM CP consensus failed: {e} — keeping current value {cp}")
-    else:
-        log.debug(f"Skipping CP consensus — base VLM already produced cp={cp}")
-        _cp_vlm_future.cancel()
+                log.info(
+                    f"CP correction: {cp} → {reconciled} "
+                    f"(ocr_at_capture={_ocr_cp_at_capture}, raw={cp_text!r}, vlm={vlm_cp})"
+                )
+            cp = reconciled
+        else:
+            log.warning(
+                f"Could not reconcile CP from OCR={_ocr_cp_at_capture}, "
+                f"vlm={vlm_cp}; keeping {cp}"
+            )
+    except Exception as e:
+        log.warning(f"VLM CP consensus failed: {e} — keeping OCR CP {cp}")
     # ─────────────────────────────────────────────────────────────────────
 
     # ── 3. OCR NAME, BARS, CAUGHT DATE ───────────────────────────────────
