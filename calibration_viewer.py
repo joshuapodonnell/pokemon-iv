@@ -9,6 +9,7 @@ from PIL import Image, ImageTk, ImageDraw
 import json
 import logging
 import traceback
+
 CONFIG_FILE = "calibration.json"
 LOG_FILE = "calibration_viewer.log"
 
@@ -43,48 +44,46 @@ HANDLES = [
     ("Weight x2/y2",   "#AAFFAA", "ui.weight_region.x2y2",   "rect_br"),
     ("Height x1/y1",   "#AAAAFF", "ui.height_region.x1y1",   "rect_tl"),
     ("Height x2/y2",   "#AAAAFF", "ui.height_region.x2y2",   "rect_br"),
-    ("Menu Button",    "#FFFFFF", "ui.menu_button",           "point"),
-    ("Appraise Btn",   "#FFFF00", "ui.appraise_button",       "point"),
-    ("Back Button",    "#FF6600", "ui.back_button",           "point"),
-    ("Clear Search",    "#FF6600", "ui.clear_search",           "point"),
-    ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",       "point_slot"),
-    ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",       "point_slot"),
-    ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",       "point_slot"),
+    ("Menu Button",    "#FFFFFF", "ui.menu_button",          "point"),
+    ("Appraise Btn",   "#FFFF00", "ui.appraise_button",      "point"),
+    ("Back Button",    "#FF6600", "ui.back_button",          "point"),
+    ("Clear Search",   "#FF6600", "ui.clear_search",         "point"),
+    ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",      "point_slot"),
+    ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",      "point_slot"),
+    ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",      "point_slot"),
 ]
 
-# We map the number of text lines (2, 3, 4, 5) to the respective config keys
 TEXT_LINES_KEYS = {
     2: [
-        ("ATK Bar Y",   "atk_bar_y",   "#FF8800", "hline"),
-        ("DEF Bar Y",   "def_bar_y",   "#FFCC00", "hline"),
-        ("STA Bar Y",   "sta_bar_y",   "#FF0088", "hline"),
-        ("Bar X Start", "bar_x_start", "#00FFFF", "vline"),
-        ("Bar X End",   "bar_x_end",   "#00CCFF", "vline"),
+        ("ATK Bar Y",   "atk_bar_y",        "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y",        "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y",        "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",      "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",        "#00CCFF", "vline"),
     ],
     3: [
-        ("ATK Bar Y",   "atk_bar_y_3lines",   "#FF8800", "hline"),
-        ("DEF Bar Y",   "def_bar_y_3lines",   "#FFCC00", "hline"),
-        ("STA Bar Y",   "sta_bar_y_3lines",   "#FF0088", "hline"),
-        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
-        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+        ("ATK Bar Y",   "atk_bar_y_3lines", "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_3lines", "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_3lines", "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",      "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",        "#00CCFF", "vline"),
     ],
     4: [
-        ("ATK Bar Y",   "atk_bar_y_4lines",   "#FF8800", "hline"),
-        ("DEF Bar Y",   "def_bar_y_4lines",   "#FFCC00", "hline"),
-        ("STA Bar Y",   "sta_bar_y_4lines",   "#FF0088", "hline"),
-        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
-        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+        ("ATK Bar Y",   "atk_bar_y_4lines", "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_4lines", "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_4lines", "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",      "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",        "#00CCFF", "vline"),
     ],
     5: [
-        ("ATK Bar Y",   "atk_bar_y_5lines",   "#FF8800", "hline"),
-        ("DEF Bar Y",   "def_bar_y_5lines",   "#FFCC00", "hline"),
-        ("STA Bar Y",   "sta_bar_y_5lines",   "#FF0088", "hline"),
-        ("Bar X Start", "bar_x_start",        "#00FFFF", "vline"),
-        ("Bar X End",   "bar_x_end",          "#00CCFF", "vline"),
+        ("ATK Bar Y",   "atk_bar_y_5lines", "#FF8800", "hline"),
+        ("DEF Bar Y",   "def_bar_y_5lines", "#FFCC00", "hline"),
+        ("STA Bar Y",   "sta_bar_y_5lines", "#FF0088", "hline"),
+        ("Bar X Start", "bar_x_start",      "#00FFFF", "vline"),
+        ("Bar X End",   "bar_x_end",        "#00CCFF", "vline"),
     ],
 }
 
-# Regions drawn as coloured overlays on the screenshot
 RECT_REGIONS = [
     ("cp_region",     "#FF4444"),
     ("name_region",   "#44FF44"),
@@ -95,7 +94,6 @@ RECT_REGIONS = [
     ("height_region", "#AAAAFF"),
 ]
 
-# Default values injected into calibration.json if a region is missing
 REGION_DEFAULTS = {
     "type_region":   {"x1": 0.10, "y1": 0.28, "x2": 0.90, "y2": 0.36},
     "weight_region": {"x1": 0.10, "y1": 0.38, "x2": 0.55, "y2": 0.46},
@@ -107,13 +105,15 @@ TAG_DEFAULTS = {
     "tag_keep":       {"x": 0.25, "y": 0.70},
     "tag_transfer":   {"x": 0.50, "y": 0.70},
     "tag_review":     {"x": 0.75, "y": 0.70},
+    "tag_dismiss":    {"x": 0.50, "y": 0.85},
 }
 
 TAG_FOREVER_FRIENDS = {
-    "tag_option_btn": {"x": 0.85, "y": 0.92},
-    "tag_keep_ff":       {"x": 0.25, "y": 0.70},
-    "tag_transfer_ff":   {"x": 0.50, "y": 0.70},
-    "tag_review_ff":     {"x": 0.75, "y": 0.70},
+    "tag_option_btn":   {"x": 0.85, "y": 0.92},
+    "tag_keep_ff":      {"x": 0.25, "y": 0.70},
+    "tag_transfer_ff":  {"x": 0.50, "y": 0.70},
+    "tag_review_ff":    {"x": 0.75, "y": 0.70},
+    "tag_dismiss":      {"x": 0.50, "y": 0.85},
 }
 
 
@@ -122,33 +122,30 @@ def load_config():
     with open(CONFIG_FILE) as f:
         cfg = json.load(f)
 
-    # Inject missing regions so the viewer works even before calibration
     ui = cfg.setdefault("ui", {})
+    account = cfg.setdefault("account", {})
     logger.debug("Config loaded. UI keys: %s", sorted(ui.keys()))
-    # Default text lines selection
+
+    account.setdefault("forever_friends_enabled", False)
+
     ui.setdefault("text_lines_layout", 2)
 
-    # 2 Lines (Default)
     ui.setdefault("atk_bar_y", 0.774)
     ui.setdefault("def_bar_y", 0.815)
     ui.setdefault("sta_bar_y", 0.857)
 
-    # 3 Lines
     ui.setdefault("atk_bar_y_3lines", 0.749)
     ui.setdefault("def_bar_y_3lines", 0.787)
     ui.setdefault("sta_bar_y_3lines", 0.830)
 
-    # 4 Lines
     ui.setdefault("atk_bar_y_4lines", 0.721)
     ui.setdefault("def_bar_y_4lines", 0.760)
     ui.setdefault("sta_bar_y_4lines", 0.802)
 
-    # 5 Lines (Extrapolated from the 0.027 vertical shift per line)
     ui.setdefault("atk_bar_y_5lines", 0.694)
     ui.setdefault("def_bar_y_5lines", 0.733)
     ui.setdefault("sta_bar_y_5lines", 0.775)
 
-    # General X-axis boundaries for the bars
     ui.setdefault("bar_x_start", 0.132)
     ui.setdefault("bar_x_end", 0.471)
 
@@ -199,8 +196,8 @@ class CalibrationApp:
         self.dragging = None
         self.img_w = 1
         self.img_h = 1
+        self.tags_legend_frame = None
 
-        # Legend categorized data
         self.legend_subsets = {
             "OCR Regions": [
                 ("#FF4444", "CP region corners"),
@@ -220,28 +217,7 @@ class CalibrationApp:
             "Slots": [
                 ("#00FF88", "Pokémon slots"),
             ],
-            "Tags": [
-                ("#00FFFF", "Tag ⋮ (option button)"),
-                ("#00FF44", "Tag Keep"),
-                ("#FF3333", "Tag Transfer"),
-                ("#FF9900", "Tag Review"),
-            ],
-            "Forever_Tags": [
-                ("#00FFFF", "Tag ⋮ (option button)"),
-                ("#FF3333", "Tag Keep"),
-                ("#FF9900", "Tag Transfer"),
-                ("#FF9900", "Tag Review"),
-            ]
         }
-
-        # Combine all subsets for the "Legend" view
-        self.legend_subsets["Legend"] = [item for sub in self.legend_subsets.values() for item in sub]
-        self.legend_subsets["Legend"].extend([
-            ("#FF8800", "ATK bar (drag vert)"),
-            ("#FFCC00", "DEF bar (drag vert)"),
-            ("#FF0088", "STA bar (drag vert)"),
-            ("#00FFFF", "Bar X start/end (drag horiz)")
-        ])
 
         self._build_ui()
         self.refresh()
@@ -252,6 +228,43 @@ class CalibrationApp:
     def get_active_bar_keys(self):
         return TEXT_LINES_KEYS.get(self.get_text_lines_layout(), TEXT_LINES_KEYS[2])
 
+    def forever_friends_enabled(self):
+        return bool(self.cfg.get("account", {}).get("forever_friends_enabled", False))
+
+    def active_tag_handles(self):
+        if self.forever_friends_enabled():
+            return [
+                ("tag_option_btn",  "#00FFFF", "Tag ⋮"),
+                ("tag_keep_ff",     "#00FF44", "Tag Keep FF"),
+                ("tag_transfer_ff", "#FF3333", "Tag Transfer FF"),
+                ("tag_review_ff",   "#FF9900", "Tag Review FF"),
+                ("tag_dismiss",     "#CCCCCC", "Tag Dismiss"),
+            ]
+        return [
+            ("tag_option_btn", "#00FFFF", "Tag ⋮"),
+            ("tag_keep",       "#00FF44", "Tag Keep"),
+            ("tag_transfer",   "#FF3333", "Tag Transfer"),
+            ("tag_review",     "#FF9900", "Tag Review"),
+            ("tag_dismiss",    "#CCCCCC", "Tag Dismiss"),
+        ]
+
+    def current_tag_legend(self):
+        if self.forever_friends_enabled():
+            return [
+                ("#00FFFF", "Tag ⋮ (option button)"),
+                ("#00FF44", "Tag Keep FF"),
+                ("#FF3333", "Tag Transfer FF"),
+                ("#FF9900", "Tag Review FF"),
+                ("#CCCCCC", "Tag Dismiss"),
+            ]
+        return [
+            ("#00FFFF", "Tag ⋮ (option button)"),
+            ("#00FF44", "Tag Keep"),
+            ("#FF3333", "Tag Transfer"),
+            ("#FF9900", "Tag Review"),
+            ("#CCCCCC", "Tag Dismiss"),
+        ]
+
     def show_category(self):
         selected = self.category_var.get()
         for frame in self.category_frames.values():
@@ -261,14 +274,32 @@ class CalibrationApp:
     def _build_category_legend(self, parent, subset):
         lf = tk.Frame(parent, bg="#16213e")
         lf.pack(fill="x", pady=4)
-        tk.Label(lf, text="Drag colored handles on image",
-                 fg="#94a3b8", bg="#16213e", font=("Helvetica", 9)).pack(pady=(0, 8))
+        tk.Label(
+            lf,
+            text="Drag colored handles on image",
+            fg="#94a3b8",
+            bg="#16213e",
+            font=("Helvetica", 9)
+        ).pack(pady=(0, 8))
         for color, text in subset:
             r = tk.Frame(lf, bg="#16213e")
             r.pack(fill="x", pady=1)
             tk.Label(r, bg=color, width=2, height=1).pack(side="left", padx=(0, 5))
-            tk.Label(r, text=text, fg="#cbd5e1", bg="#16213e",
-                     font=("Helvetica", 8)).pack(side="left")
+            tk.Label(
+                r,
+                text=text,
+                fg="#cbd5e1",
+                bg="#16213e",
+                font=("Helvetica", 8)
+            ).pack(side="left")
+
+    def _rebuild_tags_panel(self):
+        frame = self.category_frames.get("Tags")
+        if not frame:
+            return
+        for w in frame.winfo_children():
+            w.destroy()
+        self._build_category_legend(frame, self.current_tag_legend())
 
     def _build_iv_bars_panel(self, parent):
         for w in parent.winfo_children():
@@ -289,81 +320,166 @@ class CalibrationApp:
 
         cb.bind("<<ComboboxSelected>>", on_layout_change)
 
-        tk.Label(parent, text="Bar Positions (drag or use sliders)",
-                 font=("Helvetica", 10, "bold"), fg="#e2e8f0",
-                 bg="#16213e", justify="center").pack(pady=(10, 4))
+        tk.Label(
+            parent,
+            text="Bar Positions (drag or use sliders)",
+            font=("Helvetica", 10, "bold"),
+            fg="#e2e8f0",
+            bg="#16213e",
+            justify="center"
+        ).pack(pady=(10, 4))
 
         self.bar_vars = {}
         for label, key, color, _ in self.get_active_bar_keys():
             row = tk.Frame(parent, bg="#16213e")
             row.pack(fill="x", pady=3)
             tk.Label(row, bg=color, width=2).pack(side="left", padx=(0, 6))
-            tk.Label(row, text=label, fg="#e2e8f0", bg="#16213e",
-                     font=("Helvetica", 9), width=11, anchor="w").pack(side="left")
+            tk.Label(
+                row,
+                text=label,
+                fg="#e2e8f0",
+                bg="#16213e",
+                font=("Helvetica", 9),
+                width=11,
+                anchor="w"
+            ).pack(side="left")
             val = self.cfg["ui"].get(key, 0.5)
             var = tk.DoubleVar(value=val)
-            sl = tk.Scale(row, from_=0.0, to=1.0, resolution=0.001,
-                          orient="horizontal", variable=var,
-                          bg="#16213e", fg="#e2e8f0", troughcolor="#0f3460",
-                          highlightthickness=0, length=100,
-                          command=lambda v, k=key, dv=var: self._bar_slider(k, dv))
+            sl = tk.Scale(
+                row,
+                from_=0.0,
+                to=1.0,
+                resolution=0.001,
+                orient="horizontal",
+                variable=var,
+                bg="#16213e",
+                fg="#e2e8f0",
+                troughcolor="#0f3460",
+                highlightthickness=0,
+                length=100,
+                command=lambda v, k=key, dv=var: self._bar_slider(k, dv)
+            )
             sl.pack(side="left")
-            lbl = tk.Label(row, text=f"{val:.3f}", fg="#94a3b8", bg="#16213e",
-                           font=("Helvetica", 8), width=5)
+            lbl = tk.Label(
+                row,
+                text=f"{val:.3f}",
+                fg="#94a3b8",
+                bg="#16213e",
+                font=("Helvetica", 8),
+                width=5
+            )
             lbl.pack(side="left")
             self.bar_vars[key] = (var, lbl)
+
+    def _on_ff_toggle(self):
+        self.cfg.setdefault("account", {})
+        self.cfg["account"]["forever_friends_enabled"] = bool(self.ff_var.get())
+        self._rebuild_tags_panel()
+        self._redraw()
+        self.show_category()
 
     # ── UI BUILD ──────────────────────────────────────────────────────────────
     def _build_ui(self):
         bar = tk.Frame(self.root, bg="#16213e", pady=6)
         bar.pack(fill="x")
-        tk.Label(bar, text="📍 Calibration Viewer", font=("Helvetica", 14, "bold"),
-                 fg="#e2e8f0", bg="#16213e").pack(side="left", padx=12)
-        tk.Button(bar, text="🔄 Refresh", command=self.refresh,
-                  bg="#0f3460", fg="white", font=("Helvetica", 11),
-                  relief="flat", padx=10, pady=4).pack(side="left", padx=6)
-        tk.Button(bar, text="💾 Save Config", command=self.save,
-                  bg="#1a472a", fg="white", font=("Helvetica", 11),
-                  relief="flat", padx=10, pady=4).pack(side="left", padx=4)
-        self.status = tk.Label(bar, text="", fg="#94a3b8", bg="#16213e",
-                               font=("Helvetica", 10))
+        tk.Label(
+            bar,
+            text="📍 Calibration Viewer",
+            font=("Helvetica", 14, "bold"),
+            fg="#e2e8f0",
+            bg="#16213e"
+        ).pack(side="left", padx=12)
+        tk.Button(
+            bar,
+            text="🔄 Refresh",
+            command=self.refresh,
+            bg="#0f3460",
+            fg="white",
+            font=("Helvetica", 11),
+            relief="flat",
+            padx=10,
+            pady=4
+        ).pack(side="left", padx=6)
+        tk.Button(
+            bar,
+            text="💾 Save Config",
+            command=self.save,
+            bg="#1a472a",
+            fg="white",
+            font=("Helvetica", 11),
+            relief="flat",
+            padx=10,
+            pady=4
+        ).pack(side="left", padx=4)
+        self.status = tk.Label(
+            bar,
+            text="",
+            fg="#94a3b8",
+            bg="#16213e",
+            font=("Helvetica", 10)
+        )
         self.status.pack(side="right", padx=12)
 
         main = tk.Frame(self.root, bg="#1a1a2e")
         main.pack(fill="both", expand=True, padx=8, pady=8)
 
-        self.canvas = tk.Canvas(main, bg="#0d0d1a", cursor="crosshair",
-                                highlightthickness=0)
+        self.canvas = tk.Canvas(main, bg="#0d0d1a", cursor="crosshair", highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.canvas.bind("<ButtonPress-1>",   self.on_press)
-        self.canvas.bind("<B1-Motion>",       self.on_drag)
+        self.canvas.bind("<ButtonPress-1>", self.on_press)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
-        self.canvas.bind("<Left>",       lambda e: self._nudge(-0.001,  0))
-        self.canvas.bind("<Right>",      lambda e: self._nudge( 0.001,  0))
-        self.canvas.bind("<Up>",         lambda e: self._nudge( 0, -0.001))
-        self.canvas.bind("<Down>",       lambda e: self._nudge( 0,  0.001))
-        self.canvas.bind("<Shift-Left>",  lambda e: self._nudge(-0.01,  0))
-        self.canvas.bind("<Shift-Right>", lambda e: self._nudge( 0.01,  0))
-        self.canvas.bind("<Shift-Up>",    lambda e: self._nudge( 0, -0.01))
-        self.canvas.bind("<Shift-Down>",  lambda e: self._nudge( 0,  0.01))
+        self.canvas.bind("<Left>", lambda e: self._nudge(-0.001, 0))
+        self.canvas.bind("<Right>", lambda e: self._nudge(0.001, 0))
+        self.canvas.bind("<Up>", lambda e: self._nudge(0, -0.001))
+        self.canvas.bind("<Down>", lambda e: self._nudge(0, 0.001))
+        self.canvas.bind("<Shift-Left>", lambda e: self._nudge(-0.01, 0))
+        self.canvas.bind("<Shift-Right>", lambda e: self._nudge(0.01, 0))
+        self.canvas.bind("<Shift-Up>", lambda e: self._nudge(0, -0.01))
+        self.canvas.bind("<Shift-Down>", lambda e: self._nudge(0, 0.01))
         self.canvas.focus_set()
         self.canvas.bind("<Motion>", self.on_motion)
 
-        # ── Right panel ──
         panel = tk.Frame(main, bg="#16213e", width=270)
         panel.pack(side="right", fill="y", padx=(8, 0))
         panel.pack_propagate(False)
 
+        ff_row = tk.Frame(panel, bg="#16213e")
+        ff_row.pack(fill="x", padx=8, pady=(10, 2))
+
+        self.ff_var = tk.BooleanVar(value=self.forever_friends_enabled())
+        tk.Checkbutton(
+            ff_row,
+            text="Forever Friends account",
+            variable=self.ff_var,
+            command=self._on_ff_toggle,
+            fg="#e2e8f0",
+            bg="#16213e",
+            selectcolor="#0f3460",
+            activebackground="#16213e",
+            activeforeground="#e2e8f0",
+            font=("Helvetica", 10, "bold")
+        ).pack(anchor="w")
+
         top = tk.Frame(panel, bg="#16213e")
         top.pack(fill="x", padx=8, pady=(10, 6))
 
-        tk.Label(top, text="Category:", fg="#e2e8f0", bg="#16213e",
-                 font=("Helvetica", 10, "bold")).pack(side="left")
+        tk.Label(
+            top,
+            text="Category:",
+            fg="#e2e8f0",
+            bg="#16213e",
+            font=("Helvetica", 10, "bold")
+        ).pack(side="left")
 
         self.category_var = tk.StringVar(value="IV Bars")
         categories = ["IV Bars", "OCR Regions", "Buttons", "Slots", "Tags", "Legend"]
-        self.category_menu = ttk.Combobox(top, textvariable=self.category_var,
-                                          values=categories, state="readonly", width=15)
+        self.category_menu = ttk.Combobox(
+            top,
+            textvariable=self.category_var,
+            values=categories,
+            state="readonly",
+            width=15
+        )
         self.category_menu.pack(side="right", fill="x", expand=True, padx=(8, 0))
         self.category_menu.bind("<<ComboboxSelected>>", lambda e: self.show_category())
 
@@ -376,15 +492,33 @@ class CalibrationApp:
             self.category_frames[cat] = f
             if cat == "IV Bars":
                 self._build_iv_bars_panel(f)
+            elif cat == "Tags":
+                self._build_category_legend(f, self.current_tag_legend())
+            elif cat == "Legend":
+                legend = []
+                for subset_name in ["OCR Regions", "Buttons", "Slots"]:
+                    legend.extend(self.legend_subsets[subset_name])
+                legend.extend(self.current_tag_legend())
+                legend.extend([
+                    ("#FF8800", "ATK bar (drag vert)"),
+                    ("#FFCC00", "DEF bar (drag vert)"),
+                    ("#FF0088", "STA bar (drag vert)"),
+                    ("#00FFFF", "Bar X start/end (drag horiz)")
+                ])
+                self._build_category_legend(f, legend)
             else:
                 self._build_category_legend(f, self.legend_subsets[cat])
 
         ttk.Separator(panel, orient="horizontal").pack(fill="x", padx=8, pady=6)
 
-        self.coord_label = tk.Label(panel,
-                                    text="Hover or click on image\nto see coordinates",
-                                    fg="#64748b", bg="#16213e",
-                                    font=("Courier", 10), justify="center")
+        self.coord_label = tk.Label(
+            panel,
+            text="Hover or click on image\nto see coordinates",
+            fg="#64748b",
+            bg="#16213e",
+            font=("Courier", 10),
+            justify="center"
+        )
         self.coord_label.pack(pady=6)
 
         self.show_category()
@@ -401,9 +535,9 @@ class CalibrationApp:
             ch = max(400, self.root.winfo_height() - 60)
             self.display_scale = min(cw / self.img_w, ch / self.img_h, 2.0)
             self._redraw()
-            self.status.config(text=f"{self.img_w}×{self.img_h} | "
-                                    f"scale {self.display_scale:.2f}×  |  "
-                                    f"drag handles to adjust, Save when done")
+            self.status.config(
+                text=f"{self.img_w}×{self.img_h} | scale {self.display_scale:.2f}×  |  drag handles to adjust, Save when done"
+            )
         except Exception as e:
             self.status.config(text=f"Error: {e}")
 
@@ -422,7 +556,6 @@ class CalibrationApp:
         self._draw_handles_on_canvas()
 
     def _draw_all(self, img):
-        """Draw region overlays (filled semi-transparent rects) on PIL image."""
         draw = ImageDraw.Draw(img, "RGBA")
         w, h = img.size
         ui = self.cfg["ui"]
@@ -435,8 +568,7 @@ class CalibrationApp:
             x2, y2 = int(r["x2"] * w), int(r["y2"] * h)
             hc = color.lstrip("#")
             rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
-            draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 40),
-                           outline=(rc, gc, bc, 200), width=2)
+            draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 40), outline=(rc, gc, bc, 200), width=2)
 
         for region_key, color in RECT_REGIONS:
             rect(region_key, color)
@@ -455,7 +587,6 @@ class CalibrationApp:
                 draw.line([(x, 0), (x, h)], fill=(rc, gc, bc, 220), width=2)
 
     def _draw_handles_on_canvas(self):
-        """Draw draggable handle circles/squares on the Tkinter canvas."""
         ui = self.cfg["ui"]
         s = self.display_scale
         r = self.HANDLE_RADIUS
@@ -463,15 +594,17 @@ class CalibrationApp:
         def dot(x_rel, y_rel, color, tag, label=""):
             cx = int(x_rel * self.img_w * s)
             cy = int(y_rel * self.img_h * s)
-            self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r,
-                                    fill=color, outline="white",
-                                    width=1, tags=tag)
+            self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill=color, outline="white", width=1, tags=tag)
             if label:
-                self.canvas.create_text(cx+r+3, cy, text=label,
-                                        fill=color, font=("Helvetica", 8),
-                                        anchor="w", tags=tag+"_lbl")
+                self.canvas.create_text(
+                    cx+r+3, cy,
+                    text=label,
+                    fill=color,
+                    font=("Helvetica", 8),
+                    anchor="w",
+                    tags=tag+"_lbl"
+                )
 
-        # All rect regions (existing + new)
         rect_handles = [
             ("cp_region",     "#FF4444", "CP"),
             ("name_region",   "#44FF44", "Name"),
@@ -483,35 +616,25 @@ class CalibrationApp:
         ]
         for cfg_key, color, short in rect_handles:
             reg = ui.get(cfg_key, {})
-            dot(reg.get("x1", 0), reg.get("y1", 0), color,
-                f"rect_tl_{cfg_key}", f"{short} ↖")
-            dot(reg.get("x2", 1), reg.get("y2", 1), color,
-                f"rect_br_{cfg_key}", f"{short} ↘")
+            dot(reg.get("x1", 0), reg.get("y1", 0), color, f"rect_tl_{cfg_key}", f"{short} ↖")
+            dot(reg.get("x2", 1), reg.get("y2", 1), color, f"rect_br_{cfg_key}", f"{short} ↘")
 
-        # Point handles
         for cfg_key, color, label in [
             ("menu_button",     "#FFFFFF", "Menu"),
             ("appraise_button", "#FFFF00", "Appraise"),
             ("back_button",     "#FF6600", "Back"),
-            ("clear_search", "#FF6600", "Clear"),
-            ("tag_option_btn", "#00FFFF", "Tag ⋮"),
-            ("tag_keep", "#00FF44", "Tag Keep"),
-            ("tag_transfer", "#FF3333", "Tag Transfer"),
-            ("tag_review", "#FF9900", "Tag Review"),
-            ("tag_keep_ff", "#FF3333", "Tag Keep FF"),
-            ("tag_transfer_ff", "#FF9900", "Tag Transfer FF"),
-            ("tag_review_ff", "#FF9900", "Tag Review FF"),
+            ("clear_search",    "#FF6600", "Clear"),
         ]:
             p = ui.get(cfg_key, {})
-            dot(p.get("x", 0.5), p.get("y", 0.5), color,
-                f"point_{cfg_key}", label)
+            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
 
-        # Slots
+        for cfg_key, color, label in self.active_tag_handles():
+            p = ui.get(cfg_key, {})
+            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
+
         for i, slot in enumerate(ui.get("pokemon_slots", [])):
-            dot(slot.get("x", 0), slot.get("y", 0),
-                "#00FF88", f"slot_{i}", f"Slot{i+1}")
+            dot(slot.get("x", 0), slot.get("y", 0), "#00FF88", f"slot_{i}", f"Slot{i+1}")
 
-        # Bar handles (squares)
         for label, key, color, btype in self.get_active_bar_keys():
             val = ui.get(key)
             if val is None:
@@ -522,12 +645,8 @@ class CalibrationApp:
             else:
                 cx = int(val * self.img_w * s)
                 cy = int(0.5 * self.img_h * s)
-            self.canvas.create_rectangle(cx-r, cy-r, cx+r, cy+r,
-                                         fill=color, outline="white",
-                                         width=1, tags=f"bar_{key}")
-            self.canvas.create_text(cx+r+3, cy, text=label,
-                                    fill=color, font=("Helvetica", 8),
-                                    anchor="w", tags=f"bar_{key}_lbl")
+            self.canvas.create_rectangle(cx-r, cy-r, cx+r, cy+r, fill=color, outline="white", width=1, tags=f"bar_{key}")
+            self.canvas.create_text(cx+r+3, cy, text=label, fill=color, font=("Helvetica", 8), anchor="w", tags=f"bar_{key}_lbl")
 
     # ── DRAG LOGIC ────────────────────────────────────────────────────────────
     def _canvas_to_rel(self, cx, cy):
@@ -541,9 +660,7 @@ class CalibrationApp:
 
         candidates = []
 
-        # All rect region corners
-        all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region",
-                         "type_region", "weight_region", "height_region")
+        all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region", "type_region", "weight_region", "height_region")
         for cfg_key in all_rect_keys:
             reg = ui.get(cfg_key, {})
             for corner, xk, yk in [("tl", "x1", "y1"), ("br", "x2", "y2")]:
@@ -551,21 +668,24 @@ class CalibrationApp:
                 hy = reg.get(yk, 0) * self.img_h * s
                 dist = abs(cx - hx) + abs(cy - hy)
                 if dist < r * 2:
-                    candidates.append((dist, f"rect_{corner}_{cfg_key}",
-                                       xk, yk, cfg_key, "rect_corner"))
+                    candidates.append((dist, f"rect_{corner}_{cfg_key}", xk, yk, cfg_key, "rect_corner"))
 
-        # Points
-        for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search",
-                        "tag_option_btn", "tag_keep", "tag_transfer", "tag_review", "tag_keep_ff", "tag_transfer_ff", "tag_review_ff"):
+        for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search"):
             p = ui.get(cfg_key, {})
             hx = p.get("x", 0.5) * self.img_w * s
             hy = p.get("y", 0.5) * self.img_h * s
             dist = abs(cx - hx) + abs(cy - hy)
             if dist < r * 2:
-                candidates.append((dist, f"point_{cfg_key}",
-                                   "x", "y", cfg_key, "point"))
+                candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
 
-        # Slots
+        for cfg_key, _, _ in self.active_tag_handles():
+            p = ui.get(cfg_key, {})
+            hx = p.get("x", 0.5) * self.img_w * s
+            hy = p.get("y", 0.5) * self.img_h * s
+            dist = abs(cx - hx) + abs(cy - hy)
+            if dist < r * 2:
+                candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
+
         for i, slot in enumerate(ui.get("pokemon_slots", [])):
             hx = slot.get("x", 0) * self.img_w * s
             hy = slot.get("y", 0) * self.img_h * s
@@ -573,7 +693,6 @@ class CalibrationApp:
             if dist < r * 2:
                 candidates.append((dist, f"slot_{i}", "x", "y", i, "slot"))
 
-        # Bars
         for label, key, color, btype in self.get_active_bar_keys():
             val = ui.get(key)
             if val is None:
@@ -627,10 +746,7 @@ class CalibrationApp:
                 self.bar_vars[cfg_key][0].set(rx)
                 self.bar_vars[cfg_key][1].config(text=f"{rx:.3f}")
 
-        self.coord_label.config(
-            text=f"Dragging: {tag}\nx={rx:.3f}  y={ry:.3f}",
-            fg="#00FF88"
-        )
+        self.coord_label.config(text=f"Dragging: {tag}\nx={rx:.3f}  y={ry:.3f}", fg="#00FF88")
         self._redraw()
 
     def on_release(self, event):
@@ -649,10 +765,7 @@ class CalibrationApp:
             )
             self.canvas.config(cursor="fleur")
         else:
-            self.coord_label.config(
-                text=f"x={rx:.3f}  y={ry:.3f}",
-                fg="#64748b"
-            )
+            self.coord_label.config(text=f"x={rx:.3f}  y={ry:.3f}", fg="#64748b")
             self.canvas.config(cursor="crosshair")
 
     def _bar_slider(self, key, var):
@@ -667,7 +780,6 @@ class CalibrationApp:
         self.status.config(text="✅ Saved to calibration.json")
 
     def _nudge(self, dx, dy):
-        """Nudge the last-clicked handle by dx, dy in relative coords."""
         if not self.dragging:
             return
         dist, tag, xk, yk, cfg_key, htype = self.dragging
