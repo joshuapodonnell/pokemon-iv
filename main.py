@@ -46,6 +46,12 @@ def parse_args():
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--mode", choices=["catalog", "newcatch"], default="catalog",
                    help="catalog: scan age0 box. newcatch: appraise most recent catch only.")
+    p.add_argument(
+        "--tag-layout",
+        choices=["standard", "forever_friend"],
+        default="standard",
+        help="Choose which in-game tag menu layout to use."
+    )
     return p.parse_args()
 
 
@@ -441,7 +447,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
     ui = cfg["ui"]
-
+    tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
     # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])
@@ -773,11 +779,11 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             base_delay=cfg['timing']['after_tap'])
 
     if tag_value == "KEEP":
-        tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
+        tap.tap(tag_layout['tag_keep']['x'],     tag_layout['tag_keep']['y'])
     elif tag_value == "TRANSFER":
-        tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
+        tap.tap(tag_layout['tag_transfer']['x'], tag_layout['tag_transfer']['y'])
     else:
-        tap.tap(ui['tag_review']['x'],   ui['tag_review']['y'])
+        tap.tap(tag_layout['tag_review']['x'],   tag_layout['tag_review']['y'])
 
     tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
             base_delay=cfg['timing']['after_tap'])
@@ -1052,6 +1058,7 @@ def run_bot(args):
     cfg  = load_config()
     conn = get_db()
     tap  = TapController(cfg)
+    tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
     # ── Pause controller ──────────────────────────────────────────────
     pause = PauseController(pause_key='f9', quit_key='f10', reprocess_key='f8')

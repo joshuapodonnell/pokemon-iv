@@ -62,6 +62,25 @@ DEFAULT_CONFIG = {
         "long_break_dur":    [120, 480],
         "session_max_min":   [45, 90],
     },
+    "account": {
+        "forever_friends": False
+    },
+    "tag_layouts": {
+        "normal": {
+            "tag_option_btn": {"x": 0.648, "y": 0.65},
+            "tag_keep": {"x": 0.50, "y": 0.35},
+            "tag_review": {"x": 0.50, "y": 0.55},
+            "tag_transfer": {"x": 0.50, "y": 0.45},
+            "tag_dismiss": {"x": 0.50, "y": 0.85}
+        },
+        "forever_friends": {
+            "tag_option_btn": {"x": 0.648, "y": 0.65},
+            "tag_keep": {"x": 0.50, "y": 0.40},
+            "tag_review": {"x": 0.50, "y": 0.50},
+            "tag_transfer": {"x": 0.50, "y": 0.60},
+            "tag_dismiss": {"x": 0.50, "y": 0.85}
+        }
+    }
 }
 
 
