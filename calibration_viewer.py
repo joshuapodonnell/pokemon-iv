@@ -169,6 +169,8 @@ class CalibrationApp:
         self.photo = None
         self.display_scale = 1.0
         self.dragging = None
+        self.img_w = 1
+        self.img_h = 1
 
         # Legend categorized data
         self.legend_subsets = {
