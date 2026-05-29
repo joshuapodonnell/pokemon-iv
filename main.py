@@ -441,7 +441,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── Submit CP consensus BEFORE any taps, while base screen is still visible
     # Capture frames immediately so all 5 land on the base screen
     _cp_frames = _capture_cp_frames(
-        capture_window, cfg, n=5, interval=0.2,
+        capture_window, cfg, n=capture_frames, interval=0.2,
         debug=args.debug, visit_num=visit_num,
     )
     _ocr_cp_at_capture = cp  # snapshot before any mutation
@@ -735,7 +735,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
              + (f" | {reasons}" if reasons else ""))
 
     # ── 6. CLOSE APPRAISAL & APPLY TAG ───────────────────────────────────
-    tap.tap(0.5, 0.5, base_delay=cfg['timing']['after_tap'])
+    tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
+            base_delay=random.uniform(0.1, 0.2))
     tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],
             base_delay=cfg['timing']['after_tap'])
     tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'],
@@ -1086,4 +1087,6 @@ def run_bot(args):
 
 
 if __name__ == "__main__":
+    capture_frames = 3
     run_bot(parse_args())
+
