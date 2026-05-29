@@ -710,6 +710,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             conn, name, cp,
             atk_iv, def_iv, sta_iv,
             iv_data["iv_pct"], pvp, evo_rankings,
+            level=iv_data.get("level"),
             current_id=poke_id,
         )
 

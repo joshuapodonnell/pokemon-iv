@@ -11,6 +11,7 @@ KEEP_RULES = {
     "perfect_iv":       True,
     "zero_iv":          True,
     "min_trusted_cp":   10,   # CP under this is treated as OCR uncertainty
+    "min_keep_level":   30,   # Keep anything caught at this level or above
 }
 
 KEEP_SPECIES = frozenset({
@@ -38,7 +39,7 @@ KEEP_SPECIES = frozenset({
 })
 
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
-                   pvp: dict, evo_rankings: dict,
+                   pvp: dict, evo_rankings: dict, level: float = None,
                    current_id: int = None) -> dict:
     reasons = []
     action = "TRANSFER"
@@ -53,7 +54,11 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     if KEEP_RULES["zero_iv"] and is_nundo:
         reasons.append("0% IV — nundo")
         action = "KEEP"
-
+        # ← add this block
+    min_lvl = KEEP_RULES.get("min_keep_level")
+    if min_lvl and level is not None and level >= min_lvl:
+        reasons.append(f"High-level catch (L{level} ≥ {min_lvl})")
+        action = "KEEP"
     if iv_pct >= KEEP_RULES["iv_pct_min"]:
         reasons.append(f"{iv_pct}% IV (3★+)")
         action = "KEEP"
