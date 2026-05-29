@@ -137,7 +137,7 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         return 2, "", []
 
     # Filter out lines whose height is anomalously large vs the median —
-    # loading-bar artefacts tend to produce oversized bounding boxes
+    # loading-bar artifacts tend to produce oversized bounding boxes
     median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
     lines = [l for l in lines if l["height"] < median_h * 2.5]
 
@@ -293,7 +293,7 @@ def reload_calibration(cfg):
         log.warning(f"calibration reload failed (using current values): {e}")
 
 
-def _is_valid_base_parse(cp, hp, typetext, weighttext, heighttext, name=None):
+def _is_valid_base_parse(cp, hp, typetext,name=None):
     """Return True when the base-screen OCR looks trustworthy."""
     if cp is None or cp <= 0:
         return False
@@ -301,8 +301,9 @@ def _is_valid_base_parse(cp, hp, typetext, weighttext, heighttext, name=None):
         return False
     if not typetext or typetext.strip().lower() in ("", "unknown"):
         return False
-    if weighttext == "" and heighttext == "":
-        return False
+    # TODO
+    # if weighttext == "" and heighttext == "":
+    #     return False
     return True
 
 
@@ -423,8 +424,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     cp_text     = ocrregion(cp_image)
     type_text   = ocrregion(getrelativeregion(base_img, ui["type_region"]))
-    weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
-    height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
+    # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
+    # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
     log.info(f"raw cp_text: {cp_text!r}")
 
     cp = parsecp(cp_text)
@@ -454,7 +455,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     # ── Base-screen VLM fallback (only if OCR is suspect) ─────────────────
     _base_vlm_used = False
-    if not _is_valid_base_parse(cp, hp, type_text, weight_text, height_text):
+    if not _is_valid_base_parse(cp, hp, type_text):
         log.info("Base-screen OCR suspect – calling VisionAgent")
         _bvlm = vision_agent.analyze_base_screen(base_img)
 
