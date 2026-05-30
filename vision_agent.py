@@ -39,6 +39,9 @@ Recommended models for 8 GB unified memory:
 Set the model via env var:
     export POGO_VLM_MODEL=mlx-community/Qwen2-VL-2B-Instruct-4bit
 
+To disable local fallback entirely (remote-only mode, degrades to OCR/review):
+    export POGO_DISABLE_LOCAL_VLM=1
+
 Or edit MODEL_PATH below.
 """
 
@@ -51,6 +54,7 @@ import logging
 import os
 import re
 import requests
+import threading
 from typing import Optional
 
 from PIL import Image
@@ -61,16 +65,17 @@ log = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Put your Windows PC's local IP address and the LM Studio port here
-WINDOWS_PC_IP = "192.168.1.229"   # <-- your PC's local IP (find with `ipconfig` on Windows)
+WINDOWS_PC_IP = "192.168.1.229"
 API_PORT = "11434"
 API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
-VLM_MODEL = "qwen2.5vl:32b"        # must match what you pulled in ollama
+VLM_MODEL = "qwen2.5vl:32b"
 
 CONFIDENCE_THRESHOLD: float = 0.75
 MAX_TOKENS: int = 400
 
-import threading
+# Set POGO_DISABLE_LOCAL_VLM=1 to skip local fallback entirely and degrade to
+# OCR/review when remote is unreachable. Local is ON by default.
+_DISABLE_LOCAL_VLM: bool = os.environ.get("POGO_DISABLE_LOCAL_VLM", "0") == "1"
 
 # ---------------------------------------------------------------------------
 # Local MLX-VLM fallback (M1 Mac)
@@ -83,11 +88,14 @@ LOCAL_MODEL_PATH = os.environ.get(
 
 _local_model = None
 _local_processor = None
+_local_config = None          # cached once in _load_local_model(); reused every call
 _local_model_lock = threading.Lock()
-_local_available: bool | None = None  # None = untested, True/False = known
-_local_config = None   # add this with the other globals at the top
+_local_available: bool | None = None   # None = untested, True/False = known
+_local_broken: bool = False            # set True after first inference failure this session
 
-def _load_local_model():
+
+def _load_local_model() -> bool:
+    """Load and cache the local MLX model + config. Returns True on success."""
     global _local_model, _local_processor, _local_config, _local_available
     with _local_model_lock:
         if _local_model is not None:
@@ -97,7 +105,7 @@ def _load_local_model():
             from mlx_vlm.utils import load_config
             log.info(f"[VLM-local] Loading {LOCAL_MODEL_PATH} …")
             _local_model, _local_processor = load(LOCAL_MODEL_PATH)
-            _local_config = load_config(LOCAL_MODEL_PATH)   # ← cache it here
+            _local_config = load_config(LOCAL_MODEL_PATH)   # cached here; never called again
             _local_available = True
             log.info("[VLM-local] Model ready.")
             return True
@@ -106,27 +114,32 @@ def _load_local_model():
             _local_available = False
             return False
 
+
 def _call_vlm_local(prompt: str, images: list) -> str:
-    """Run inference on the local MLX model."""
+    """
+    Run inference on the local MLX model.
+
+    Uses the module-level _local_config cache loaded by _load_local_model()
+    so load_config() is never called more than once per session.
+    """
     from mlx_vlm import generate
     from mlx_vlm.prompt_utils import apply_chat_template
-    from mlx_vlm.utils import load_config
     import tempfile
 
     img = images[0]
 
-    # mlx-vlm's generate() expects a FILE PATH string, not a PIL Image or BytesIO.
-    # Write to a named temp file and pass the path.
+    # mlx-vlm generate() requires a file path, not a PIL Image.
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         img.save(tmp, format="PNG")
         tmp_path = tmp.name
 
     try:
-        config = load_config(LOCAL_MODEL_PATH)
+        if _local_config is None:
+            raise RuntimeError("Local VLM config not initialised — _load_local_model() was not called")
 
         formatted = apply_chat_template(
             _local_processor,
-            config,
+            _local_config,       # ← reuse cached config, no extra load_config() call
             prompt,
             num_images=1,
         )
@@ -134,34 +147,30 @@ def _call_vlm_local(prompt: str, images: list) -> str:
         output = generate(
             _local_model,
             _local_processor,
-            formatted,        # prompt is the 3rd positional arg
-            [tmp_path],       # image list is the 4th positional arg — must be file paths
+            formatted,
+            [tmp_path],
             verbose=False,
             max_tokens=MAX_TOKENS,
             temperature=0.0,
         )
         return output.strip()
     finally:
-        os.unlink(tmp_path)   # clean up the temp file
+        os.unlink(tmp_path)
+
+
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Remote backend
 # ---------------------------------------------------------------------------
 
-def _pil_to_list(img: Image.Image) -> list:
-    """Pass through the PIL image for the API."""
-    return [img]
+REMOTE_CONNECT_TIMEOUT = 3     # seconds — keep short so failures are fast
+REMOTE_READ_TIMEOUT    = 180   # seconds — model inference can be slow
+REMOTE_WARMUP_TIMEOUT  = 180   # seconds — 32B needs time to load into VRAM
 
-
-# How long to wait for the remote PC to *accept* the connection.
-# Keep this short so failures are detected in ~3 s, not 120 s.
-REMOTE_CONNECT_TIMEOUT = 3    # seconds
-REMOTE_READ_TIMEOUT    = 180  # seconds (model inference can be slow)
-
-_remote_available: bool | None = None  # None = untested
+_remote_available: bool | None = None   # None = untested
 
 
 def _call_vlm_remote(prompt: str, images: list) -> str:
-    """Send to the Windows PC Ollama endpoint."""
+    """Send a vision request to the Windows PC Ollama endpoint."""
     img = images[0]
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -190,15 +199,24 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
     return response.json()["choices"][0]["message"]["content"].strip()
 
 
+# ---------------------------------------------------------------------------
+# Unified VLM dispatcher with circuit breaker
+# ---------------------------------------------------------------------------
+
 def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
     """
     Try the remote Windows PC first.
-    On any connection error, fall back to the local MLX model.
-    Raises RuntimeError only if BOTH backends fail.
-    """
-    global _remote_available
+    On any connection error, fall back to the local MLX model (unless disabled).
 
-    # ── 1. Try remote (skip if already known-down this session) ──────────
+    Circuit breaker: if local inference throws an exception, _local_broken is
+    set to True and all subsequent calls skip local entirely, raising
+    RuntimeError so _safe_call() can return confidence=0.0 gracefully.
+
+    Raises RuntimeError only when BOTH backends are unavailable/broken.
+    """
+    global _remote_available, _local_broken
+
+    # ── 1. Remote ─────────────────────────────────────────────────────────
     if _remote_available is not False:
         try:
             result = _call_vlm_remote(prompt, images)
@@ -224,14 +242,65 @@ def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
                         "Trying local MLX model.")
             _remote_available = False
 
-    # ── 2. Fall back to local MLX-VLM ────────────────────────────────────
+    # ── 2. Local MLX fallback ─────────────────────────────────────────────
+    if _DISABLE_LOCAL_VLM:
+        raise RuntimeError(
+            "VLM unavailable: remote PC is down and local fallback is disabled "
+            "(POGO_DISABLE_LOCAL_VLM=1). Degrading to OCR/review."
+        )
+
+    if _local_broken:
+        raise RuntimeError(
+            "VLM unavailable: remote PC is down and local MLX model is disabled "
+            "for this session after a previous inference failure."
+        )
+
     if _load_local_model():
-        log.debug("[VLM-local] Running local inference.")
-        return _call_vlm_local(prompt, images)
+        try:
+            log.debug("[VLM-local] Running local inference.")
+            return _call_vlm_local(prompt, images)
+        except Exception as e:
+            # Circuit breaker: disable local for the rest of this session.
+            _local_broken = True
+            log.warning(
+                f"[VLM-local] Inference failed ({e}). "
+                "Disabling local VLM for the remainder of this session — "
+                "subsequent failures will degrade to OCR/review."
+            )
+            raise RuntimeError(
+                f"Local VLM inference failed; disabled for this session: {e}"
+            ) from e
 
     raise RuntimeError(
         "VLM unavailable: remote PC is down and local MLX model failed to load."
     )
+
+
+def reset_remote_status() -> None:
+    """Allow the next VLM call to re-probe the remote PC (called between passes)."""
+    global _remote_available
+    _remote_available = None
+    log.info("[VLM] Remote PC status reset — will probe on next call.")
+
+
+def reset_local_circuit_breaker() -> None:
+    """
+    Manually re-enable local inference after it was tripped by the circuit
+    breaker. Only use this if you have fixed the underlying MLX issue.
+    """
+    global _local_broken
+    _local_broken = False
+    log.info("[VLM-local] Circuit breaker reset — local inference re-enabled.")
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _pil_to_list(img: Image.Image) -> list:
+    return [img]
+
+
 def _parse_json_response(raw: str) -> dict:
     """Extract the first JSON object from the VLM's text output."""
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
@@ -245,6 +314,7 @@ def _parse_json_response(raw: str) -> dict:
         log.warning(f"VLM JSON parse error: {e}  raw={raw[:120]!r}")
         return {}
 
+
 def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
     """Wrapper that catches all exceptions and returns an empty failure dict."""
     try:
@@ -257,48 +327,61 @@ def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
         log.warning(f"VisionAgent VLM call failed: {e}")
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
+
+# ---------------------------------------------------------------------------
+# Image crop helpers
+# ---------------------------------------------------------------------------
+
 def crop_for_vlm(img: Image.Image) -> Image.Image:
     w, h = img.size
-    # Start at ~44% (below name/HP), end at ~65% (above stardust/candy row)
     return img.crop((0, int(h * 0.44), w, int(h * 0.65)))
 
+
 def _crop_cp_region(img: Image.Image) -> Image.Image:
-    """Crop to just the CP header area at the top, upscaled for clarity."""
+    """CP header area, upscaled 2× for digit clarity."""
     w, h = img.size
     crop = img.crop((0, 0, w, int(h * 0.22)))
-    # Upscale 2x so digits are large and unambiguous
-    new_w, new_h = crop.width * 2, crop.height * 2
-    return crop.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    return crop.resize((crop.width * 2, crop.height * 2), Image.Resampling.LANCZOS)
+
+
 def _crop_hp_region(img: Image.Image) -> Image.Image:
-    """Crop to just the name + HP bar row."""
     w, h = img.size
     return img.crop((0, int(h * 0.40), w, int(h * 0.52)))
 
+
 def _crop_type_region(img: Image.Image) -> Image.Image:
-    """Crop to just the weight/type/height row — no name, no nickname."""
     w, h = img.size
     return img.crop((0, int(h * 0.52), w, int(h * 0.65)))
+
+
+def _crop_candy_region(img: Image.Image) -> Image.Image:
+    w, h = img.size
+    return img.crop((0, int(h * 0.65), w, int(h * 0.78)))
+
+
 VALID_TYPES = {
     "normal", "fire", "water", "electric", "grass", "ice", "fighting",
     "poison", "ground", "flying", "psychic", "bug", "rock", "ghost",
     "dragon", "dark", "steel", "fairy"
 }
-def _crop_candy_region(img: Image.Image) -> Image.Image:
-    """Crop to the stardust/candy row — below weight/type/height, above POWER UP."""
-    w, h = img.size
-    return img.crop((0, int(h * 0.65), w, int(h * 0.78)))
+
 
 def _validate_type(text: str) -> str:
-    """Return the type if valid, empty string if hallucinated."""
     return text if text.lower() in VALID_TYPES else ""
+
+
+# ---------------------------------------------------------------------------
+# Response parsers
+# ---------------------------------------------------------------------------
+
 def _parse_qa_response(raw: str) -> dict:
     patterns = {
-        "cp": r"CP:\s*(\d{2,4})",  # enforce 2-4 digits exactly
-        "hp":     r"HP:\s*(\d+)",           # digits only — stops at non-digit
+        "cp":     r"CP:\s*(\d{2,4})",
+        "hp":     r"HP:\s*(\d+)",
         "type1":  r"TYPE1:\s*(\w+)",
         "type2":  r"TYPE2:\s*(\w+)",
-        "weight": r"WEIGHT:\s*([\d.]+\s*kg)",  # capture number + kg together
-        "height": r"HEIGHT:\s*([\d.]+\s*m)",   # capture number + m together
+        "weight": r"WEIGHT:\s*([\d.]+\s*kg)",
+        "height": r"HEIGHT:\s*([\d.]+\s*m)",
     }
     result = {"screen_type": "base_screen"}
     found = 0
@@ -312,29 +395,26 @@ def _parse_qa_response(raw: str) -> dict:
     result["confidence"] = 0.9 if found >= 5 else round(found / 6, 2)
     return result
 
+
 def _parse_candy_response(raw: str) -> dict:
     patterns = {
-        "candy":          r"CANDY:\s*([\d,]+)",
-        "candy_xl":       r"CANDY_XL:\s*([\d,]+)",
-        "candy_species":  r"CANDY_SPECIES:\s*(.+)",
+        "candy":         r"CANDY:\s*([\d,]+)",
+        "candy_xl":      r"CANDY_XL:\s*([\d,]+)",
+        "candy_species": r"CANDY_SPECIES:\s*(.+)",
     }
     result = {}
     for key, pattern in patterns.items():
         m = re.search(pattern, raw, re.IGNORECASE)
         if m:
             text = m.group(1).strip()
-            # Strip commas from numbers
             if key in ("candy", "candy_xl"):
                 text = text.replace(",", "")
             result[key] = {"text": text, "confidence": 0.9}
         else:
             result[key] = {"text": "", "confidence": 0.0}
     return result
-def reset_remote_status():
-    """Call this to allow the next VLM call to re-probe the remote PC."""
-    global _remote_available
-    _remote_available = None
-    log.info("[VLM] Remote PC status reset — will probe on next call.")
+
+
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------
@@ -434,11 +514,6 @@ Extract as much as you can and return this JSON:
 Use value -1 for bars you cannot determine.
 Return JSON only."""
 
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 _CP_PROMPT = """Read the exact number shown after 'CP' in this Pokémon GO screenshot.
 
 Rules:
@@ -457,8 +532,8 @@ Examples:
 
 _STATS_PROMPT = """Look at this Pokémon GO stats panel and extract these values.
 
-IMPORTANT: There are circular colored icons showing type badges. 
-IGNORE the icons completely. 
+IMPORTANT: There are circular colored icons showing type badges.
+IGNORE the icons completely.
 Read ONLY the TEXT WORD written beneath the icons (e.g. "FAIRY", "ELECTRIC", "DRAGON").
 The type text is always a single English word in capital letters under the icon.
 
@@ -487,7 +562,6 @@ Ignore the Pokémon name, nickname, or any other text.
 
 Answer in this exact format with nothing else:
 HP: <number>"""
-
 
 _TYPE_PROMPT = """This is a crop from a Pokémon GO stats card showing ONLY the weight/type/height row.
 
@@ -526,66 +600,66 @@ CANDY: <number>
 CANDY_XL: <number>
 CANDY_SPECIES: <species name>"""
 
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def analyze_base_screen(img: Image.Image) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
-        cp_img   = _crop_cp_region(img)
-        hp_img   = _crop_hp_region(img)
-        type_img = _crop_type_region(img)
+        cp_img    = _crop_cp_region(img)
+        hp_img    = _crop_hp_region(img)
+        type_img  = _crop_type_region(img)
         candy_img = _crop_candy_region(img)
 
-
-        # Save debug crops
+        # Debug crops
         cp_img.save("cp_region.png")
         hp_img.save("hp_region.png")
         type_img.save("type_region.png")
         candy_img.save("candy_region.png")
 
-        cp_raw   = call_vlm(_CP_PROMPT,   [cp_img])
-        hp_raw   = call_vlm(_HP_PROMPT,   [hp_img])
-        type_raw = call_vlm(_TYPE_PROMPT, [type_img])
+        cp_raw    = call_vlm(_CP_PROMPT,    [cp_img])
+        hp_raw    = call_vlm(_HP_PROMPT,    [hp_img])
+        type_raw  = call_vlm(_TYPE_PROMPT,  [type_img])
         candy_raw = call_vlm(_CANDY_PROMPT, [candy_img])
 
-
-
-        print(f"DEBUG cp_raw:   {cp_raw!r}")
-        print(f"DEBUG hp_raw:   {hp_raw!r}")
-        print(f"DEBUG type_raw: {type_raw!r}")
+        print(f"DEBUG cp_raw:    {cp_raw!r}")
+        print(f"DEBUG hp_raw:    {hp_raw!r}")
+        print(f"DEBUG type_raw:  {type_raw!r}")
         print(f"DEBUG candy_raw: {candy_raw!r}")
 
-        cp_result   = _parse_qa_response(cp_raw)
-        hp_result   = _parse_qa_response(hp_raw)
-        type_result = _parse_qa_response(type_raw)
+        cp_result    = _parse_qa_response(cp_raw)
+        hp_result    = _parse_qa_response(hp_raw)
+        type_result  = _parse_qa_response(type_raw)
         candy_result = _parse_candy_response(candy_raw)
 
         result = {
-            "screen_type": "base_screen",
-            "cp":     cp_result.get("cp",       {"text": "", "confidence": 0.0}),
-            "hp":     hp_result.get("hp",        {"text": "", "confidence": 0.0}),
-            "type1":  type_result.get("type1",   {"text": "", "confidence": 0.0}),
-            "type2":  type_result.get("type2",   {"text": "", "confidence": 0.0}),
-            "weight": type_result.get("weight",  {"text": "", "confidence": 0.0}),
-            "height": type_result.get("height",  {"text": "", "confidence": 0.0}),
-            "candy": candy_result.get("candy", {"text": "", "confidence": 0.0}),
-            "candy_xl": candy_result.get("candy_xl", {"text": "", "confidence": 0.0}),
-            "candy_species": candy_result.get("candy_species", {"text": "", "confidence": 0.0}),
+            "screen_type":    "base_screen",
+            "cp":             cp_result.get("cp",            {"text": "", "confidence": 0.0}),
+            "hp":             hp_result.get("hp",            {"text": "", "confidence": 0.0}),
+            "type1":          type_result.get("type1",       {"text": "", "confidence": 0.0}),
+            "type2":          type_result.get("type2",       {"text": "", "confidence": 0.0}),
+            "weight":         type_result.get("weight",      {"text": "", "confidence": 0.0}),
+            "height":         type_result.get("height",      {"text": "", "confidence": 0.0}),
+            "candy":          candy_result.get("candy",      {"text": "", "confidence": 0.0}),
+            "candy_xl":       candy_result.get("candy_xl",   {"text": "", "confidence": 0.0}),
+            "candy_species":  candy_result.get("candy_species", {"text": "", "confidence": 0.0}),
             "source": "vlm",
         }
 
-        # Validate types — reject hallucinations
+        # Reject hallucinated types
         for key in ("type1", "type2"):
             t = result[key].get("text", "").lower()
             if t and t not in ("none", "") and t not in VALID_TYPES:
                 log.warning(f"VLM returned invalid type '{t}' — rejecting")
                 result[key] = {"text": "", "confidence": 0.0}
 
-        # Confidence based on how many fields were populated
         fields_found = sum(
             1 for k in ("cp", "hp", "type1", "weight", "height")
             if result.get(k, {}).get("text")
         )
         result["confidence"] = 0.9 if fields_found >= 5 else round(fields_found / 5, 2)
-
         return result
 
     except Exception as e:
@@ -594,40 +668,15 @@ def analyze_base_screen(img: Image.Image) -> dict:
 
 
 def analyze_appraisal_screen(img: Image.Image) -> dict:
-    """
-    Analyze the dark appraisal overlay screen.
-
-    Returns a dict with keys: name, bars (attack/defense/stamina with
-    value + bbox_rel), confidence, source.
-    """
+    """Analyze the dark appraisal overlay screen."""
     log.debug("VisionAgent.analyze_appraisal_screen called")
     return _safe_call(_APPRAISAL_SCREEN_PROMPT, _pil_to_list(img))
 
 
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
-    """
-    Given a dict of already-extracted OCR fields (cp, hp, type1, type2,
-    weight, height, name), ask the VLM to correct suspicious values.
-
-    `fields` keys and expected format:
-        {
-            "cp": "310",
-            "hp": "47",
-            "type1": "Fire",
-            "type2": "none",
-            "weight": "4.20 kg",
-            "height": "0.40 m",
-            "name": "Charmander"
-        }
-
-    If `img` is provided the VLM can use it visually. If None, the VLM
-    works from the text alone (less accurate but still useful for
-    obvious character substitutions like 0/O, 1/I/l).
-    """
+    """Ask the VLM to correct suspicious OCR-extracted fields."""
     log.debug("VisionAgent.correct_ocr called")
-    prompt = _OCR_CORRECTION_PROMPT.format(
-        fields_json=json.dumps(fields, indent=2)
-    )
+    prompt = _OCR_CORRECTION_PROMPT.format(fields_json=json.dumps(fields, indent=2))
     images = _pil_to_list(img) if img is not None else []
     return _safe_call(prompt, images)
 
@@ -637,14 +686,7 @@ def recover_failed_parse(
     appraisal_img: Image.Image,
     partial: Optional[dict] = None,
 ) -> dict:
-    """
-    Last-resort full-screen recovery when the normal pipeline produced
-    invalid or incomplete data.
-
-    Pass both the base screen and the appraisal screen. `partial` may
-    contain whatever fields *did* parse successfully (they will be
-    included in the prompt as hints to avoid over-correction).
-    """
+    """Last-resort full-screen recovery when the normal pipeline failed."""
     log.debug("VisionAgent.recover_failed_parse called")
     prompt = _RECOVERY_PROMPT
     if partial:
@@ -657,24 +699,19 @@ def recover_failed_parse(
 
 
 # ---------------------------------------------------------------------------
-# Convenience validators (used by main.py after agent call)
+# Convenience validators
 # ---------------------------------------------------------------------------
 
 def is_reliable(agent_result: dict, threshold: float = CONFIDENCE_THRESHOLD) -> bool:
-    """Return True if the agent result is above the confidence threshold."""
     return agent_result.get("confidence", 0.0) >= threshold
 
 
 def extract_bar_values(agent_result: dict) -> Optional[tuple[int, int, int]]:
-    """
-    Pull (atk_iv, def_iv, sta_iv) from an analyze_appraisal_screen result.
-    Returns None if bars are missing or confidence is too low.
-    """
     bars = agent_result.get("bars", {})
     try:
-        atk = int(bars["attack"]["value"])
+        atk  = int(bars["attack"]["value"])
         def_ = int(bars["defense"]["value"])
-        sta = int(bars["stamina"]["value"])
+        sta  = int(bars["stamina"]["value"])
         if all(0 <= v <= 15 for v in (atk, def_, sta)):
             return atk, def_, sta
     except (KeyError, TypeError, ValueError):
@@ -683,10 +720,6 @@ def extract_bar_values(agent_result: dict) -> Optional[tuple[int, int, int]]:
 
 
 def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[dict]:
-    """
-    Convert bbox_rel fractions to absolute pixel boxes.
-    Returns dict keyed by "attack", "defense", "stamina", or None on failure.
-    """
     bars = agent_result.get("bars", {})
     result = {}
     for stat in ("attack", "defense", "stamina"):
@@ -701,12 +734,14 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
     return result
 
 
-REMOTE_WARMUP_TIMEOUT = 180  # 3 minutes — enough for 32B to load into VRAM
+# ---------------------------------------------------------------------------
+# Warmup
+# ---------------------------------------------------------------------------
 
 def warmup_remote() -> bool:
     """
-    Send a trivial text-only request to Ollama to force the model to load
-    into VRAM before scanning begins. Returns True if remote is ready.
+    Send a trivial text-only ping to Ollama to force the model into VRAM
+    before scanning begins. Returns True if remote is ready.
     """
     global _remote_available
     log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 32B…")
