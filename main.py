@@ -19,7 +19,7 @@ from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseivbars, parse_caught_date,
-    readappraisalbars, readappraisalbarsdebug, ocr_type_region
+    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
@@ -306,11 +306,10 @@ def _is_valid_base_parse(cp, hp, typetext,name=None):
         return False
     if hp is None or hp <= 0:
         return False
-    if not typetext or typetext.strip().lower() in ("", "unknown"):
+    type1, type2 = parse_types(typetext or "")
+    if not type1:
         return False
-    # TODO
-    # if weighttext == "" and heighttext == "":
-    #     return False
+
     return True
 
 
