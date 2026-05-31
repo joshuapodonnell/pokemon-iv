@@ -15,3 +15,9 @@ pyobjc-framework-Cocoa>=9.0
 
 # Database
 # sqlite3 is stdlib — no install needed
+
+pytesseract
+requests
+beautifulsoup4
+flask
+mlx-vlm

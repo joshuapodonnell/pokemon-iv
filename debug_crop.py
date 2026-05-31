@@ -1,6 +1,6 @@
 import vision_agent
 from screen_capture import capture_window
-from config import loadconfig
+from config import load_config
 
 cfg  = loadconfig()
 base_img = capture_window(cfg['mirror_region'])   # drop your screenshot here

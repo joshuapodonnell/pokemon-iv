@@ -22,26 +22,47 @@ ALLTYPES = [
     "Dragon", "Dark", "Steel", "Fairy",
 ]
 
-def normalize_type_text(text):
-    if not text:
-        return ""
-    cleaned = re.sub(r"[^A-Za-z ]", "", text).strip().title()
-    words = cleaned.split()
-    valid = [w for w in words if w in ALLTYPES]
-    return " ".join(valid)
+def parse_types(raw):
+    if not raw:
+        return None, None
+
+    cleaned = re.sub(r"[^A-Za-z/ ]", "", raw).strip().title()
+
+    if "/" in cleaned:
+        parts = [p.strip() for p in cleaned.split("/") if p.strip()]
+        valid = [p for p in parts if p in ALLTYPES]
+        if len(valid) >= 2:
+            return valid[0], valid[1]
+        if len(valid) == 1:
+            return valid[0], None
+
+    compact = re.sub(r"[^A-Za-z]", "", cleaned)
+
+    if compact in ALLTYPES:
+        return compact, None
+
+    for t1 in sorted(ALLTYPES, key=len, reverse=True):
+        if compact.startswith(t1):
+            rest = compact[len(t1):]
+            for t2 in sorted(ALLTYPES, key=len, reverse=True):
+                if rest == t2:
+                    return t1, t2
+
+    return None, None
 
 def ocr_type_region(img):
     w, h = img.size
-    crop = img.crop((int(w*0.18), 0, w, h))  # trim left icon area
-    crop = crop.resize((w*4, h*4), Image.Resampling.LANCZOS).convert("L")
-    crop = ImageEnhance.Contrast(crop).enhance(2.5)
-    crop = crop.point(lambda p: 255 if p > 160 else 0)
+    crop = img.resize((w * 4, h * 4), Image.Resampling.LANCZOS).convert("L")
+    crop = ImageEnhance.Contrast(crop).enhance(2.0)
+
     raw = pytesseract.image_to_string(
         crop,
-        config="--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
+        config="--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz/"
     ).strip()
-    log.info(f"raw cp_text: {raw!r}")
-    return normalize_type_text(raw)
+
+    raw = raw.replace(" / ", "/").replace(" /", "/").replace("/ ", "/")
+    log.info(f"raw type_text: {raw!r}")
+    return raw
 
 VARIANT_TYPE_MAP = {
     ("Slowpoke",    "Poison"):          "Slowpoke (Galarian)",
@@ -100,7 +121,7 @@ def ocrregion(img: Image.Image, upscale: bool = False) -> str:
     """Run Tesseract OCR on a PIL image crop. Optionally upscale for small regions."""
     if upscale:
         w, h = img.size
-        img_rgb = img.convert("RGB").resize((w, h), Image.Resampling.LANCZOS)
+        img = img.convert("RGB").resize((w, h), Image.Resampling.LANCZOS)
     text = pytesseract.image_to_string(img, config="--psm 7").strip()
     return text
 
@@ -231,14 +252,7 @@ def ocrnameregion(img, ui):
     return ""
 
 
-def resolvespeciesname(
-        img: Image.Image,
-        ui: dict,
-        cp: int,
-        type_text: str,
-) -> str:
-    """Combine type/weight/height species ID with direct name OCR for best accuracy."""
-
+def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str) -> str:
     ocr_name = ocrnameregion(img, ui)
     if not ocr_name:
         return "Unknown"
@@ -246,7 +260,6 @@ def resolvespeciesname(
     ocr_lower = ocr_name.lower()
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
-            log.debug(f"resolvespeciesname: name OCR exact match → {known}")
             canonical = known
             break
     else:
@@ -258,17 +271,16 @@ def resolvespeciesname(
         else:
             canonical = normalize_species_name(ocr_name)
 
-    # ── Variant resolution ──────────────────────────────────────────
-    type_text = normalize_type_text(type_text)
-    if type_text:
-        type_words = [t.strip().title() for t in type_text.split()]
-        base = canonical.split(" (")[0]
-        for type_word in type_words:
-            variant = VARIANT_TYPE_MAP.get((base, type_word))
-            if variant:
-                return variant
+    type1, type2 = parse_types(type_text)
 
-    log.debug(f"resolvespeciesname: resolved to {canonical!r}")
+
+    for type_name in (type1, type2):
+        if not type_name:
+            continue
+        variant = VARIANT_TYPE_MAP.get((canonical, type_name))
+        if variant:
+            return variant
+
     return canonical
 
 

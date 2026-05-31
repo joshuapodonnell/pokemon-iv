@@ -153,7 +153,7 @@ def _call_vlm_local(prompt: str, images: list) -> str:
             max_tokens=MAX_TOKENS,
             temperature=0.0,
         )
-        return output.strip()
+        return output.text.strip()
     finally:
         os.unlink(tmp_path)
 

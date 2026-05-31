@@ -1,7 +1,7 @@
 {
   "mirror_region": {
-    "x": 1123,
-    "y": 138,
+    "x": 8,
+    "y": 113,
     "w": 316,
     "h": 696
   },
@@ -102,10 +102,10 @@
       "y": 0.8
     },
     "type_region": {
-      "x1": 0.395,
-      "y1": 0.544,
-      "x2": 0.613,
-      "y2": 0.602
+      "x1": 0.373,
+      "y1": 0.537,
+      "x2": 0.662,
+      "y2": 0.6
     },
     "weight_region": {
       "x1": 0.105,
@@ -150,8 +150,23 @@
     "sta_bar_y_4lines": 0.802,
     "atk_bar_y_5lines": 0.694,
     "def_bar_y_5lines": 0.733,
-    "sta_bar_y_5lines": 0.775
-
+    "sta_bar_y_5lines": 0.775,
+    "tag_dismiss": {
+      "x": 0.5,
+      "y": 0.85
+    },
+    "tag_keep_ff": {
+      "x": 0.25,
+      "y": 0.7
+    },
+    "tag_transfer_ff": {
+      "x": 0.5,
+      "y": 0.7
+    },
+    "tag_review_ff": {
+      "x": 0.75,
+      "y": 0.7
+    }
   },
   "bar_fill_brightness": 160,
   "bar_segments": 15,

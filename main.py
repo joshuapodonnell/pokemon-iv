@@ -463,6 +463,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text!r}")
     type_img = getrelativeregion(base_img, ui["type_region"])
+    type_img.save("raw_type_region.png")
     type_text = ocr_type_region(type_img)
     # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
