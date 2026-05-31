@@ -40,6 +40,7 @@ def ocr_type_region(img):
         crop,
         config="--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
     ).strip()
+    log.info(f"raw cp_text: {raw!r}")
     return normalize_type_text(raw)
 
 VARIANT_TYPE_MAP = {
@@ -149,13 +150,16 @@ def normalize_species_name(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 def parsecp(text: str) -> int:
-    """Extract CP integer from OCR text like 'CP 310' or '310'."""
+    """Extract CP integer from OCR text like 'CP 310', '310', or slash-misread values."""
     if not text:
         return 0
-    # Slash in CP text = misread 7, treat as failed parse
-    if "/" in text:
-        return 0
-    m = re.search(r"(\d{1,4})", text)
+
+    cleaned = text.strip()
+
+    # Common OCR error: slash or backslash instead of 7
+    cleaned = cleaned.replace("/", "7").replace("\\", "7")
+
+    m = re.search(r"(\d{1,4})", cleaned)
     try:
         return int(m.group(1)) if m else 0
     except (ValueError, TypeError):

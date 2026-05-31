@@ -254,10 +254,16 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     return 0, img
 
 def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
-    # If OCR raw text had a slash, it's a known-bad read — trust VLM unconditionally
+    # If OCR raw text had a slash, assume it was a misread 7 and trust OCR.
     if "/" in ocr_raw or "\\" in ocr_raw:
-        log.info(f"CP reconcile: OCR raw {ocr_raw!r} has slash (misread 7) — trusting VLM {vlm_cp}")
+        if ocr_cp:
+            log.info(
+                f"CP reconcile: OCR raw {ocr_raw!r} has slash/backslash — "
+                f"assuming 7 and trusting OCR {ocr_cp}"
+            )
+            return ocr_cp
         return vlm_cp
+
     if ocr_cp is None:
         return vlm_cp
     if vlm_cp is None:
@@ -269,22 +275,17 @@ def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
 
     if len(vlm_s) == len(ocr_s) + 1:
         if vlm_s.startswith(ocr_s):
-            # VLM duplicated trailing digit (67 → 677)
             log.info(f"CP reconcile: VLM {vlm_cp} has spurious trailing digit vs OCR {ocr_cp} — trusting OCR")
             return ocr_cp
         if vlm_s.endswith(ocr_s):
-            # VLM added leading digit (arc dot: 194 → 1941)
             log.info(f"CP reconcile: VLM {vlm_cp} has spurious leading digit vs OCR {ocr_cp} — trusting OCR")
             return ocr_cp
 
     if len(ocr_s) == len(vlm_s) + 1:
         if ocr_s.startswith(vlm_s) or ocr_s.endswith(vlm_s):
-            # OCR has extra digit, VLM is shorter — trust VLM
             log.info(f"CP reconcile: OCR {ocr_cp} has extra digit vs VLM {vlm_cp} — trusting VLM")
             return vlm_cp
 
-    # Same digit count, different value — VLM wins (OCR prefix errors
-    # like 'p67', 'ce194' corrupt the value but not digit count)
     log.info(f"CP reconcile: same length OCR={ocr_cp} VLM={vlm_cp} — trusting VLM")
     return vlm_cp
 
@@ -460,17 +461,17 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
+    log.info(f"raw cp_text: {cp_text!r}")
     type_img = getrelativeregion(base_img, ui["type_region"])
     type_text = ocr_type_region(type_img)
     # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
-    log.info(f"raw cp_text: {cp_text!r}")
-    log.info(f"raw type_text: {type_text!r}")
+    log.info(f"normalized type_text: {type_text!r}")
 
     cp = parsecp(cp_text)
     _ocr_has_slash = "/" in cp_text or "\\" in cp_text
     if _ocr_has_slash:
-        log.info("CP text contains slash — OCR likely misread a 7")
+        log.info("CP text contains slash/backslash — assuming it is a 7")
 
     hp_img = getrelativeregion(base_img, ui["hp_region"])
     try:
