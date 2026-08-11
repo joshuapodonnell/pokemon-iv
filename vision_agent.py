@@ -67,8 +67,8 @@ log = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-#WINDOWS_PC_IP = "192.168.1.229"
-WINDOWS_PC_IP = "100.84.89.49"
+WINDOWS_PC_IP = "192.168.1.60"
+#WINDOWS_PC_IP = "100.84.89.49"
 API_PORT = "11434"
 API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
 VLM_MODEL = "qwen2.5vl:32b"
