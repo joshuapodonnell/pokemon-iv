@@ -1,8 +1,9 @@
 import re
 import json
 import logging
+import os
 from pathlib import Path
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageEnhance, ImageOps, ImageDraw
 import pytesseract
 
 log = logging.getLogger(__name__)
@@ -400,87 +401,144 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float,
         log.warning(f"readappraisalbarsdebug failed: {e}")
         return None
 
+def _classify_pixel(r, g, b):
+    if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
+        return 'filled'
+    if r > 170 and g < 165 and b < 165 and r > g + 30 and r > b + 30:
+        return 'filled'
+    if 190 < r < 250 and 190 < g < 250 and 190 < b < 250 \
+            and abs(r - g) < 18 and abs(g - b) < 18:
+        return 'empty'
+    return 'outside'
+
+
+def _classify_row(barimg, y_rel, W, H):
+    y = int(y_rel * H)
+    col = []
+    for x in range(W):
+        votes = {'filled': 0, 'empty': 0, 'outside': 0}
+        for dy in (-3, 0, 3):
+            sy = max(0, min(y + dy, H - 1))
+            r, g, b = barimg.getpixel((x, sy))[:3]
+            votes[_classify_pixel(r, g, b)] += 1
+        col.append(max(votes, key=votes.get))
+    return y, col
+
+
+def _group_columns(col):
+    groups = []
+    in_group = False
+    gstart = 0
+    outside_run = 0
+    for x, cls in enumerate(col):
+        if cls == 'outside':
+            outside_run += 1
+            if in_group and outside_run >= 2:
+                groups.append((gstart, x - outside_run))
+                in_group = False
+        else:
+            if not in_group:
+                gstart = x
+                in_group = True
+            outside_run = 0
+    if in_group:
+        groups.append((gstart, len(col) - 1))
+
+    if not groups:
+        return []
+
+    gw = groups[0][1] - groups[0][0] + 1
+    final = []
+    for gs, ge in groups:
+        w = ge - gs + 1
+        if w > gw * 1.4:
+            x = gs
+            while x <= ge:
+                end = min(x + gw - 1, ge)
+                final.append((x, end))
+                x = end + 1
+                while x <= ge and col[x] == 'outside':
+                    x += 1
+        else:
+            final.append((gs, ge))
+    return final
+
+
+def _score_row(barimg, y_rel, W, H):
+    y, col = _classify_row(barimg, y_rel, W, H)
+    groups = _group_columns(col)
+
+    total = 0
+    seg_scores = []
+    for gs, ge in groups[:3]:
+        chunk = col[gs:ge + 1]
+        fp = sum(1 for c in chunk if c == 'filled')
+        frac = fp / len(chunk) if chunk else 0
+        seg_val = round(frac * 5)
+        seg_scores.append((gs, ge, frac, seg_val))
+        total += seg_val
+    return y, col, groups, seg_scores, total
+
 def parseivbars(barimg: Image.Image, debug: bool = False):
     W, H = barimg.size
-
-    Y_ATK = 0.155
-    Y_DEF = 0.483
-    Y_HP = 0.816
-
-    def _classify(r, g, b):
-        if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
-            return 'filled'
-        if r > 170 and g < 165 and b < 165 and r > g + 30 and r > b + 30:
-            return 'filled'
-        if 190 < r < 250 and 190 < g < 250 and 190 < b < 250 \
-                and abs(r - g) < 18 and abs(g - b) < 18:
-            return 'empty'
-        return 'outside'
-
-    def _count_at_row(y_rel):
-        y = int(y_rel * H)
-
-        col = []
-        for x in range(W):
-            votes = {'filled': 0, 'empty': 0, 'outside': 0}
-            for dy in (-3, 0, 3):
-                sy = max(0, min(y + dy, H - 1))
-                r, g, b = barimg.getpixel((x, sy))[:3]
-                votes[_classify(r, g, b)] += 1
-            col.append(max(votes, key=votes.get))
-
-        groups = []
-        in_group = False
-        gstart = 0
-        outside_run = 0
-        for x, cls in enumerate(col):
-            if cls == 'outside':
-                outside_run += 1
-                if in_group and outside_run >= 2:
-                    groups.append((gstart, x - outside_run))
-                    in_group = False
-            else:
-                if not in_group:
-                    gstart = x
-                    in_group = True
-                outside_run = 0
-        if in_group:
-            groups.append((gstart, len(col) - 1))
-
-        if not groups:
-            return 0
-
-        gw = groups[0][1] - groups[0][0] + 1
-
-        final = []
-        for gs, ge in groups:
-            w = ge - gs + 1
-            if w > gw * 1.4:
-                x = gs
-                while x <= ge:
-                    end = min(x + gw - 1, ge)
-                    final.append((x, end))
-                    x = end + 1
-                    while x <= ge and col[x] == 'outside':
-                        x += 1
-            else:
-                final.append((gs, ge))
-
-        total = 0
-        for gs, ge in final[:3]:
-            chunk = col[gs:ge + 1]
-            fp = sum(1 for c in chunk if c == 'filled')
-            frac = fp / len(chunk) if chunk else 0
-            total += round(frac * 5)
-        return total
-
+    Y_ATK, Y_DEF, Y_HP = 0.155, 0.483, 0.816
     try:
-        atk = _count_at_row(Y_ATK)
-        def_ = _count_at_row(Y_DEF)
-        sta = _count_at_row(Y_HP)
+        *_, atk = _score_row(barimg, Y_ATK, W, H)
+        *_, def_ = _score_row(barimg, Y_DEF, W, H)
+        *_, sta = _score_row(barimg, Y_HP, W, H)
         if debug:
             log.debug(f"Bar scan ATK={atk} DEF={def_} STA={sta}")
         return atk, def_, sta
     except Exception as e:
         log.warning(f"parseivbars failed: {e}")
         return None
+
+def parseivbarsdebug(barimg: Image.Image, debug_path: str = "screenshots/debugivbars.png"):
+    """Debug version of parseivbars — saves an annotated strip showing per-column
+    classification (filled/empty/outside), detected segment groups, and scan rows."""
+    W, H = barimg.size
+    Y_ATK, Y_DEF, Y_HP = 0.155, 0.483, 0.816
+
+    scale = 4
+    annotated = barimg.resize((W * scale, H * scale), Image.Resampling.LANCZOS).convert("RGB")
+    draw = ImageDraw.Draw(annotated)
+
+    color_map = {
+        'filled':  (34, 197, 94),    # green
+        'empty':   (148, 163, 184),  # gray
+        'outside': (239, 68, 68),    # red
+    }
+
+    results = {}
+    try:
+        for label, y_rel in [("ATK", Y_ATK), ("DEF", Y_DEF), ("STA", Y_HP)]:
+            y, col, groups, seg_scores, total = _score_row(barimg, y_rel, W, H)
+            results[label] = total
+            sy = y * scale
+
+            # Strip of classification color just above the scan line
+            for x, cls in enumerate(col):
+                draw.line(
+                    (x * scale, sy - 4, x * scale + scale, sy - 4),
+                    fill=color_map[cls], width=6,
+                )
+
+            # Cyan scan line at the exact row being sampled
+            draw.line((0, sy, W * scale, sy), fill=(6, 182, 212), width=2)
+
+            # Yellow boxes around each detected segment with its computed value
+            for gs, ge, frac, seg_val in seg_scores:
+                box = (gs * scale, sy - 14, (ge + 1) * scale, sy + 14)
+                draw.rectangle(box, outline=(255, 255, 0), width=2)
+                draw.text((gs * scale, sy + 16), str(seg_val), fill=(255, 255, 0))
+
+            draw.text((4, sy - 26), f"{label}={total}", fill=(255, 255, 255))
+
+        os.makedirs(os.path.dirname(debug_path) or ".", exist_ok=True)
+        annotated.save(debug_path)
+        log.info(f"Debug IV-bar image saved to {debug_path}")
+
+    except Exception as e:
+        log.warning(f"parseivbarsdebug failed: {e}")
+
+    return results.get("ATK"), results.get("DEF"), results.get("STA")

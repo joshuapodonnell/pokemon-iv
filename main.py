@@ -18,7 +18,7 @@ from pause_controller import PauseController
 from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
-    ocrregion, getrelativeregion, parseivbars, parse_caught_date,
+    ocrregion, getrelativeregion, parseivbars, parseivbarsdebug, parse_caught_date,
     readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types
 )
 from pvp_rankings import all_league_rankings_with_evos
@@ -595,7 +595,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     if args.debug:
         bar_strip.save(f"screenshots/barstrip{visit_num:03d}.png")
 
-    bars = parseivbars(bar_strip, args.debug)
+    if args.debug:
+        bars = parseivbarsdebug(bar_strip, debug_path=f"screenshots/ivbars_{visit_num:03d}.png")
+    else:
+        bars = parseivbars(bar_strip)
 
     if not bars:
         log.warning(f"#{visit_num} Bar read failed for {name}")
