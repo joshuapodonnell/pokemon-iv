@@ -1,7 +1,7 @@
 {
   "mirror_region": {
-    "x": 8,
-    "y": 113,
+    "x": 70,
+    "y": 67,
     "w": 316,
     "h": 696
   },
@@ -48,7 +48,7 @@
     },
     "atk_bar_y": 0.774,
     "def_bar_y": 0.815,
-    "sta_bar_y": 0.857,
+    "sta_bar_y": 0.853,
     "bar_x_start": 0.132,
     "bar_x_end": 0.471,
     "name_region": {
@@ -141,7 +141,7 @@
       "x": 0.261,
       "y": 0.364
     },
-    "text_lines_layout": 3,
+    "text_lines_layout": 2,
     "atk_bar_y_3lines": 0.747,
     "def_bar_y_3lines": 0.787,
     "sta_bar_y_3lines": 0.83,
