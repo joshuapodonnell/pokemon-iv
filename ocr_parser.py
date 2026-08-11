@@ -481,7 +481,7 @@ def _score_row(barimg, y_rel, W, H):
 
 def parseivbars(barimg: Image.Image, debug: bool = False):
     W, H = barimg.size
-    Y_ATK, Y_DEF, Y_HP = 0.162, 0.483, 0.808
+    Y_ATK, Y_DEF, Y_HP = 0.164, 0.483, 0.803
     try:
         *_, atk = _score_row(barimg, Y_ATK, W, H)
         *_, def_ = _score_row(barimg, Y_DEF, W, H)
@@ -497,7 +497,7 @@ def parseivbarsdebug(barimg: Image.Image, debug_path: str = "screenshots/debugiv
     """Debug version of parseivbars — saves an annotated strip showing per-column
     classification (filled/empty/outside), detected segment groups, and scan rows."""
     W, H = barimg.size
-    Y_ATK, Y_DEF, Y_HP = 0.162, 0.483, 0.808
+    Y_ATK, Y_DEF, Y_HP = 0.164, 0.483, 0.803
 
     scale = 4
     annotated = barimg.resize((W * scale, H * scale), Image.Resampling.LANCZOS).convert("RGB")
