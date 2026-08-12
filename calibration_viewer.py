@@ -576,7 +576,7 @@ class CalibrationApp:
             rc, gc, bc = tuple(int(hc[i:i + 2], 16) for i in (0, 2, 4))
 
             # MUCH MORE TRANSPARENT: Fill dropped from 40 to 15, Outline from 200 to 120
-            draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 15), outline=(rc, gc, bc, 120), width=2)
+            draw.rectangle([x1, y1, x2, y2], outline=(rc, gc, bc, 160), width=2)
 
         if cat in ("OCR Regions", "Legend"):
             for region_key, color in RECT_REGIONS:
