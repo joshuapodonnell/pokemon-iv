@@ -72,11 +72,15 @@ def apply_ingame_tag(tap: TapController, ui: dict, window: dict, action: str):
     log.info(f"  {icons.get(action, '•')} Tagged in-game: {action.lower()}")
 
 
-def tags_are_calibrated(ui: dict) -> bool:
-    """Returns True if all tag positions are present in calibration."""
+def tags_are_calibrated(tag_layout: dict) -> bool:
+    """Returns True if all tag positions are present in the selected layout."""
+    if not tag_layout:
+        log.warning("  Tag layout dictionary is empty or missing.")
+        return False
+
     required = ["tag_option_btn", "tag_keep", "tag_transfer", "tag_review"]
-    missing  = [k for k in required if k not in ui]
+    missing = [k for k in required if k not in tag_layout]
     if missing:
-        log.warning(f"  Missing tag calibration keys: {missing}")
+        log.warning(f"  Missing tag calibration keys in selected layout: {missing}")
         return False
     return True

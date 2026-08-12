@@ -921,92 +921,95 @@ def report_displaced(conn):
     return displaced
 
 
-# ── Pass 2: Tag ───────────────────────────────────────────────────────────────
+# # ── Pass 2: Tag ───────────────────────────────────────────────────────────────
+#
+# def pass2_tag(args, cfg, conn, tap, session_ids, pause):
+#     ui = cfg["ui"]
+#
+#     if not session_ids:
+#         log.info("Pass 2: nothing new to tag.")
+#         return
+#
+#     placeholders = ",".join("?" * len(session_ids))
+#     new_rows = conn.execute(f"""
+#         SELECT * FROM pokemon
+#         WHERE id IN ({placeholders})
+#         ORDER BY id
+#     """, session_ids).fetchall()
+#     new_rows = [dict(r) for r in new_rows]
+#
+#     if not new_rows:
+#         log.info("Pass 2: nothing new to tag.")
+#         return
+#
+#     log.info(f"── Pass 2: Tagging {len(new_rows)} Pokémon ─────────────────────────")
+#     log.info("Navigate back to the START of the age0-filtered storage list.")
+#     tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+#             base_delay=cfg["timing"]["after_tap"])
+#     tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+#             base_delay=cfg["timing"]["after_tap"])
+#     for i in range(5, 0, -1):
+#         log.info(f"Starting Pass 2 in {i}s…")
+#         time.sleep(1)
+#
+#     if not args.dry_run:
+#         slot = ui["pokemon_slots"][0]
+#         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
+#
+#     tagged = 0
+#     try:
+#         for idx, row in enumerate(new_rows):
+#             # ── Pause / quit check ────────────────────────────────────
+#             pause.wait_if_paused()
+#             if pause.should_stop():
+#                 log.info("Clean stop requested — ending Pass 2.")
+#                 break
+#             # ─────────────────────────────────────────────────────────
+#             name   = row["name"]
+#             cp     = row["cp"]
+#             iv_pct = row["iv_pct"] or 0
+#
+#             pvp = {
+#                 "great": {"rank": row["gl_rank"], "percentile": row["gl_percentile"]},
+#                 "ultra": {"rank": row["ul_rank"], "percentile": row["ul_percentile"]},
+#             }
+#             evo_rankings = get_evo_rankings(conn, row["id"])
+#
+#             decision = evaluate_catch(
+#                 conn, name, cp,
+#                 row["iv_atk"], row["iv_def"], row["iv_sta"],
+#                 iv_pct, pvp, evo_rankings,
+#                 current_id=row["id"],
+#             )
+#             action = decision["action"]
+#
+#             log.info(
+#                 f"  [{idx + 1}/{len(new_rows)}] {name:<15s} CP{cp:>4}  "
+#                 f"{row['iv_atk']}/{row['iv_def']}/{row['iv_sta']}  → {action}"
+#                 + (f"  ({', '.join(decision['reasons'])})" if decision["reasons"] else "")
+#             )
+#
+#             if not args.dry_run:
+#                 apply_ingame_tag(tap, ui, cfg["mirror_region"], action)
+#                 conn.execute(
+#                     "UPDATE pokemon SET tag = ? WHERE id = ?",
+#                     (action, row["id"])
+#                 )
+#                 conn.commit()
+#                 tap.swipe_left()
+#                 tap.anti_bot_break()
+#                 tagged += 1
+#
+#     except KeyboardInterrupt:
+#         log.info("Pass 2 interrupted by user.")
+#
+#     log.info(f"Pass 2 complete: {tagged} Pokémon tagged.")
 
-def pass2_tag(args, cfg, conn, tap, session_ids, pause):
-    ui = cfg["ui"]
 
-    if not session_ids:
-        log.info("Pass 2: nothing new to tag.")
-        return
+def micro_pass_2_cleanup(args, conn, tap, ui, cfg, pause):
+    # 1. Extract the selected tag layout here:
+    tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
-    placeholders = ",".join("?" * len(session_ids))
-    new_rows = conn.execute(f"""
-        SELECT * FROM pokemon
-        WHERE id IN ({placeholders})
-        ORDER BY id
-    """, session_ids).fetchall()
-    new_rows = [dict(r) for r in new_rows]
-
-    if not new_rows:
-        log.info("Pass 2: nothing new to tag.")
-        return
-
-    log.info(f"── Pass 2: Tagging {len(new_rows)} Pokémon ─────────────────────────")
-    log.info("Navigate back to the START of the age0-filtered storage list.")
-    tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-            base_delay=cfg["timing"]["after_tap"])
-    tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-            base_delay=cfg["timing"]["after_tap"])
-    for i in range(5, 0, -1):
-        log.info(f"Starting Pass 2 in {i}s…")
-        time.sleep(1)
-
-    if not args.dry_run:
-        slot = ui["pokemon_slots"][0]
-        tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
-
-    tagged = 0
-    try:
-        for idx, row in enumerate(new_rows):
-            # ── Pause / quit check ────────────────────────────────────
-            pause.wait_if_paused()
-            if pause.should_stop():
-                log.info("Clean stop requested — ending Pass 2.")
-                break
-            # ─────────────────────────────────────────────────────────
-            name   = row["name"]
-            cp     = row["cp"]
-            iv_pct = row["iv_pct"] or 0
-
-            pvp = {
-                "great": {"rank": row["gl_rank"], "percentile": row["gl_percentile"]},
-                "ultra": {"rank": row["ul_rank"], "percentile": row["ul_percentile"]},
-            }
-            evo_rankings = get_evo_rankings(conn, row["id"])
-
-            decision = evaluate_catch(
-                conn, name, cp,
-                row["iv_atk"], row["iv_def"], row["iv_sta"],
-                iv_pct, pvp, evo_rankings,
-                current_id=row["id"],
-            )
-            action = decision["action"]
-
-            log.info(
-                f"  [{idx + 1}/{len(new_rows)}] {name:<15s} CP{cp:>4}  "
-                f"{row['iv_atk']}/{row['iv_def']}/{row['iv_sta']}  → {action}"
-                + (f"  ({', '.join(decision['reasons'])})" if decision["reasons"] else "")
-            )
-
-            if not args.dry_run:
-                apply_ingame_tag(tap, ui, cfg["mirror_region"], action)
-                conn.execute(
-                    "UPDATE pokemon SET tag = ? WHERE id = ?",
-                    (action, row["id"])
-                )
-                conn.commit()
-                tap.swipe_left()
-                tap.anti_bot_break()
-                tagged += 1
-
-    except KeyboardInterrupt:
-        log.info("Pass 2 interrupted by user.")
-
-    log.info(f"Pass 2 complete: {tagged} Pokémon tagged.")
-
-
-def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
     demoted_rows = conn.execute(
         "SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1"
     ).fetchall()
@@ -1026,7 +1029,7 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
             log.info("Clean stop requested — ending Pass 2.")
             break
         # ─────────────────────────────────────────────────────────
-         # ── Freeze check ──────────────────────────────────────────────
+        # ── Freeze check ──────────────────────────────────────────────
         img = capture_window(cfg["mirror_region"])
         if freeze.update(img):
             recovered = _handle_freeze(tap, cfg, capture_window, freeze)
@@ -1045,13 +1048,18 @@ def micro_pass_2_cleanup(conn, tap, ui, cfg, pause):
         tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'],
                 base_delay=cfg['timing']['after_tap'])
 
-        tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],    base_delay=cfg['timing']['after_tap'])
-        tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'], base_delay=cfg['timing']['after_tap'])
-        tap.tap(ui['tag_keep']['x'],     ui['tag_keep']['y'])
-        tap.tap(ui['tag_transfer']['x'], ui['tag_transfer']['y'])
+        # General UI buttons stay as `ui`
+        tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+
+        # 2. Tag buttons change to `tag_layout`
+        tap.tap(tag_layout['tag_option_btn']['x'], tag_layout['tag_option_btn']['y'],
+                base_delay=cfg['timing']['after_tap'])
+        tap.tap(tag_layout['tag_keep']['x'], tag_layout['tag_keep']['y'])
+        tap.tap(tag_layout['tag_transfer']['x'], tag_layout['tag_transfer']['y'])
+
         tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
 
-        tap.tap(ui['back_button']['x'],  ui['back_button']['y'],  base_delay=cfg['timing']['after_tap'])
+        tap.tap(ui['back_button']['x'], ui['back_button']['y'], base_delay=cfg['timing']['after_tap'])
         tap.tap(ui['clear_search']['x'], ui['clear_search']['y'], base_delay=cfg['timing']['after_tap'])
 
     log.info("Micro Pass 2 Complete.")
@@ -1083,7 +1091,7 @@ def run_bot(args):
     except Exception as e:
         log.warning(f"Could not auto-detect window: {e}")
 
-    if not tags_are_calibrated(cfg["ui"]):
+    if not tags_are_calibrated(tag_layout):
         log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
 
     start_time = time.time()
@@ -1112,8 +1120,8 @@ def run_bot(args):
         if not args.dry_run and session_ids:
             report_displaced(conn)
         vision_agent.reset_remote_status()
-        if not args.dry_run and tags_are_calibrated(cfg["ui"]):
-            micro_pass_2_cleanup(conn, tap, cfg["ui"], cfg, pause)
+        if not args.dry_run and tags_are_calibrated(tag_layout):
+            micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
         else:
