@@ -165,7 +165,7 @@ Quick terminal-friendly summary of your collection stats.
 The cataloger supports automatic tagging in-game via two passes:
 
 - **Pass 1 (`tagger.py`):** Tags Pokémon immediately after scanning based on evaluator rules.
-- **Pass 2 (`pass2_tagger.py`):** Re-evaluates the full database and applies updated tags. Run after bulk imports or rule changes.
+- **Pass 2 (`deprecated_tests/pass2_tagger.py`):** Re-evaluates the full database and applies updated tags. Run after bulk imports or rule changes.
 
 Tagger outcomes are one of: **keep**, **transfer**, or **review**.
 

@@ -1,4 +1,3 @@
-
 """
 vision_agent.py
 ---------------
@@ -34,11 +33,11 @@ Install:
     pip install -U mlx-vlm
 
 Recommended models for 8 GB unified memory:
-    mlx-community/Qwen2-VL-2B-Instruct-4bit   ← default, fast, fits in ~3 GB
-    mlx-community/Qwen2-VL-7B-Instruct-4bit   ← better accuracy, needs ~5 GB
+    mlx-community/Qwen3-VL-4B-Instruct-4bit   ← default, fast, fits in ~3 GB
+    mlx-community/Qwen3-VL-8B-Instruct-4bit   ← better accuracy, needs ~6 GB
 
 Set the model via env var:
-    export POGO_VLM_MODEL=mlx-community/Qwen2-VL-2B-Instruct-4bit
+    export POGO_VLM_MODEL=mlx-community/Qwen3-VL-4B-Instruct-4bit
 
 To disable local fallback entirely (remote-only mode, degrades to OCR/review):
     export POGO_DISABLE_LOCAL_VLM=1
@@ -71,7 +70,7 @@ WINDOWS_PC_IP = "192.168.1.60"
 #WINDOWS_PC_IP = "100.84.89.49"
 API_PORT = "11434"
 API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
-VLM_MODEL = "qwen2.5vl:32b"
+VLM_MODEL = "qwen3-vl:32b"
 
 CONFIDENCE_THRESHOLD: float = 0.75
 MAX_TOKENS: int = 400
@@ -86,7 +85,7 @@ _DISABLE_LOCAL_VLM: bool = os.environ.get("POGO_DISABLE_LOCAL_VLM", "0") == "1"
 
 LOCAL_MODEL_PATH = os.environ.get(
     "POGO_VLM_MODEL",
-    "mlx-community/Qwen2-VL-2B-Instruct-4bit"
+    "mlx-community/Qwen3-VL-4B-Instruct-4bit"
 )
 
 _local_model = None
