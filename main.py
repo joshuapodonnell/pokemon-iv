@@ -48,8 +48,8 @@ def parse_args():
                    help="catalog: scan age0 box. newcatch: appraise most recent catch only.")
     p.add_argument(
         "--tag-layout",
-        choices=["standard", "ff"],
-        default="standard",
+        choices=["default", "ff"],
+        default="default",
         help="Choose which in-game tag menu layout to use."
     )
     return p.parse_args()
