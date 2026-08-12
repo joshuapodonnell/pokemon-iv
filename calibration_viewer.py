@@ -274,6 +274,7 @@ class CalibrationApp:
         for frame in self.category_frames.values():
             frame.pack_forget()
         self.category_frames[selected].pack(fill="both", expand=True, padx=8, pady=4)
+        self._redraw()
 
     def _build_category_legend(self, parent, subset):
         lf = tk.Frame(parent, bg="#16213e")
@@ -563,6 +564,7 @@ class CalibrationApp:
         draw = ImageDraw.Draw(img, "RGBA")
         w, h = img.size
         ui = self.cfg["ui"]
+        cat = self.category_var.get()  # Get current category
 
         def rect(key, color):
             r = ui.get(key)
@@ -571,29 +573,36 @@ class CalibrationApp:
             x1, y1 = int(r["x1"] * w), int(r["y1"] * h)
             x2, y2 = int(r["x2"] * w), int(r["y2"] * h)
             hc = color.lstrip("#")
-            rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
-            draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 40), outline=(rc, gc, bc, 200), width=2)
+            rc, gc, bc = tuple(int(hc[i:i + 2], 16) for i in (0, 2, 4))
 
-        for region_key, color in RECT_REGIONS:
-            rect(region_key, color)
+            # MUCH MORE TRANSPARENT: Fill dropped from 40 to 15, Outline from 200 to 120
+            draw.rectangle([x1, y1, x2, y2], fill=(rc, gc, bc, 15), outline=(rc, gc, bc, 120), width=2)
 
-        for _, key, color, btype in self.get_active_bar_keys():
-            val = ui.get(key)
-            if val is None:
-                continue
-            hc = color.lstrip("#")
-            rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
-            if btype == "hline":
-                y = int(val * h)
-                draw.line([(0, y), (w, y)], fill=(rc, gc, bc, 220), width=2)
-            elif btype == "vline":
-                x = int(val * w)
-                draw.line([(x, 0), (x, h)], fill=(rc, gc, bc, 220), width=2)
+        if cat in ("OCR Regions", "Legend"):
+            for region_key, color in RECT_REGIONS:
+                rect(region_key, color)
+
+        if cat in ("IV Bars", "Legend"):
+            for _, key, color, btype in self.get_active_bar_keys():
+                val = ui.get(key)
+                if val is None:
+                    continue
+                hc = color.lstrip("#")
+                rc, gc, bc = tuple(int(hc[i:i + 2], 16) for i in (0, 2, 4))
+
+                # MORE TRANSPARENT LINES: Dropped from 220 to 120
+                if btype == "hline":
+                    y = int(val * h)
+                    draw.line([(0, y), (w, y)], fill=(rc, gc, bc, 120), width=2)
+                elif btype == "vline":
+                    x = int(val * w)
+                    draw.line([(x, 0), (x, h)], fill=(rc, gc, bc, 120), width=2)
 
     def _draw_handles_on_canvas(self):
         ui = self.cfg["ui"]
         s = self.display_scale
         r = self.HANDLE_RADIUS
+        cat = self.category_var.get()  # Get current category
 
         def dot(x_rel, y_rel, color, tag, label=""):
             cx = int(x_rel * self.img_w * s)
@@ -601,60 +610,56 @@ class CalibrationApp:
             self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r, fill=color, outline="white", width=1, tags=tag)
             if label:
                 self.canvas.create_text(
-                    cx+r+3, cy,
-                    text=label,
-                    fill=color,
-                    font=("Helvetica", 8),
-                    anchor="w",
-                    tags=tag+"_lbl"
+                    cx+r+3, cy, text=label, fill=color, font=("Helvetica", 8), anchor="w", tags=tag+"_lbl"
                 )
 
-        rect_handles = [
-            ("cp_region",     "#FF4444", "CP"),
-            ("name_region",   "#44FF44", "Name"),
-            ("hp_region",     "#4488FF", "HP"),
-            ("dust_region",   "#FF44FF", "Dust"),
-            ("type_region",   "#FF9900", "Type"),
-            ("weight_region", "#AAFFAA", "Wt"),
-            ("height_region", "#AAAAFF", "Ht"),
-        ]
-        for cfg_key, color, short in rect_handles:
-            reg = ui.get(cfg_key, {})
-            dot(reg.get("x1", 0), reg.get("y1", 0), color, f"rect_tl_{cfg_key}", f"{short} ↖")
-            dot(reg.get("x2", 1), reg.get("y2", 1), color, f"rect_br_{cfg_key}", f"{short} ↘")
+        if cat in ("OCR Regions", "Legend"):
+            rect_handles = [
+                ("cp_region",     "#FF4444", "CP"),
+                ("name_region",   "#44FF44", "Name"),
+                ("hp_region",     "#4488FF", "HP"),
+                ("dust_region",   "#FF44FF", "Dust"),
+                ("type_region",   "#FF9900", "Type"),
+                ("weight_region", "#AAFFAA", "Wt"),
+                ("height_region", "#AAAAFF", "Ht"),
+            ]
+            for cfg_key, color, short in rect_handles:
+                reg = ui.get(cfg_key, {})
+                dot(reg.get("x1", 0), reg.get("y1", 0), color, f"rect_tl_{cfg_key}", f"{short} ↖")
+                dot(reg.get("x2", 1), reg.get("y2", 1), color, f"rect_br_{cfg_key}", f"{short} ↘")
 
-        for cfg_key, color, label in [
-            ("menu_button",     "#FFFFFF", "Menu"),
-            ("appraise_button", "#FFFF00", "Appraise"),
-            ("back_button",     "#FF6600", "Back"),
-            ("clear_search",    "#FF6600", "Clear"),
-        ]:
-            p = ui.get(cfg_key, {})
-            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
+        if cat in ("Buttons", "Legend"):
+            for cfg_key, color, label in [
+                ("menu_button",     "#FFFFFF", "Menu"),
+                ("appraise_button", "#FFFF00", "Appraise"),
+                ("back_button",     "#FF6600", "Back"),
+                ("clear_search",    "#FF6600", "Clear"),
+            ]:
+                p = ui.get(cfg_key, {})
+                dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
 
-        # Get the currently active layout dict
-        active_layout_name = "ff" if self.forever_friends_enabled() else "default"
-        tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+        if cat in ("Tags", "Legend"):
+            active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+            tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+            for cfg_key, color, label in self.active_tag_handles():
+                p = tag_layout.get(cfg_key, {})
+                dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_tag_{cfg_key}", label)
 
-        for cfg_key, color, label in self.active_tag_handles():
-            p = tag_layout.get(cfg_key, {})
-            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_tag_{cfg_key}", label)
+        if cat in ("Slots", "Legend"):
+            for i, slot in enumerate(ui.get("pokemon_slots", [])):
+                dot(slot.get("x", 0), slot.get("y", 0), "#00FF88", f"slot_{i}", f"Slot{i+1}")
 
-        for i, slot in enumerate(ui.get("pokemon_slots", [])):
-            dot(slot.get("x", 0), slot.get("y", 0), "#00FF88", f"slot_{i}", f"Slot{i+1}")
+        if cat in ("IV Bars", "Legend"):
+            for label, key, color, btype in self.get_active_bar_keys():
+                val = ui.get(key)
+                if val is None: continue
+                if btype == "hline":
+                    cx, cy = int(0.5 * self.img_w * s), int(val * self.img_h * s)
+                else:
+                    cx, cy = int(val * self.img_w * s), int(0.5 * self.img_h * s)
+                self.canvas.create_rectangle(cx-r, cy-r, cx+r, cy+r, fill=color, outline="white", width=1, tags=f"bar_{key}")
+                self.canvas.create_text(cx+r+3, cy, text=label, fill=color, font=("Helvetica", 8), anchor="w", tags=f"bar_{key}_lbl")
 
-        for label, key, color, btype in self.get_active_bar_keys():
-            val = ui.get(key)
-            if val is None:
-                continue
-            if btype == "hline":
-                cx = int(0.5 * self.img_w * s)
-                cy = int(val * self.img_h * s)
-            else:
-                cx = int(val * self.img_w * s)
-                cy = int(0.5 * self.img_h * s)
-            self.canvas.create_rectangle(cx-r, cy-r, cx+r, cy+r, fill=color, outline="white", width=1, tags=f"bar_{key}")
-            self.canvas.create_text(cx+r+3, cy, text=label, fill=color, font=("Helvetica", 8), anchor="w", tags=f"bar_{key}_lbl")
 
     # ── DRAG LOGIC ────────────────────────────────────────────────────────────
     def _canvas_to_rel(self, cx, cy):
@@ -665,57 +670,56 @@ class CalibrationApp:
         ui = self.cfg["ui"]
         s = self.display_scale
         r = self.HANDLE_RADIUS + 4
-
+        cat = self.category_var.get()  # Get current category
         candidates = []
 
-        all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region", "type_region", "weight_region", "height_region")
-        for cfg_key in all_rect_keys:
-            reg = ui.get(cfg_key, {})
-            for corner, xk, yk in [("tl", "x1", "y1"), ("br", "x2", "y2")]:
-                hx = reg.get(xk, 0) * self.img_w * s
-                hy = reg.get(yk, 0) * self.img_h * s
+        if cat in ("OCR Regions", "Legend"):
+            all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region", "type_region", "weight_region",
+                             "height_region")
+            for cfg_key in all_rect_keys:
+                reg = ui.get(cfg_key, {})
+                for corner, xk, yk in [("tl", "x1", "y1"), ("br", "x2", "y2")]:
+                    hx = reg.get(xk, 0) * self.img_w * s
+                    hy = reg.get(yk, 0) * self.img_h * s
+                    dist = abs(cx - hx) + abs(cy - hy)
+                    if dist < r * 2:
+                        candidates.append((dist, f"rect_{corner}_{cfg_key}", xk, yk, cfg_key, "rect_corner"))
+
+        if cat in ("Buttons", "Legend"):
+            for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search"):
+                p = ui.get(cfg_key, {})
+                hx, hy = p.get("x", 0.5) * self.img_w * s, p.get("y", 0.5) * self.img_h * s
                 dist = abs(cx - hx) + abs(cy - hy)
                 if dist < r * 2:
-                    candidates.append((dist, f"rect_{corner}_{cfg_key}", xk, yk, cfg_key, "rect_corner"))
+                    candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
 
-        for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search"):
-            p = ui.get(cfg_key, {})
-            hx = p.get("x", 0.5) * self.img_w * s
-            hy = p.get("y", 0.5) * self.img_h * s
-            dist = abs(cx - hx) + abs(cy - hy)
-            if dist < r * 2:
-                candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
+        if cat in ("Tags", "Legend"):
+            active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+            tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+            for cfg_key, _, _ in self.active_tag_handles():
+                p = tag_layout.get(cfg_key, {})
+                hx, hy = p.get("x", 0.5) * self.img_w * s, p.get("y", 0.5) * self.img_h * s
+                dist = abs(cx - hx) + abs(cy - hy)
+                if dist < r * 2:
+                    candidates.append((dist, f"point_tag_{cfg_key}", "x", "y", cfg_key, "point_tag"))
 
-        active_layout_name = "ff" if self.forever_friends_enabled() else "default"
-        tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+        if cat in ("Slots", "Legend"):
+            for i, slot in enumerate(ui.get("pokemon_slots", [])):
+                hx, hy = slot.get("x", 0) * self.img_w * s, slot.get("y", 0) * self.img_h * s
+                dist = abs(cx - hx) + abs(cy - hy)
+                if dist < r * 2:
+                    candidates.append((dist, f"slot_{i}", "x", "y", i, "slot"))
 
-        for cfg_key, _, _ in self.active_tag_handles():
-            p = tag_layout.get(cfg_key, {})
-            hx = p.get("x", 0.5) * self.img_w * s
-            hy = p.get("y", 0.5) * self.img_h * s
-            dist = abs(cx - hx) + abs(cy - hy)
-            if dist < r * 2:
-                candidates.append((dist, f"point_tag_{cfg_key}", "x", "y", cfg_key, "point_tag"))
-
-        for i, slot in enumerate(ui.get("pokemon_slots", [])):
-            hx = slot.get("x", 0) * self.img_w * s
-            hy = slot.get("y", 0) * self.img_h * s
-            dist = abs(cx - hx) + abs(cy - hy)
-            if dist < r * 2:
-                candidates.append((dist, f"slot_{i}", "x", "y", i, "slot"))
-
-        for label, key, color, btype in self.get_active_bar_keys():
-            val = ui.get(key)
-            if val is None:
-                continue
-            if btype == "hline":
-                hy = val * self.img_h * s
-                dist = abs(cy - hy)
-            else:
-                hx = val * self.img_w * s
-                dist = abs(cx - hx)
-            if dist < r * 2:
-                candidates.append((dist, f"bar_{key}", None, None, key, btype))
+        if cat in ("IV Bars", "Legend"):
+            for label, key, color, btype in self.get_active_bar_keys():
+                val = ui.get(key)
+                if val is None: continue
+                if btype == "hline":
+                    hy, dist = val * self.img_h * s, abs(cy - (val * self.img_h * s))
+                else:
+                    hx, dist = val * self.img_w * s, abs(cx - (val * self.img_w * s))
+                if dist < r * 2:
+                    candidates.append((dist, f"bar_{key}", None, None, key, btype))
 
         if not candidates:
             return None
