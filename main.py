@@ -780,9 +780,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # ── 6. CLOSE APPRAISAL & APPLY TAG ───────────────────────────────────
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=random.uniform(0.1, 0.2))
-    tap.tap(ui['menu_button']['x'],    ui['menu_button']['y'],
+    tap.tap(tag_layout['tag_menu_btn']['x'], tag_layout['tag_menu_btn']['y'],
             base_delay=cfg['timing']['after_tap'])
-    tap.tap(ui['tag_option_btn']['x'], ui['tag_option_btn']['y'],
+    tap.tap(tag_layout['tag_option_btn']['x'], tag_layout['tag_option_btn']['y'],
             base_delay=cfg['timing']['after_tap'])
 
     if tag_value == "KEEP":
