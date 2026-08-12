@@ -101,19 +101,21 @@ REGION_DEFAULTS = {
 }
 
 TAG_DEFAULTS = {
-    "tag_option_btn": {"x": 0.85, "y": 0.92},
-    "tag_keep":       {"x": 0.25, "y": 0.70},
-    "tag_transfer":   {"x": 0.50, "y": 0.70},
-    "tag_review":     {"x": 0.75, "y": 0.70},
+    "tag_menu_btn":   {"x": 0.842, "y": 0.933},
+    "tag_option_btn": {"x": 0.648, "y": 0.65},
+    "tag_keep":       {"x": 0.50, "y": 0.35},
+    "tag_transfer":   {"x": 0.50, "y": 0.45},
+    "tag_review":     {"x": 0.50, "y": 0.55},
     "tag_dismiss":    {"x": 0.50, "y": 0.85},
 }
 
 TAG_FOREVER_FRIENDS = {
-    "tag_option_btn":   {"x": 0.85, "y": 0.92},
-    "tag_keep_ff":      {"x": 0.25, "y": 0.70},
-    "tag_transfer_ff":  {"x": 0.50, "y": 0.70},
-    "tag_review_ff":    {"x": 0.75, "y": 0.70},
-    "tag_dismiss":      {"x": 0.50, "y": 0.85},
+    "tag_menu_btn":   {"x": 0.842, "y": 0.933},
+    "tag_option_btn": {"x": 0.648, "y": 0.65},
+    "tag_keep":       {"x": 0.20, "y": 0.38},
+    "tag_transfer":   {"x": 0.20, "y": 0.50},
+    "tag_review":     {"x": 0.20, "y": 0.44},
+    "tag_dismiss":    {"x": 0.50, "y": 0.85},
 }
 
 
@@ -124,6 +126,7 @@ def load_config():
 
     ui = cfg.setdefault("ui", {})
     account = cfg.setdefault("account", {})
+    layouts = cfg.setdefault("tag_layouts", {})  # Added this line
     logger.debug("Config loaded. UI keys: %s", sorted(ui.keys()))
 
     account.setdefault("forever_friends_enabled", False)
@@ -152,12 +155,20 @@ def load_config():
     for key, default in REGION_DEFAULTS.items():
         if key not in ui:
             ui[key] = default
+
+    # --- NEW TAG LAYOUT LOGIC ---
+    # Ensure default and ff layouts exist
+    default_layout = layouts.setdefault("default", {})
+    ff_layout = layouts.setdefault("ff", {})
+
+    # Load their defaults directly into the layout dictionaries
     for key, default in TAG_DEFAULTS.items():
-        if key not in ui:
-            ui[key] = default
+        if key not in default_layout:
+            default_layout[key] = default
+
     for key, default in TAG_FOREVER_FRIENDS.items():
-        if key not in ui:
-            ui[key] = default
+        if key not in ff_layout:
+            ff_layout[key] = default
 
     return cfg
 
@@ -232,20 +243,13 @@ class CalibrationApp:
         return bool(self.cfg.get("account", {}).get("forever_friends_enabled", False))
 
     def active_tag_handles(self):
-        if self.forever_friends_enabled():
-            return [
-                ("tag_option_btn",  "#00FFFF", "Tag ⋮"),
-                ("tag_keep_ff",     "#00FF44", "Tag Keep FF"),
-                ("tag_transfer_ff", "#FF3333", "Tag Transfer FF"),
-                ("tag_review_ff",   "#FF9900", "Tag Review FF"),
-                ("tag_dismiss",     "#CCCCCC", "Tag Dismiss"),
-            ]
         return [
+            ("tag_menu_btn", "#FFFFFF", "Tag Menu"),
             ("tag_option_btn", "#00FFFF", "Tag ⋮"),
-            ("tag_keep",       "#00FF44", "Tag Keep"),
-            ("tag_transfer",   "#FF3333", "Tag Transfer"),
-            ("tag_review",     "#FF9900", "Tag Review"),
-            ("tag_dismiss",    "#CCCCCC", "Tag Dismiss"),
+            ("tag_keep", "#00FF44", "Tag Keep"),
+            ("tag_transfer", "#FF3333", "Tag Transfer"),
+            ("tag_review", "#FF9900", "Tag Review"),
+            ("tag_dismiss", "#CCCCCC", "Tag Dismiss"),
         ]
 
     def current_tag_legend(self):
@@ -628,9 +632,13 @@ class CalibrationApp:
             p = ui.get(cfg_key, {})
             dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
 
+        # Get the currently active layout dict
+        active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+        tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+
         for cfg_key, color, label in self.active_tag_handles():
-            p = ui.get(cfg_key, {})
-            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
+            p = tag_layout.get(cfg_key, {})
+            dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_tag_{cfg_key}", label)
 
         for i, slot in enumerate(ui.get("pokemon_slots", [])):
             dot(slot.get("x", 0), slot.get("y", 0), "#00FF88", f"slot_{i}", f"Slot{i+1}")
@@ -678,13 +686,16 @@ class CalibrationApp:
             if dist < r * 2:
                 candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
 
+        active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+        tag_layout = self.cfg.get("tag_layouts", {}).get(active_layout_name, {})
+
         for cfg_key, _, _ in self.active_tag_handles():
-            p = ui.get(cfg_key, {})
+            p = tag_layout.get(cfg_key, {})
             hx = p.get("x", 0.5) * self.img_w * s
             hy = p.get("y", 0.5) * self.img_h * s
             dist = abs(cx - hx) + abs(cy - hy)
             if dist < r * 2:
-                candidates.append((dist, f"point_{cfg_key}", "x", "y", cfg_key, "point"))
+                candidates.append((dist, f"point_tag_{cfg_key}", "x", "y", cfg_key, "point_tag"))
 
         for i, slot in enumerate(ui.get("pokemon_slots", [])):
             hx = slot.get("x", 0) * self.img_w * s
@@ -732,6 +743,10 @@ class CalibrationApp:
         elif htype == "point":
             ui[cfg_key]["x"] = round(rx, 3)
             ui[cfg_key]["y"] = round(ry, 3)
+        elif htype == "point_tag":
+            active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+            self.cfg["tag_layouts"][active_layout_name][cfg_key]["x"] = round(rx, 3)
+            self.cfg["tag_layouts"][active_layout_name][cfg_key]["y"] = round(ry, 3)
         elif htype == "slot":
             ui["pokemon_slots"][cfg_key]["x"] = round(rx, 3)
             ui["pokemon_slots"][cfg_key]["y"] = round(ry, 3)
@@ -791,6 +806,11 @@ class CalibrationApp:
         elif htype == "point":
             ui[cfg_key]["x"] = round(max(0, min(1, ui[cfg_key]["x"] + dx)), 3)
             ui[cfg_key]["y"] = round(max(0, min(1, ui[cfg_key]["y"] + dy)), 3)
+        elif htype == "point_tag":
+            active_layout_name = "ff" if self.forever_friends_enabled() else "default"
+            target = self.cfg["tag_layouts"][active_layout_name][cfg_key]
+            target["x"] = round(max(0, min(1, target["x"] + dx)), 3)
+            target["y"] = round(max(0, min(1, target["y"] + dy)), 3)
         elif htype == "slot":
             ui["pokemon_slots"][cfg_key]["x"] = round(max(0, min(1, ui["pokemon_slots"][cfg_key]["x"] + dx)), 3)
             ui["pokemon_slots"][cfg_key]["y"] = round(max(0, min(1, ui["pokemon_slots"][cfg_key]["y"] + dy)), 3)
