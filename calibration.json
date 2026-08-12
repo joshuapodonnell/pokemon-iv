@@ -125,22 +125,6 @@
       "x2": 0.48,
       "y2": 0.88
     },
-    "tag_option_btn": {
-      "x": 0.77,
-      "y": 0.62
-    },
-    "tag_keep": {
-      "x": 0.221,
-      "y": 0.318
-    },
-    "tag_transfer": {
-      "x": 0.252,
-      "y": 0.422
-    },
-    "tag_review": {
-      "x": 0.261,
-      "y": 0.364
-    },
     "text_lines_layout": 2,
     "atk_bar_y_3lines": 0.747,
     "def_bar_y_3lines": 0.787,
@@ -150,23 +134,7 @@
     "sta_bar_y_4lines": 0.800,
     "atk_bar_y_5lines": 0.694,
     "def_bar_y_5lines": 0.733,
-    "sta_bar_y_5lines": 0.773,
-    "tag_dismiss": {
-      "x": 0.5,
-      "y": 0.85
-    },
-    "tag_keep_ff": {
-      "x": 0.25,
-      "y": 0.7
-    },
-    "tag_transfer_ff": {
-      "x": 0.5,
-      "y": 0.7
-    },
-    "tag_review_ff": {
-      "x": 0.75,
-      "y": 0.7
-    }
+    "sta_bar_y_5lines": 0.773
   },
   "bar_fill_brightness": 160,
   "bar_segments": 15,

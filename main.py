@@ -447,9 +447,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
     ui = cfg["ui"]
-    #log.info("args are {}".format(args))
+    log.info("args are {}".format(args))
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
-    #log.info("tag_layout is {}".format(tag_layout))
+    log.info("tag_layout is {}".format(tag_layout))
     # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])
