@@ -1,7 +1,7 @@
 {
   "mirror_region": {
-    "x": 70,
-    "y": 67,
+    "x": 56,
+    "y": 73,
     "w": 316,
     "h": 696
   },
@@ -66,8 +66,8 @@
     "hp_region": {
       "x1": 0.332,
       "y1": 0.484,
-      "x2": 0.584,
-      "y2": 0.513
+      "x2": 0.637,
+      "y2": 0.512
     },
     "dust_region": {
       "x1": 0.056,
@@ -102,9 +102,9 @@
       "y": 0.8
     },
     "type_region": {
-      "x1": 0.379,
-      "y1": 0.578,
-      "x2": 0.626,
+      "x1": 0.349,
+      "y1": 0.571,
+      "x2": 0.688,
       "y2": 0.643
     },
     "weight_region": {
@@ -131,7 +131,7 @@
     "sta_bar_y_3lines": 0.827,
     "atk_bar_y_4lines": 0.721,
     "def_bar_y_4lines": 0.76,
-    "sta_bar_y_4lines": 0.800,
+    "sta_bar_y_4lines": 0.8,
     "atk_bar_y_5lines": 0.694,
     "def_bar_y_5lines": 0.733,
     "sta_bar_y_5lines": 0.773
@@ -183,20 +183,20 @@
         "y": 0.933
       },
       "tag_option_btn": {
-        "x": 0.648,
-        "y": 0.65
+        "x": 0.764,
+        "y": 0.623
       },
       "tag_keep": {
-        "x": 0.5,
-        "y": 0.35
+        "x": 0.254,
+        "y": 0.312
       },
       "tag_transfer": {
-        "x": 0.5,
-        "y": 0.45
+        "x": 0.209,
+        "y": 0.419
       },
       "tag_review": {
-        "x": 0.5,
-        "y": 0.55
+        "x": 0.209,
+        "y": 0.364
       },
       "tag_dismiss": {
         "x": 0.5,
@@ -231,6 +231,6 @@
     }
   },
   "account": {
-    "forever_friends_enabled": true
+    "forever_friends_enabled": false
   }
 }

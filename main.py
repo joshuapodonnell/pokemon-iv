@@ -651,8 +651,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             "hp":     str(hp)          if hp          else "",
             "name":   name             or "",
             "type1":  type_text        or "",
-            "weight": weight_text      or "",
-            "height": height_text      or "",
+            # "weight": weight_text      or "",
+            # "height": height_text      or "",
         }
         _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
 
