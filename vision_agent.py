@@ -70,7 +70,7 @@ WINDOWS_PC_IP = "192.168.1.60"
 #WINDOWS_PC_IP = "100.84.89.49"
 API_PORT = "11434"
 API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
-VLM_MODEL = "qwen3-vl:32b"
+VLM_MODEL = "qwen3-vl:30b"
 
 CONFIDENCE_THRESHOLD: float = 0.75
 MAX_TOKENS: int = 400
@@ -726,7 +726,7 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
 
 def warmup_remote() -> bool:
     global _remote_available
-    log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 32B…")
+    log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 30B…")
 
     payload = {
         "model": VLM_MODEL,
