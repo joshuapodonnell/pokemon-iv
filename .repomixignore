@@ -15,3 +15,5 @@ evolution_chains.py
 query_db_gui.py
 repomix-output.txt
 calibration_viewer.py
+deprecated/
+deprecated_tests/

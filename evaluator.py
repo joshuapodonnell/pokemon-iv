@@ -258,3 +258,79 @@ def get_species_summary(conn, name: str) -> dict:
         WHERE name = ?
     """, (name,)).fetchone()
     return dict(row) if row else {}
+
+# Replaces reliance on find_displaced/flag_displaced for top-N enforcement.
+
+def _is_immune(poke: dict) -> bool:
+    """Same immunity rules used in evaluate_catch's per-catch demotion."""
+    iv_pct = poke.get("iv_pct") or 0.0
+    is_hundo = iv_pct == 100.0
+    is_nundo = (
+        poke.get("iv_atk") == 0
+        and poke.get("iv_def") == 0
+        and poke.get("iv_sta") == 0
+    )
+    is_legendary = any(poke["name"].startswith(s) for s in KEEP_SPECIES)
+    is_high_iv = iv_pct >= KEEP_RULES["iv_pct_min"]
+    min_lvl = KEEP_RULES.get("min_keep_level")
+    is_high_level = (
+        min_lvl is not None
+        and poke.get("level") is not None
+        and poke["level"] >= min_lvl
+    )
+    return is_hundo or is_nundo or is_legendary or is_high_iv or is_high_level
+
+
+def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
+    """
+    For every species with more than `top_n` non-immune KEEP-tagged rows,
+    demote everything beyond the top N (ranked by best of GL/UL rank) to
+    TRANSFER and mark demoted=1 so Micro Pass 2 picks it up.
+
+    Immune rows (hundo, nundo, legendary/mythical, 3-star+, high level)
+    never count against the cap and are never touched.
+
+    Ranking key: min(gl_rank or 99999, ul_rank or 99999), then iv_pct DESC
+    as a tiebreaker — matches the ordering already used in get_best_in_db.
+    """
+    species_rows = conn.execute("""
+        SELECT DISTINCT name FROM pokemon WHERE tag = 'KEEP'
+    """).fetchall()
+
+    demoted_all = []
+    for (name,) in [(r["name"],) for r in species_rows]:
+        rows = conn.execute("""
+            SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
+                   gl_rank, ul_rank
+            FROM pokemon
+            WHERE name = ? AND tag = 'KEEP'
+        """, (name,)).fetchall()
+        rows = [dict(r) for r in rows]
+
+        immune = [r for r in rows if _is_immune(r)]
+        contenders = [r for r in rows if not _is_immune(r)]
+
+        contenders.sort(
+            key=lambda r: (
+                min(r["gl_rank"] or 99999, r["ul_rank"] or 99999),
+                -(r["iv_pct"] or 0.0),
+            )
+        )
+
+        overflow = contenders[top_n:]
+        if not overflow:
+            continue
+
+        for poke in overflow:
+            conn.execute("""
+                UPDATE pokemon
+                SET tag = 'TRANSFER',
+                    demoted = 1,
+                    needs_review = 1,
+                    review_reason = ?
+                WHERE id = ?
+            """, (f"exceeds_top_{top_n}_for_species", poke["id"]))
+            demoted_all.append(poke)
+
+    conn.commit()
+    return demoted_all
