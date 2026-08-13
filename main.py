@@ -447,9 +447,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
     ui = cfg["ui"]
-    log.info("args are {}".format(args))
+    #log.info("args are {}".format(args))
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
-    log.info("tag_layout is {}".format(tag_layout))
+    #log.info("tag_layout is {}".format(tag_layout))
     # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])
@@ -921,92 +921,6 @@ def report_displaced(conn):
     else:
         log.info("No Pokémon displaced this session.")
     return displaced
-
-
-# # ── Pass 2: Tag ───────────────────────────────────────────────────────────────
-#
-# def pass2_tag(args, cfg, conn, tap, session_ids, pause):
-#     ui = cfg["ui"]
-#
-#     if not session_ids:
-#         log.info("Pass 2: nothing new to tag.")
-#         return
-#
-#     placeholders = ",".join("?" * len(session_ids))
-#     new_rows = conn.execute(f"""
-#         SELECT * FROM pokemon
-#         WHERE id IN ({placeholders})
-#         ORDER BY id
-#     """, session_ids).fetchall()
-#     new_rows = [dict(r) for r in new_rows]
-#
-#     if not new_rows:
-#         log.info("Pass 2: nothing new to tag.")
-#         return
-#
-#     log.info(f"── Pass 2: Tagging {len(new_rows)} Pokémon ─────────────────────────")
-#     log.info("Navigate back to the START of the age0-filtered storage list.")
-#     tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-#             base_delay=cfg["timing"]["after_tap"])
-#     tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-#             base_delay=cfg["timing"]["after_tap"])
-#     for i in range(5, 0, -1):
-#         log.info(f"Starting Pass 2 in {i}s…")
-#         time.sleep(1)
-#
-#     if not args.dry_run:
-#         slot = ui["pokemon_slots"][0]
-#         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
-#
-#     tagged = 0
-#     try:
-#         for idx, row in enumerate(new_rows):
-#             # ── Pause / quit check ────────────────────────────────────
-#             pause.wait_if_paused()
-#             if pause.should_stop():
-#                 log.info("Clean stop requested — ending Pass 2.")
-#                 break
-#             # ─────────────────────────────────────────────────────────
-#             name   = row["name"]
-#             cp     = row["cp"]
-#             iv_pct = row["iv_pct"] or 0
-#
-#             pvp = {
-#                 "great": {"rank": row["gl_rank"], "percentile": row["gl_percentile"]},
-#                 "ultra": {"rank": row["ul_rank"], "percentile": row["ul_percentile"]},
-#             }
-#             evo_rankings = get_evo_rankings(conn, row["id"])
-#
-#             decision = evaluate_catch(
-#                 conn, name, cp,
-#                 row["iv_atk"], row["iv_def"], row["iv_sta"],
-#                 iv_pct, pvp, evo_rankings,
-#                 current_id=row["id"],
-#             )
-#             action = decision["action"]
-#
-#             log.info(
-#                 f"  [{idx + 1}/{len(new_rows)}] {name:<15s} CP{cp:>4}  "
-#                 f"{row['iv_atk']}/{row['iv_def']}/{row['iv_sta']}  → {action}"
-#                 + (f"  ({', '.join(decision['reasons'])})" if decision["reasons"] else "")
-#             )
-#
-#             if not args.dry_run:
-#                 apply_ingame_tag(tap, ui, cfg["mirror_region"], action)
-#                 conn.execute(
-#                     "UPDATE pokemon SET tag = ? WHERE id = ?",
-#                     (action, row["id"])
-#                 )
-#                 conn.commit()
-#                 tap.swipe_left()
-#                 tap.anti_bot_break()
-#                 tagged += 1
-#
-#     except KeyboardInterrupt:
-#         log.info("Pass 2 interrupted by user.")
-#
-#     log.info(f"Pass 2 complete: {tagged} Pokémon tagged.")
-
 
 def micro_pass_2_cleanup(args, conn, tap, ui, cfg, pause):
     # 1. Extract the selected tag layout here:

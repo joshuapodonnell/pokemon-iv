@@ -100,43 +100,26 @@ def capture_window(bounds: dict) -> Image.Image:
         logger.debug("Returning PIL image size=%s mode=%s", pil_img.size, pil_img.mode)
         return pil_img
 
-
     except ImportError:
-
         logger.debug("Quartz import failed, falling back to mss")
-
         import mss
-
         with mss.mss() as sct:
-
             monitor = {
-
                 "left": bounds["x"],
-
                 "top": bounds["y"],
-
                 "width": bounds["w"],
-
                 "height": bounds["h"],
-
             }
-
             logger.debug("Using mss monitor=%s", monitor)
-
             screenshot = sct.grab(monitor)
-
             logger.debug("mss screenshot size=%s", screenshot.size)
-
             pil_img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-
             logger.debug("Returning mss PIL image size=%s mode=%s", pil_img.size, pil_img.mode)
 
             return pil_img
 
     except Exception:
-
         logger.exception("capture_window failed bounds=%s", bounds)
-
         raise
 
 def get_relative_region(img: Image.Image, rel: dict) -> Image.Image:
