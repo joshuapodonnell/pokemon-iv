@@ -38,6 +38,7 @@ KEEP_SPECIES = frozenset({
     "Koraidon", "Miraidon", "Ogerpon", "Terapagos",
 })
 
+
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                    pvp: dict, evo_rankings: dict, level: float = None,
                    current_id: int = None) -> dict:
@@ -54,7 +55,7 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     if KEEP_RULES["zero_iv"] and is_nundo:
         reasons.append("0% IV — nundo")
         action = "KEEP"
-        # ← add this block
+
     min_lvl = KEEP_RULES.get("min_keep_level")
     if min_lvl and level is not None and level >= min_lvl:
         reasons.append(f"High-level catch (L{level} ≥ {min_lvl})")
@@ -71,10 +72,10 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     ul = pvp.get("ultra", {})
 
     if gl.get("rank") and gl["rank"] <= KEEP_RULES["gl_rank_max"]:
-        reasons.append(f"GL rank #{gl['rank']} (top {100-gl.get('percentile',0):.1f}%)")
+        reasons.append(f"GL rank #{gl['rank']} (top {100 - gl.get('percentile', 0):.1f}%)")
         action = "KEEP"
     if ul.get("rank") and ul["rank"] <= KEEP_RULES["ul_rank_max"]:
-        reasons.append(f"UL rank #{ul['rank']} (top {100-ul.get('percentile',0):.1f}%)")
+        reasons.append(f"UL rank #{ul['rank']} (top {100 - ul.get('percentile', 0):.1f}%)")
         action = "KEEP"
 
     for evo_name, evo_pvp in evo_rankings.items():
@@ -96,11 +97,9 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
         if not existing_top:
             reasons.append(f"First {name} in collection")
     elif existing_top:
-        existing_gl = existing_top[0]["gl_rank"]
-        existing_ul = min(
-            (r["ul_rank"] for r in existing_top if r["ul_rank"] is not None),
-            default=None
-        )
+        # Find the absolute best ranks you ALREADY own
+        existing_gl = min((r["gl_rank"] for r in existing_top if r["gl_rank"] is not None), default=None)
+        existing_ul = min((r["ul_rank"] for r in existing_top if r["ul_rank"] is not None), default=None)
 
         beats_gl = new_gl and (existing_gl is None or new_gl < existing_gl)
         beats_ul = new_ul and (existing_ul is None or new_ul < existing_ul)
@@ -123,18 +122,62 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "REVIEW"
             reasons.append(f"OCR uncertain — needs manual check (CP < {KEEP_RULES['min_trusted_cp']} or unknown name)")
 
-        # NEW DEMOTION LOGIC — mark previously kept Pokémon for review if beaten
+    # ────────────────────────────────────────────────────────────────────────────────
+    # NEW DEMOTION LOGIC — Mark previously kept Pokémon for review if beaten
+    # ────────────────────────────────────────────────────────────────────────────────
     if action == "KEEP" and beats_existing and existing_top:
         for old_poke in existing_top:
-            # Only demote if it was previously tagged KEEP
-            if old_poke.get('tag') == 'KEEP':
+            # We only care about demoting things we were previously planning to KEEP
+            # Note: We rely on the database column returning the old tag. If get_best_in_db
+            # doesn't explicitly SELECT 'tag', you may need to add it to the SELECT statement!
+            if old_poke.get('tag', 'KEEP') != 'KEEP':
+                continue
+
+            # 1. Immunity check: Do not demote Hundos, Nundos, Legendaries, High Level, or High IVs
+            old_iv_pct = old_poke.get("iv_pct") or 0.0
+            old_is_hundo = (old_iv_pct == 100.0)
+            old_is_nundo = (old_poke.get("iv_atk") == 0 and old_poke.get("iv_def") == 0 and old_poke.get("iv_sta") == 0)
+
+            is_legendary = any(old_poke["name"].startswith(s) for s in KEEP_SPECIES)
+            is_high_iv = (old_iv_pct >= KEEP_RULES["iv_pct_min"])
+
+            # Since level might not be explicitly stored, we do a safe check
+            is_high_level = False
+            min_lvl = KEEP_RULES.get("min_keep_level")
+            if min_lvl and old_poke.get("level") is not None and old_poke["level"] >= min_lvl:
+                is_high_level = True
+
+            if old_is_hundo or old_is_nundo or is_legendary or is_high_iv or is_high_level:
+                continue  # IMMUNE! Do not demote.
+
+            # 2. Check if the new catch strictly beats this specific old one
+            demote_reasons = []
+
+            old_gl = old_poke.get("gl_rank")
+            if new_gl and old_gl and new_gl < old_gl:
+                demote_reasons.append(f"GL #{new_gl} beats old #{old_gl}")
+
+            old_ul = old_poke.get("ul_rank")
+            if new_ul and old_ul and new_ul < old_ul:
+                demote_reasons.append(f"UL #{new_ul} beats old #{old_ul}")
+
+            # 3. Ensure we don't demote an old one if it is STILL our best in a different league!
+            is_still_best_ul = (old_ul is not None and (new_ul is None or old_ul < new_ul))
+            is_still_best_gl = (old_gl is not None and (new_gl is None or old_gl < new_gl))
+
+            if demote_reasons and not (is_still_best_gl or is_still_best_ul):
+                reason_str = "demoted_by_better"
+
+                # Flag the old Pokémon for review in the DB
                 conn.execute("""
                        UPDATE pokemon 
                        SET needs_review = 1, 
-                           review_reason = 'demoted_by_better'
-                       WHERE id = ? AND tag = 'KEEP'
-                   """, (old_poke['id'],))
-                reasons.append(f"Demoted {old_poke['name']} #{old_poke['id']} from top ranks")
+                           review_reason = ?
+                       WHERE id = ? AND (tag = 'KEEP' OR tag IS NULL)
+                   """, (reason_str, old_poke['id']))
+
+                reasons.append(f"Demoted {old_poke['name']} #{old_poke['id']} ({', '.join(demote_reasons)})")
+
     return {
         "action": action,
         "reasons": reasons,
@@ -149,8 +192,9 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
     params_gl = (name, exclude_id, limit) if exclude_id is not None else (name, limit)
     params_ul = (name, exclude_id) if exclude_id is not None else (name,)
 
+    # ADDED: `tag` and `level` to the SELECT columns
     gl_rows = conn.execute(f"""
-        SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
+        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
         FROM pokemon
         WHERE name = ? {exclude_clause}
@@ -160,8 +204,9 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
         LIMIT ?
     """, params_gl).fetchall()
 
+    # ADDED: `tag` and `level` to the SELECT columns here too
     ul_best = conn.execute(f"""
-        SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
+        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
                gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
         FROM pokemon
         WHERE name = ? {exclude_clause}
