@@ -4,12 +4,12 @@ Automated Pokémon GO IV scanning, appraisal parsing, PvP ranking, and in-game t
 
 ---
 
-## 1. What This Bot Does
+## 1. What It Does
 
 This project turns the iPhone Mirroring window on macOS Sequoia into a fully automated IV cataloging pipeline:
 
 - Captures **pixel-perfect** frames from the iPhone Mirroring window via Quartz.
-- Reads **name, CP, HP, type, height, weight, stardust, and caught date** using OCR.
+- Reads **name, CP, HP, type, and caught date** using OCR.
 - Measures appraisal bars to recover **exact ATK / DEF / STA IVs (0–15)**.
 - Computes **exact IV percentage, level**, and **PvP stat product rankings** for Great / Ultra / Master League, including all evolutions.
 - Writes everything into a local **SQLite database (`pokemon_ivs.db`)** with flags for review, displacement, and demotion.
@@ -71,7 +71,7 @@ Anti-detection behaviours baked in:
 ### 3.1 Requirements
 
 - macOS **Sequoia** on Apple Silicon (M1+).
-- iPhone with **iPhone Mirroring** enabled over USB.
+- iPhone with **iPhone Mirroring** enabled over USB or Bluetooth.
 - Python **3.10+**.
 
 ### 3.2 Install Dependencies
