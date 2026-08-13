@@ -1119,8 +1119,8 @@ def run_bot(args):
             args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs, pause
         )
 
-        if not args.dry_run and session_ids:
-            report_displaced(conn)
+        # if not args.dry_run and session_ids:
+        #     report_displaced(conn)
         vision_agent.reset_remote_status()
         if not args.dry_run and tags_are_calibrated(tag_layout):
             micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
