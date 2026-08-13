@@ -19,7 +19,7 @@ from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseivbars, parseivbarsdebug, parse_caught_date,
-    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types
+    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, normalize_species_name
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
@@ -44,8 +44,8 @@ def parse_args():
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--debug", action="store_true")
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--mode", choices=["catalog", "newcatch"], default="catalog",
-                   help="catalog: scan age0 box. newcatch: appraise most recent catch only.")
+    p.add_argument("--mode", choices=["catalog", "newcatch", "sync-flags"], default="catalog",
+                   help="catalog: scan age0 box. newcatch: appraise most recent catch only.sync-flags: sync shiny/shadow/"                         "purified status from in-game search filters.")
     p.add_argument(
         "--tag-layout",
         choices=["default", "ff"],
@@ -802,6 +802,147 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     return poke_id, decision
 
+# =============================================================================
+# main.py — sync_special_flags, REWRITTEN to walk the filtered list one
+# Pokemon at a time instead of OCR-ing a scrolling grid. Reuses the same
+# detail-screen OCR helpers as scan_one_pokemon(), just reads name/cp/
+# caught_date and skips the appraisal/IV/tagging steps entirely.
+# =============================================================================
+
+def read_list_entry(img, ui) -> tuple:
+    """Read just name + cp + caught_date from the current detail screen.
+    Lighter-weight than scan_one_pokemon() — no appraisal, no IV bars,
+    no VLM calls. Used only to identify WHICH row is currently showing."""
+    cp_img = getrelativeregion(img, ui["cp_region"])
+    cp_text = ocrregion(cp_img)
+    cp = parsecp(cp_text)
+
+    type_img = getrelativeregion(img, ui["type_region"])
+    type_text = ocr_type_region(type_img)
+
+    name = resolvespeciesname(img, ui, cp, type_text)
+
+    # caught_date lives in the description text below the stats —
+    # reuse the same region/parsing main.py already does for cataloging
+    desc_img = getrelativeregion(img, ui["name_region"])
+    _, raw_text, _ = detect_description_lines(desc_img)
+    caught_date = parse_caught_date(raw_text)
+
+    return (name, cp, caught_date)
+
+
+def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
+    """
+    Syncs is_shiny / form_status flags using the in-game search bar's own
+    "Shiny" / "Shadow" / "Purified" filters as ground truth. Walks the
+    filtered list ONE Pokemon at a time via next_arrow — same mechanism
+    pass1_catalog() already uses — instead of trying to OCR a scrolling
+    grid view, which breaks once the list clamps at the bottom.
+
+    Matches on (name, cp, caught_date) — the same composite key
+    find_duplicate() uses — since name+cp alone isn't unique across an
+    11,000+ record collection.
+    """
+    ui = cfg["ui"]
+    freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
+
+    passes = [
+        ("Shiny",    "is_shiny",    1),
+        ("Shadow",   "form_status", "shadow"),
+        ("Purified", "form_status", "purified"),
+    ]
+
+    for keyword, column, value in passes:
+        log.info(f"--- Syncing {keyword} flags ---")
+
+        tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
+                base_delay=cfg["timing"].get("after_tap", 1.0))
+        tap.type_text(keyword)
+        time.sleep(1.5)
+
+        # Enter the filtered list at its first entry — same slot tap
+        # pass1_catalog() uses to enter the normal (unfiltered) list.
+        tap.tap(ui["pokemon_slots"][0]["x"], ui["pokemon_slots"][0]["y"],
+                base_delay=cfg["timing"].get("after_tap", 1.0))
+
+        matched = 0
+        skipped_no_match = 0
+        last_entry = None
+        visited = 0
+
+        while True:
+            if pause.wait_if_paused():
+                pass
+            if pause.should_stop():
+                log.info(f"Stop requested — ending {keyword} sync early.")
+                break
+
+            img = capture_window(cfg["mirror_region"])
+
+            if freeze.update(img):
+                recovered = _handle_freeze(tap, cfg, capture_window, freeze)
+                if not recovered:
+                    log.error(f"[FREEZE] Could not recover during {keyword} sync — stopping.")
+                    break
+                continue
+
+            entry = read_list_entry(img, ui)
+            name, cp, caught_date = entry
+
+            # End of list: next_arrow stopped advancing, same Pokemon showing twice
+            if entry == last_entry:
+                log.info(f"{keyword} sync: reached end of list after {visited} entries.")
+                break
+            last_entry = entry
+            visited += 1
+
+            if name and name != "Unknown" and cp:
+                row = None
+                if caught_date:
+                    row = conn.execute(f"""
+                        SELECT id FROM pokemon
+                        WHERE name = ? AND cp = ? AND caught_date = ? AND {column} != ?
+                        LIMIT 1
+                    """, (name, cp, caught_date, value)).fetchone()
+                if not row:
+                    # Fallback if caught_date OCR failed — riskier, only use
+                    # when the (name, cp) pair is unique in the DB.
+                    candidates = conn.execute("""
+                        SELECT id FROM pokemon WHERE name = ? AND cp = ?
+                    """, (name, cp)).fetchall()
+                    if len(candidates) == 1:
+                        row = candidates[0]
+
+                if row:
+                    conn.execute(
+                        f"UPDATE pokemon SET {column} = ? WHERE id = ?",
+                        (value, row["id"])
+                    )
+                    matched += 1
+                else:
+                    skipped_no_match += 1
+                    log.debug(
+                        f"No unique DB match for {name} CP{cp} date={caught_date} "
+                        f"({keyword}) — skipped"
+                    )
+            else:
+                skipped_no_match += 1
+
+            tap_next_arrow(tap, ui, cfg)
+            time.sleep(cfg["timing"].get("after_swipe", 0.8))
+
+        conn.commit()
+        log.info(
+            f"{keyword} sync complete: {matched} flagged, "
+            f"{skipped_no_match} skipped (no unique match), {visited} visited"
+        )
+
+        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap", 1.0))
+        tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
+                base_delay=cfg["timing"].get("after_tap", 1.0))
+
+
 
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
@@ -994,10 +1135,8 @@ def run_bot(args):
     tap  = TapController(cfg)
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
-    # ── Pause controller ──────────────────────────────────────────────
     pause = PauseController(pause_key='f9', quit_key='f10', reprocess_key='f8')
     pause.start()
-    # ─────────────────────────────────────────────────────────────────
 
     try:
         bounds = get_mirror_window_bounds()
@@ -1007,15 +1146,42 @@ def run_bot(args):
     except Exception as e:
         log.warning(f"Could not auto-detect window: {e}")
 
-    if not tags_are_calibrated(tag_layout):
-        log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
-
     start_time = time.time()
     log.info("=" * 50)
     log.info(f"Pokémon GO IV Cataloger — Mode: {args.mode}")
-    log.info(f"Limit: {args.limit or 'unlimited'}")
     log.info("=" * 50)
 
+    # ── sync-flags mode: entirely separate path, skips VLM warmup/Pass 1/Pass 2 ──
+    if args.mode == "sync-flags":
+        try:
+            for i in range(3, 0, -1):
+                log.info(f"Starting flag sync in {i}s…")
+                time.sleep(1)
+            sync_special_flags(args, cfg, conn, tap, capture_window, pause)
+
+            log.info("Recomputing PvP rankings for newly-flagged shadows…")
+            from evaluator import recompute_shadow_rankings
+            n = recompute_shadow_rankings(conn)
+            log.info(f"Recomputed rankings for {n} shadow Pokémon")
+
+            log.info("Re-running top-N enforcement with updated flags…")
+            from evaluator import enforce_top_n
+            demoted = enforce_top_n(conn, top_n=5)
+            if demoted:
+                log.warning(f"{len(demoted)} Pokémon demoted after flag sync")
+
+            if tags_are_calibrated(tag_layout):
+                micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
+        except Exception as e:
+            log.error(f"Sync-flags mode failed: {e}")
+            traceback.print_exc()
+        finally:
+            conn.close()
+        return  # don't fall through to the catalog flow below
+
+    # ── normal catalog / newcatch modes (unchanged) ──────────────────────────
+    if not tags_are_calibrated(tag_layout):
+        log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
 
     log.info("Warming up VLM — scanning will begin once model is ready…")
     vlm_ready = vision_agent.warmup_remote()
@@ -1024,10 +1190,10 @@ def run_bot(args):
     else:
         log.warning("VLM falling back to local M1 model (2B).")
 
-    # Then the existing countdown
     for i in range(3, 0, -1):
         log.info(f"Starting in {i}s…")
         time.sleep(1)
+
     try:
         session_ids, errors = pass1_catalog(
             args, cfg, conn, tap, capture_window, readappraisalbars, compute_ivs, pause
@@ -1038,8 +1204,13 @@ def run_bot(args):
             demoted = enforce_top_n(conn, top_n=5)
             if demoted:
                 log.warning(f"{len(demoted)} Pokémon demoted beyond top-5 this session")
-            vision_agent.reset_remote_status()
+
+        # CHANGED: removed the duplicate reset_remote_status() call —
+        # your pasted version calls this twice back-to-back, once inside
+        # the `if not args.dry_run and session_ids:` block and once again
+        # unconditionally right after. Only need it once.
         vision_agent.reset_remote_status()
+
         if not args.dry_run and tags_are_calibrated(tag_layout):
             micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
