@@ -12,13 +12,13 @@ This project turns the iPhone Mirroring window on macOS Sequoia into a fully aut
 - Reads **name, CP, HP, type, height, weight, stardust, and caught date** using OCR.
 - Measures appraisal bars to recover **exact ATK / DEF / STA IVs (0–15)**.
 - Computes **exact IV percentage, level**, and **PvP stat product rankings** for Great / Ultra / Master League, including all evolutions.
-- Writes everything into a local **SQLite database (`pokemon_ivs.db`)** with flags for review, displacement, and demotion.[file:1][file:2]
+- Writes everything into a local **SQLite database (`pokemon_ivs.db`)** with flags for review, displacement, and demotion.
 - Applies **in-game tags** (keep / transfer / review) in real time using calibrated tap coordinates.
 
 Two main operating modes:
 
 - `catalog` — scan the **age 0** box and catalog an entire page of fresh catches.
-- `newcatch` — appraise and tag **only the most recent catch**, then stop.[file:2]
+- `newcatch` — appraise and tag **only the most recent catch**, then stop.
 
 ---
 
@@ -62,7 +62,7 @@ Anti-detection behaviours baked in:
 - Gaussian **tap jitter** and **Bezier mouse paths** (human-like motion).
 - Log-normal **timing variation** on all taps, swipes, and appraisals.
 - Randomized **short / long breaks** and configurable session length ranges.
-- A **FreezeDetector** that watches Mirroring for frozen frames and attempts recovery (center tap, back button, etc.).[file:2]
+- A **FreezeDetector** that watches Mirroring for frozen frames and attempts recovery (center tap, back button, etc.).
 
 ---
 
@@ -80,7 +80,7 @@ Anti-detection behaviours baked in:
 pip install -r requirements.txt
 ```
 
-Apple Vision runs via `pyobjc` on Apple Silicon. `pytesseract` is used for description-line detection and as a fallback; it is optional.[file:1][file:2]
+Apple Vision runs via `pyobjc` on Apple Silicon. `pytesseract` is used for description-line detection and as a fallback; it is optional.
 
 ### 3.3 Download Base Stats
 
@@ -90,7 +90,7 @@ Fetch base ATK / DEF / STA for all species:
 python download_data.py
 ```
 
-This script pulls from Pokémon GO GameMaster and falls back to PokeAPI if needed, then writes `data/base_stats.json`.[file:1]
+This script pulls from Pokémon GO GameMaster and falls back to PokeAPI if needed, then writes `data/base_stats.json`.
 
 ### 3.4 Build Species Lookup
 
@@ -100,7 +100,7 @@ Generate a lookup table for name → types / height / weight:
 python build_species_lookup.py
 ```
 
-This creates `data/species_lookup.json` by scraping Pokemondb.net for height/weight and type information.[file:1]
+This creates `data/species_lookup.json` by scraping Pokemondb.net for height/weight and type information.
 
 ### 3.5 Calibrate UI Coordinates
 
@@ -115,7 +115,7 @@ python calibrate.py
 - Detects the iPhone Mirroring window (`get_mirror_window_bounds`).
 - Captures a reference screenshot and saves `calibration_screenshot.png`.
 - Lets you either accept default UI coordinates or input relative coordinates (0.0–1.0) for taps and bar positions.
-- Saves the configuration to `calibration.json` and merges with `config.DEFAULT_CONFIG`.[file:1]
+- Saves the configuration to `calibration.json` and merges with `config.DEFAULT_CONFIG`.
 
 Re-run calibration whenever you change iPhone model or monitor resolution.
 
@@ -131,7 +131,7 @@ python main.py [options]
 
 ### 4.1 Command-Line Options
 
-`parse_args()` supports:[file:2]
+`parse_args()` supports:
 
 | Option | Values | Description |
 | :----- | :----- | :---------- |
@@ -143,7 +143,7 @@ python main.py [options]
 
 ### 4.2 Session Controls
 
-`PauseController` binds hotkeys:[file:2]
+`PauseController` binds hotkeys:
 
 - **F9** — pause/resume the current session.
 - **F10** — emergency stop (clean shutdown).
@@ -163,13 +163,13 @@ Emergency mouse-kill is also supported by moving the cursor to a configured corn
   - Opens the appraisal screen, reads IV bars, and computes IVs + PvP ranks.
   - Evaluates the catch (keep/transfer/review) and writes to the database.
   - Applies the appropriate **in-game tag**.
-  - Taps the next arrow to advance.[file:2]
+  - Taps the next arrow to advance.
 
 #### New Catch Mode (`--mode newcatch`)
 
 - Taps the **last slot** in `ui["pokemon_slots"]` (most recent Pokémon).
 - Runs a single `scan_one_pokemon()` cycle.
-- Tags the Pokémon and then exits without swiping further.[file:2]
+- Tags the Pokémon and then exits without swiping further.
 
 ---
 
@@ -185,7 +185,7 @@ The helper `detect_description_lines()`:
 - Anchors on words like **"caught"**, **"around"**, or the **date**, then expands up/down within a dynamic vertical gap.
 - Produces `num_lines` (2–5) and concatenated description text.
 
-The number of lines drives which appraisal bar layout to use (different Y coordinates for 3/4/5-line layouts).[file:2]
+The number of lines drives which appraisal bar layout to use (different Y coordinates for 3/4/5-line layouts).
 
 ### 5.2 CP OCR + VLM Reconciliation
 
@@ -197,7 +197,7 @@ For CP parsing, the bot:
 - Reconciles OCR vs VLM using `_reconcile_cp()`:
   - Treats slashes/backslashes as misread `7` and prefers OCR in that case.
   - Detects extraneous leading/trailing digits and discards them.
-  - Falls back to VLM when lengths disagree and OCR looks like it has the stray digit.[file:2]
+  - Falls back to VLM when lengths disagree and OCR looks like it has the stray digit.
 
 ### 5.3 Base-Screen VLM Fallback
 
@@ -226,7 +226,7 @@ The goal is to either obtain trustworthy `(name, ATK, DEF, STA)` or explicitly f
 - Escalates to tapping the back button.
 - Aborts the session only if multiple recovery attempts fail.
 
-Freeze handling is used both in Pass 1 and in Micro Pass 2 cleanup.[file:2]
+Freeze handling is used both in Pass 1 and in Micro Pass 2 cleanup.
 
 ---
 
@@ -234,7 +234,7 @@ Freeze handling is used both in Pass 1 and in Micro Pass 2 cleanup.[file:2]
 
 ### 6.1 Database Schema
 
-`database.py` initializes `pokemon_ivs.db` and ensures columns exist:[file:1]
+`database.py` initializes `pokemon_ivs.db` and ensures columns exist:
 
 Core `pokemon` columns include (simplified):
 
@@ -269,13 +269,13 @@ During Pass 1:
   - Tag menu button.
   - Tag option button.
   - One of `tag_keep`, `tag_transfer`, or `tag_review`.
-  - Appraisal done / dismiss.[file:2]
+  - Appraisal done / dismiss.
 
-If `tags_are_calibrated(tag_layout)` returns false, the bot logs a warning and **skips** in-game tagging (database writes still occur).[file:2]
+If `tags_are_calibrated(tag_layout)` returns false, the bot logs a warning and **skips** in-game tagging (database writes still occur).
 
 ### 6.4 Micro Pass 2 Cleanup (In-Place Demotion)
 
-The legacy `pass2_tagger.py` script is deprecated. Instead, `main.py` implements a built-in **Micro Pass 2** cleanup step:[file:2]
+The legacy `pass2_tagger.py` script is deprecated. Instead, `main.py` implements a built-in **Micro Pass 2** cleanup step:
 
 - After Pass 1, if tags are calibrated and this is not a dry run, `micropass2_cleanup()` runs.
 - It queries all rows where `demoted = 1` — Pokémon whose desired tag changed after re-evaluation.
@@ -289,13 +289,13 @@ This keeps in-game tags in sync with the latest evaluator rules without a separa
 
 ### 6.5 Displaced Pokémon Reporting
 
-`report_displaced(conn)` uses `flag_displaced()` / `find_displaced()` to identify Pokémon whose position in the collection is now "displaced" relative to previous evaluations (e.g., better candidates found later), and logs them for manual follow-up.[file:2]
+`report_displaced(conn)` uses `flag_displaced()` / `find_displaced()` to identify Pokémon whose position in the collection is now "displaced" relative to previous evaluations (e.g., better candidates found later), and logs them for manual follow-up.
 
 ---
 
 ## 7. Querying and Review Tools
 
-Beyond `main.py`, several helper tools exist:[file:1]
+Beyond `main.py`, several helper tools exist:
 
 - `query_db_gui.py` — desktop GUI for browsing, filtering, and exporting the catalog to CSV.
 - `query_db_basic.py` — terminal-friendly summary of collection stats.
@@ -328,7 +328,7 @@ ORDER BY iv_pct ASC;
 
 ## 8. Repository Layout
 
-Approximate structure:[file:1]
+Approximate structure:
 
 ```text
 pokemon-iv/
@@ -370,5 +370,3 @@ pokemon-iv/
 ├── requirements.txt         # Python dependencies
 └── README.md                # This documentation
 ```
-
-The deprecated `pass2_tagger.py` bulk retagging script is no longer part of the recommended workflow; use the built-in Micro Pass 2 cleanup in `main.py` instead.[file:1][file:2]
