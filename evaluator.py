@@ -72,6 +72,32 @@ def _is_immune(poke: dict) -> bool:
         or is_high_iv or is_high_level or is_shiny
     )
 
+def promote_newly_immune(conn) -> list[dict]:
+    candidates = conn.execute("""
+        SELECT id, name, cp, hp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
+               is_shiny, form_status
+        FROM pokemon
+        WHERE tag != 'KEEP'
+    """).fetchall()
+
+    promoted = []
+    for row in candidates:
+        poke = dict(row)
+        if _is_immune(poke):
+            # CHANGED: capture whatever the CURRENT tag is (TRANSFER,
+            # REVIEW, or NULL) into pending_old_tag before flipping to KEEP.
+            conn.execute("""
+                UPDATE pokemon
+                SET pending_old_tag = tag,
+                    tag = 'KEEP',
+                    demoted = 0,
+                    tag_changed = 1
+                WHERE id = ?
+            """, (poke["id"],))
+            promoted.append(poke)
+
+    conn.commit()
+    return promoted
 
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                    pvp: dict, evo_rankings: dict, level: float = None,
@@ -246,25 +272,6 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
 
 
 def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
-    """
-    REWRITTEN — one-way immunity model.
-
-    Ranks ALL KEEP-tagged rows for a species together (immune rows included),
-    so a good shiny/hundo/legendary still occupies a rank position and can
-    push a weaker non-immune mon out of the top N. But eviction only ever
-    applies to non-immune rows — an immune row is never the one transferred,
-    even if it falls outside the top N itself.
-
-    This replaces the previous version, which excluded immune rows from the
-    ranking pool entirely — that meant a shiny could never displace anyone.
-
-    Shadow partitioning (optional — requires the form_status column from
-    database.py below): shadows get their own top-N pool per species,
-    separate from non-shadow catches, since their true PvP stat product
-    differs. If you haven't added form_status yet, this still works fine —
-    every row will just have form_status='normal' and group together as
-    one pool per species, same as before.
-    """
     groups = conn.execute("""
         SELECT DISTINCT name, (form_status = 'shadow') AS is_shadow
         FROM pokemon WHERE tag = 'KEEP'
@@ -282,8 +289,6 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
         """, (name, is_shadow)).fetchall()
         rows = [dict(r) for r in rows]
 
-        # Rank EVERYONE together — immune rows included — so they occupy
-        # real slots and can push non-immune rows out of the top N.
         gl_full = sorted(
             (r for r in rows if r["gl_rank"] is not None),
             key=lambda r: (r["gl_rank"], -(r["iv_pct"] or 0.0)),
@@ -298,13 +303,17 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
 
         for poke in rows:
             if _is_immune(poke):
-                continue  # NEVER evict immune rows, no matter their rank
+                continue
             if poke["id"] in safe_by_rank:
-                continue  # ranked well enough to stay
+                continue
             kind = "shadow" if is_shadow else "non-shadow"
+            # CHANGED: capture pending_old_tag = 'KEEP' (guaranteed, since
+            # this query only ever touches rows currently tagged KEEP)
+            # before overwriting tag to TRANSFER.
             conn.execute("""
                 UPDATE pokemon
-                SET tag = 'TRANSFER',
+                SET pending_old_tag = tag,
+                    tag = 'TRANSFER',
                     demoted = 1,
                     needs_review = 1,
                     review_reason = ?

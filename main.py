@@ -1063,63 +1063,88 @@ def report_displaced(conn):
         log.info("No Pokémon displaced this session.")
     return displaced
 
-def micro_pass_2_cleanup(args, conn, tap, ui, cfg, pause):
-    # 1. Extract the selected tag layout here:
+def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
-    demoted_rows = conn.execute(
-        "SELECT id, cp, hp, name FROM pokemon WHERE demoted = 1"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT id, cp, hp, name, tag, pending_old_tag FROM pokemon
+        WHERE demoted = 1 OR tag_changed = 1
+    """).fetchall()
 
-    if not demoted_rows:
-        log.info("No Pokémon were demoted. Pass 2 skipped! You are done.")
+    if not rows:
+        log.info("No Pokémon need in-game re-tagging. Pass 2 skipped!")
         return
 
-    log.info(f"Micro Pass 2: Cleaning up {len(demoted_rows)} demoted Pokémon...")
+    log.info(f"Micro Pass 2: re-tagging {len(rows)} Pokémon...")
     from screen_capture import capture_window
     freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
 
-    for p in demoted_rows:
-        # ── Pause / quit check ────────────────────────────────────
+    tag_key_map = {"KEEP": "tag_keep", "TRANSFER": "tag_transfer", "REVIEW": "tag_review"}
+
+    for p in rows:
         pause.wait_if_paused()
         if pause.should_stop():
             log.info("Clean stop requested — ending Pass 2.")
             break
-        # ─────────────────────────────────────────────────────────
-        # ── Freeze check ──────────────────────────────────────────────
+
         img = capture_window(cfg["mirror_region"])
         if freeze.update(img):
             recovered = _handle_freeze(tap, cfg, capture_window, freeze)
             if not recovered:
                 log.error("[FREEZE] Could not recover in micro Pass 2 — stopping.")
                 break
-            continue  # retry this Pokémon after recovery
-        # ─────────────────────────────────────────────────────────────
-        log.info(f"Demoting {p['name']} (CP {p['cp']}, HP {p['hp']}) to TRANSFER...")
+            continue
 
-        tap.tap(ui['search_icon']['x'], ui['search_icon']['y'], base_delay=cfg['timing']['after_tap'])
-        search_str = f"{p['name']}&cp{p['cp']}&hp{p['hp']}"
+        old_tag = p["pending_old_tag"]
+        new_tag = p["tag"]
+        log.info(f"Re-tagging {p['name']} CP {p['cp']}, HP {p['hp']}: "
+                 f"{old_tag or '(none)'} → {new_tag}...")
+
+        tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        search_str = f"{p['name']}CP{p['cp']}HP{p['hp']}"
         tap.type_text(search_str)
         time.sleep(1.5)
+        tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
 
-        tap.tap(ui['first_search_result']['x'], ui['first_search_result']['y'],
-                base_delay=cfg['timing']['after_tap'])
+        tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(tag_layout["tag_option_btn"]["x"], tag_layout["tag_option_btn"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
 
-        # General UI buttons stay as `ui`
-        tap.tap(ui['menu_button']['x'], ui['menu_button']['y'], base_delay=cfg['timing']['after_tap'])
+        # CHANGED: deselect the OLD tag first (if there was one and it's
+        # calibrated), then select the NEW tag. This matches the toggle
+        # behavior of the in-game tag menu — tapping a tag that's already
+        # selected turns it off, so we must deselect before selecting a
+        # different one.
+        old_key = tag_key_map.get(old_tag)
+        if old_key and old_key in tag_layout:
+            tap.tap(tag_layout[old_key]["x"], tag_layout[old_key]["y"])
+            time.sleep(cfg["timing"].get("after_tap", 0.5))
+        elif old_tag:
+            log.warning(f"Old tag '{old_tag}' not calibrated — cannot deselect, "
+                        f"proceeding to select new tag anyway.")
 
-        # 2. Tag buttons change to `tag_layout`
-        tap.tap(tag_layout['tag_option_btn']['x'], tag_layout['tag_option_btn']['y'],
-                base_delay=cfg['timing']['after_tap'])
-        tap.tap(tag_layout['tag_keep']['x'], tag_layout['tag_keep']['y'])
-        tap.tap(tag_layout['tag_transfer']['x'], tag_layout['tag_transfer']['y'])
+        new_key = tag_key_map.get(new_tag)
+        if new_key and new_key in tag_layout:
+            tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
+        else:
+            log.warning(f"New tag '{new_tag}' not calibrated — skipping tap.")
 
-        tap.tap(0.5, 0.2, base_delay=cfg['timing']['after_tap'])
+        tap.tap(0.5, 0.2, base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
 
-        tap.tap(ui['back_button']['x'], ui['back_button']['y'], base_delay=cfg['timing']['after_tap'])
-        tap.tap(ui['clear_search']['x'], ui['clear_search']['y'], base_delay=cfg['timing']['after_tap'])
+        conn.execute("""
+            UPDATE pokemon SET demoted = 0, tag_changed = 0, pending_old_tag = NULL
+            WHERE id = ?
+        """, (p["id"],))
+        conn.commit()
 
-    log.info("Micro Pass 2 Complete.")
+    log.info("Micro Pass 2 complete.")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
