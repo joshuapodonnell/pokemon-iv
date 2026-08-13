@@ -275,8 +275,6 @@ If `tags_are_calibrated(tag_layout)` returns false, the bot logs a warning and *
 
 ### 6.4 Micro Pass 2 Cleanup (In-Place Demotion)
 
-The legacy `pass2_tagger.py` script is deprecated. Instead, `main.py` implements a built-in **Micro Pass 2** cleanup step:
-
 - After Pass 1, if tags are calibrated and this is not a dry run, `micropass2_cleanup()` runs.
 - It queries all rows where `demoted = 1` — Pokémon whose desired tag changed after re-evaluation.
 - For each demoted Pokémon, it:
