@@ -477,7 +477,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     hp_img.save(f"screenshots/hp{visit_num:03d}.png")
     try:
         hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
-        log.info("HP text converted to number: {hp}")
+        log.info(f"HP text converted to number: {hp}")
     except (ValueError, TypeError):
         hp = 0
 
