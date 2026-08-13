@@ -474,8 +474,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info("CP text contains slash/backslash — assuming it is a 7")
 
     hp_img = getrelativeregion(base_img, ui["hp_region"])
+    hp_img.save(f"screenshots/hp{visit_num:03d}.png")
     try:
         hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
+        log.info("HP text converted to number: {hp}")
     except (ValueError, TypeError):
         hp = 0
 
