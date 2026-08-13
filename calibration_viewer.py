@@ -9,6 +9,8 @@ from PIL import Image, ImageTk, ImageDraw
 import json
 import logging
 import traceback
+import os
+from config import DEFAULT_CONFIG
 
 CONFIG_FILE = "calibration.json"
 LOG_FILE = "calibration_viewer.log"
@@ -121,12 +123,18 @@ TAG_FOREVER_FRIENDS = {
 
 def load_config():
     logger.debug("Loading config from %s", CONFIG_FILE)
-    with open(CONFIG_FILE) as f:
-        cfg = json.load(f)
+
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+    else:
+        logger.info("%s not found; creating calibration from defaults.", CONFIG_FILE)
+        # deep copy DEFAULT_CONFIG so later mutations don’t affect the original
+        cfg = json.loads(json.dumps(DEFAULT_CONFIG))
 
     ui = cfg.setdefault("ui", {})
     account = cfg.setdefault("account", {})
-    layouts = cfg.setdefault("tag_layouts", {})  # Added this line
+    layouts = cfg.setdefault("tag_layouts", {})
     logger.debug("Config loaded. UI keys: %s", sorted(ui.keys()))
 
     account.setdefault("forever_friends_enabled", False)

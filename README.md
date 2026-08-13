@@ -110,7 +110,7 @@ Open **iPhone Mirroring** and navigate to your Pokémon storage, then run:
 python calibrate.py
 ```
 
-`calibrate.py`:
+`deprecated/calibrate.py`:
 
 - Detects the iPhone Mirroring window (`get_mirror_window_bounds`).
 - Captures a reference screenshot and saves `calibration_screenshot.png`.

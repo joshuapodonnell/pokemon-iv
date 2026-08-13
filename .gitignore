@@ -4,6 +4,6 @@
 /calibration_screenshot.png
 /pokemon_ivs.db
 /screenshots/
-/deprecated_tests/test_ocr.py
-/deprecated_tests/test_evaluator.py
-/deprecated_tests/debug_crop.py
+/deprecated/test_ocr.py
+/deprecated/test_evaluator.py
+/deprecated/debug_crop.py
