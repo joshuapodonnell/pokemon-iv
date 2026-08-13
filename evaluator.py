@@ -281,17 +281,19 @@ def _is_immune(poke: dict) -> bool:
     return is_hundo or is_nundo or is_legendary or is_high_iv or is_high_level
 
 
+# --- Replacement for enforce_top_n in evaluator.py ---
+# Keeps a top-N roster PER LEAGUE (Great + Ultra), independently.
+# A Pokemon survives if it's in EITHER league's top-N list.
+# Only demoted if it's outside BOTH top-N lists.
+
 def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
     """
-    For every species with more than `top_n` non-immune KEEP-tagged rows,
-    demote everything beyond the top N (ranked by best of GL/UL rank) to
-    TRANSFER and mark demoted=1 so Micro Pass 2 picks it up.
+    For every species, compute the top-N non-immune KEEP-tagged rows
+    separately for Great League (gl_rank) and Ultra League (ul_rank).
+    A Pokemon is demoted only if it falls outside BOTH top-N lists.
 
     Immune rows (hundo, nundo, legendary/mythical, 3-star+, high level)
-    never count against the cap and are never touched.
-
-    Ranking key: min(gl_rank or 99999, ul_rank or 99999), then iv_pct DESC
-    as a tiebreaker — matches the ordering already used in get_best_in_db.
+    never count against either cap and are never touched.
     """
     species_rows = conn.execute("""
         SELECT DISTINCT name FROM pokemon WHERE tag = 'KEEP'
@@ -307,21 +309,24 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
         """, (name,)).fetchall()
         rows = [dict(r) for r in rows]
 
-        immune = [r for r in rows if _is_immune(r)]
-        contenders = [r for r in rows if not _is_immune(r)]
+        immune_ids = {r["id"] for r in rows if _is_immune(r)}
+        contenders = [r for r in rows if r["id"] not in immune_ids]
 
-        contenders.sort(
-            key=lambda r: (
-                min(r["gl_rank"] or 99999, r["ul_rank"] or 99999),
-                -(r["iv_pct"] or 0.0),
-            )
-        )
+        # Top-N by Great League rank (only rows with a real gl_rank)
+        gl_ranked = [r for r in contenders if r["gl_rank"] is not None]
+        gl_ranked.sort(key=lambda r: (r["gl_rank"], -(r["iv_pct"] or 0.0)))
+        gl_keep_ids = {r["id"] for r in gl_ranked[:top_n]}
 
-        overflow = contenders[top_n:]
-        if not overflow:
-            continue
+        # Top-N by Ultra League rank (only rows with a real ul_rank)
+        ul_ranked = [r for r in contenders if r["ul_rank"] is not None]
+        ul_ranked.sort(key=lambda r: (r["ul_rank"], -(r["iv_pct"] or 0.0)))
+        ul_keep_ids = {r["id"] for r in ul_ranked[:top_n]}
 
-        for poke in overflow:
+        safe_ids = gl_keep_ids | ul_keep_ids
+
+        for poke in contenders:
+            if poke["id"] in safe_ids:
+                continue  # in top-N for at least one league — keep it
             conn.execute("""
                 UPDATE pokemon
                 SET tag = 'TRANSFER',
@@ -329,8 +334,9 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
                     needs_review = 1,
                     review_reason = ?
                 WHERE id = ?
-            """, (f"exceeds_top_{top_n}_for_species", poke["id"]))
+            """, (f"outside_top_{top_n}_both_leagues", poke["id"]))
             demoted_all.append(poke)
 
     conn.commit()
     return demoted_all
+
