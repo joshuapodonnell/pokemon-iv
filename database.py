@@ -84,7 +84,7 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    # Migration: add needs_review to any existing DB created before it was in the schema
+    # Migration: add columns to any existing DB created before they were in the schema
     existing = {row[1] for row in conn.execute("PRAGMA table_info(pokemon)")}
     if "needs_review" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN needs_review INTEGER DEFAULT 0")
@@ -96,7 +96,11 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute("ALTER TABLE pokemon ADD COLUMN review_reason TEXT")
     if "demoted" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN demoted INTEGER DEFAULT 0")
-    conn.commit()
+    # NEW — required by evaluator.py's _is_immune() and enforce_top_n()
+    if "is_shiny" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN is_shiny INTEGER DEFAULT 0")
+    if "form_status" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN form_status TEXT DEFAULT 'normal'")
     conn.commit()
     return conn
 
@@ -206,7 +210,7 @@ def insert_evo_rankings(conn: sqlite3.Connection, pokemon_id: int, evo_rankings:
             ul.get("best_level"),   ul.get("best_cp"),
         ))
     conn.commit()
-    
+
 def get_evo_rankings(conn, pokemon_id: int) -> dict:
     """Reconstruct evo_rankings dict from DB for a given pokemon_id."""
     rows = conn.execute("""

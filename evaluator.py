@@ -39,6 +39,40 @@ KEEP_SPECIES = frozenset({
 })
 
 
+def _is_immune(poke: dict) -> bool:
+    """
+    Shared immunity check — a Pokemon matching any of these is NEVER
+    marked for TRANSFER, regardless of rank. Used by both evaluate_catch's
+    live demotion loop and the batch enforce_top_n() cleanup.
+
+    NOTE: is_shiny is included here. This is the ONLY place shiny
+    immunity is enforced — it doesn't change KEEP/TRANSFER logic for a
+    brand-new catch (is_shiny defaults to 0 until your search-based sync
+    pass runs and updates it), but it protects an already-flagged-shiny
+    row from ever being evicted once that flag is set.
+    """
+    iv_pct = poke.get("iv_pct") or 0.0
+    is_hundo = iv_pct == 100.0
+    is_nundo = (
+        poke.get("iv_atk") == 0
+        and poke.get("iv_def") == 0
+        and poke.get("iv_sta") == 0
+    )
+    is_legendary = any(poke["name"].startswith(s) for s in KEEP_SPECIES)
+    is_high_iv = iv_pct >= KEEP_RULES["iv_pct_min"]
+    min_lvl = KEEP_RULES.get("min_keep_level")
+    is_high_level = (
+        min_lvl is not None
+        and poke.get("level") is not None
+        and poke["level"] >= min_lvl
+    )
+    is_shiny = bool(poke.get("is_shiny"))
+    return (
+        is_hundo or is_nundo or is_legendary
+        or is_high_iv or is_high_level or is_shiny
+    )
+
+
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                    pvp: dict, evo_rankings: dict, level: float = None,
                    current_id: int = None) -> dict:
@@ -123,34 +157,22 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             reasons.append(f"OCR uncertain — needs manual check (CP < {KEEP_RULES['min_trusted_cp']} or unknown name)")
 
     # ────────────────────────────────────────────────────────────────────────────────
-    # NEW DEMOTION LOGIC — Mark previously kept Pokémon for review if beaten
+    # DEMOTION LOGIC — Mark previously kept Pokémon for review if beaten
     # ────────────────────────────────────────────────────────────────────────────────
     if action == "KEEP" and beats_existing and existing_top:
         for old_poke in existing_top:
             # We only care about demoting things we were previously planning to KEEP
-            # Note: We rely on the database column returning the old tag. If get_best_in_db
-            # doesn't explicitly SELECT 'tag', you may need to add it to the SELECT statement!
             if old_poke.get('tag', 'KEEP') != 'KEEP':
                 continue
 
-            # 1. Immunity check: Do not demote Hundos, Nundos, Legendaries, High Level, or High IVs
-            old_iv_pct = old_poke.get("iv_pct") or 0.0
-            old_is_hundo = (old_iv_pct == 100.0)
-            old_is_nundo = (old_poke.get("iv_atk") == 0 and old_poke.get("iv_def") == 0 and old_poke.get("iv_sta") == 0)
-
-            is_legendary = any(old_poke["name"].startswith(s) for s in KEEP_SPECIES)
-            is_high_iv = (old_iv_pct >= KEEP_RULES["iv_pct_min"])
-
-            # Since level might not be explicitly stored, we do a safe check
-            is_high_level = False
-            min_lvl = KEEP_RULES.get("min_keep_level")
-            if min_lvl and old_poke.get("level") is not None and old_poke["level"] >= min_lvl:
-                is_high_level = True
-
-            if old_is_hundo or old_is_nundo or is_legendary or is_high_iv or is_high_level:
+            # Immunity check — CHANGED: now uses the shared _is_immune() helper,
+            # which includes is_shiny in addition to the original hundo/nundo/
+            # legendary/high-IV/high-level checks. Previously a shiny old_poke
+            # had no protection here.
+            if _is_immune(old_poke):
                 continue  # IMMUNE! Do not demote.
 
-            # 2. Check if the new catch strictly beats this specific old one
+            # Check if the new catch strictly beats this specific old one
             demote_reasons = []
 
             old_gl = old_poke.get("gl_rank")
@@ -161,14 +183,13 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             if new_ul and old_ul and new_ul < old_ul:
                 demote_reasons.append(f"UL #{new_ul} beats old #{old_ul}")
 
-            # 3. Ensure we don't demote an old one if it is STILL our best in a different league!
+            # Ensure we don't demote an old one if it is STILL our best in a different league!
             is_still_best_ul = (old_ul is not None and (new_ul is None or old_ul < new_ul))
             is_still_best_gl = (old_gl is not None and (new_gl is None or old_gl < new_gl))
 
             if demote_reasons and not (is_still_best_gl or is_still_best_ul):
                 reason_str = "demoted_by_better"
 
-                # Flag the old Pokémon for review in the DB
                 conn.execute("""
                        UPDATE pokemon 
                        SET needs_review = 1, 
@@ -192,9 +213,11 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
     params_gl = (name, exclude_id, limit) if exclude_id is not None else (name, limit)
     params_ul = (name, exclude_id) if exclude_id is not None else (name,)
 
-    # ADDED: `tag` and `level` to the SELECT columns
+    # CHANGED: added `is_shiny` to the SELECT columns (both queries below),
+    # alongside the previously-added `tag` and `level`. Without this,
+    # _is_immune() can never see whether an old_poke is shiny.
     gl_rows = conn.execute(f"""
-        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
+        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
                gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
         FROM pokemon
         WHERE name = ? {exclude_clause}
@@ -204,9 +227,8 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
         LIMIT ?
     """, params_gl).fetchall()
 
-    # ADDED: `tag` and `level` to the SELECT columns here too
     ul_best = conn.execute(f"""
-        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
+        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
                gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
         FROM pokemon
         WHERE name = ? {exclude_clause}
@@ -223,29 +245,75 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
     return combined
 
 
-def find_displaced(conn, limit: int = 5) -> list[dict]:
-    rows = conn.execute(f"""
-        SELECT * FROM pokemon p
-        WHERE (
-            SELECT COUNT(*) FROM pokemon p2
-            WHERE p2.name = p.name
-            AND COALESCE(p2.gl_rank, 99999) < COALESCE(p.gl_rank, 99999)
-        ) >= {limit}
-        AND p.needs_review = 0
+def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
+    """
+    REWRITTEN — one-way immunity model.
+
+    Ranks ALL KEEP-tagged rows for a species together (immune rows included),
+    so a good shiny/hundo/legendary still occupies a rank position and can
+    push a weaker non-immune mon out of the top N. But eviction only ever
+    applies to non-immune rows — an immune row is never the one transferred,
+    even if it falls outside the top N itself.
+
+    This replaces the previous version, which excluded immune rows from the
+    ranking pool entirely — that meant a shiny could never displace anyone.
+
+    Shadow partitioning (optional — requires the form_status column from
+    database.py below): shadows get their own top-N pool per species,
+    separate from non-shadow catches, since their true PvP stat product
+    differs. If you haven't added form_status yet, this still works fine —
+    every row will just have form_status='normal' and group together as
+    one pool per species, same as before.
+    """
+    groups = conn.execute("""
+        SELECT DISTINCT name, (form_status = 'shadow') AS is_shadow
+        FROM pokemon WHERE tag = 'KEEP'
     """).fetchall()
-    return [dict(r) for r in rows]
 
+    demoted_all = []
+    for g in groups:
+        name, is_shadow = g["name"], g["is_shadow"]
+        rows = conn.execute("""
+            SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
+                   gl_rank, ul_rank, is_shiny, form_status
+            FROM pokemon
+            WHERE name = ? AND tag = 'KEEP'
+              AND (form_status = 'shadow') = ?
+        """, (name, is_shadow)).fetchall()
+        rows = [dict(r) for r in rows]
 
-def flag_displaced(conn, limit: int = 5):
-    displaced = find_displaced(conn, limit)
-    ids = [r["id"] for r in displaced]
-    if ids:
-        conn.execute(
-            f"UPDATE pokemon SET needs_review = 1 WHERE id IN ({','.join('?'*len(ids))})",
-            ids
+        # Rank EVERYONE together — immune rows included — so they occupy
+        # real slots and can push non-immune rows out of the top N.
+        gl_full = sorted(
+            (r for r in rows if r["gl_rank"] is not None),
+            key=lambda r: (r["gl_rank"], -(r["iv_pct"] or 0.0)),
         )
-        conn.commit()
-    return displaced
+        ul_full = sorted(
+            (r for r in rows if r["ul_rank"] is not None),
+            key=lambda r: (r["ul_rank"], -(r["iv_pct"] or 0.0)),
+        )
+        safe_by_rank = (
+            {r["id"] for r in gl_full[:top_n]} | {r["id"] for r in ul_full[:top_n]}
+        )
+
+        for poke in rows:
+            if _is_immune(poke):
+                continue  # NEVER evict immune rows, no matter their rank
+            if poke["id"] in safe_by_rank:
+                continue  # ranked well enough to stay
+            kind = "shadow" if is_shadow else "non-shadow"
+            conn.execute("""
+                UPDATE pokemon
+                SET tag = 'TRANSFER',
+                    demoted = 1,
+                    needs_review = 1,
+                    review_reason = ?
+                WHERE id = ?
+            """, (f"outside_top_{top_n}_{kind}_both_leagues", poke["id"]))
+            demoted_all.append(poke)
+
+    conn.commit()
+    return demoted_all
 
 
 def get_species_summary(conn, name: str) -> dict:
@@ -258,85 +326,3 @@ def get_species_summary(conn, name: str) -> dict:
         WHERE name = ?
     """, (name,)).fetchone()
     return dict(row) if row else {}
-
-# Replaces reliance on find_displaced/flag_displaced for top-N enforcement.
-
-def _is_immune(poke: dict) -> bool:
-    """Same immunity rules used in evaluate_catch's per-catch demotion."""
-    iv_pct = poke.get("iv_pct") or 0.0
-    is_hundo = iv_pct == 100.0
-    is_nundo = (
-        poke.get("iv_atk") == 0
-        and poke.get("iv_def") == 0
-        and poke.get("iv_sta") == 0
-    )
-    is_legendary = any(poke["name"].startswith(s) for s in KEEP_SPECIES)
-    is_high_iv = iv_pct >= KEEP_RULES["iv_pct_min"]
-    min_lvl = KEEP_RULES.get("min_keep_level")
-    is_high_level = (
-        min_lvl is not None
-        and poke.get("level") is not None
-        and poke["level"] >= min_lvl
-    )
-    return is_hundo or is_nundo or is_legendary or is_high_iv or is_high_level
-
-
-# --- Replacement for enforce_top_n in evaluator.py ---
-# Keeps a top-N roster PER LEAGUE (Great + Ultra), independently.
-# A Pokemon survives if it's in EITHER league's top-N list.
-# Only demoted if it's outside BOTH top-N lists.
-
-def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
-    """
-    For every species, compute the top-N non-immune KEEP-tagged rows
-    separately for Great League (gl_rank) and Ultra League (ul_rank).
-    A Pokemon is demoted only if it falls outside BOTH top-N lists.
-
-    Immune rows (hundo, nundo, legendary/mythical, 3-star+, high level)
-    never count against either cap and are never touched.
-    """
-    species_rows = conn.execute("""
-        SELECT DISTINCT name FROM pokemon WHERE tag = 'KEEP'
-    """).fetchall()
-
-    demoted_all = []
-    for (name,) in [(r["name"],) for r in species_rows]:
-        rows = conn.execute("""
-            SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
-                   gl_rank, ul_rank
-            FROM pokemon
-            WHERE name = ? AND tag = 'KEEP'
-        """, (name,)).fetchall()
-        rows = [dict(r) for r in rows]
-
-        immune_ids = {r["id"] for r in rows if _is_immune(r)}
-        contenders = [r for r in rows if r["id"] not in immune_ids]
-
-        # Top-N by Great League rank (only rows with a real gl_rank)
-        gl_ranked = [r for r in contenders if r["gl_rank"] is not None]
-        gl_ranked.sort(key=lambda r: (r["gl_rank"], -(r["iv_pct"] or 0.0)))
-        gl_keep_ids = {r["id"] for r in gl_ranked[:top_n]}
-
-        # Top-N by Ultra League rank (only rows with a real ul_rank)
-        ul_ranked = [r for r in contenders if r["ul_rank"] is not None]
-        ul_ranked.sort(key=lambda r: (r["ul_rank"], -(r["iv_pct"] or 0.0)))
-        ul_keep_ids = {r["id"] for r in ul_ranked[:top_n]}
-
-        safe_ids = gl_keep_ids | ul_keep_ids
-
-        for poke in contenders:
-            if poke["id"] in safe_ids:
-                continue  # in top-N for at least one league — keep it
-            conn.execute("""
-                UPDATE pokemon
-                SET tag = 'TRANSFER',
-                    demoted = 1,
-                    needs_review = 1,
-                    review_reason = ?
-                WHERE id = ?
-            """, (f"outside_top_{top_n}_both_leagues", poke["id"]))
-            demoted_all.append(poke)
-
-    conn.commit()
-    return demoted_all
-
