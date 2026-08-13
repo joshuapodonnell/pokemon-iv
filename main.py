@@ -942,7 +942,28 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
 
-
+def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
+    """
+    Polls the CP region until two consecutive reads return the same
+    (non-empty) text, or timeout is hit. Prevents OCR-ing a detail screen
+    that's still mid-transition (sprite loading, intro animation, etc.) —
+    specifically needed for the FIRST Pokemon opened from the list view,
+    since that transition is heavier than swiping between two already-
+    open detail screens.
+    """
+    prev_cp_text = None
+    deadline = time.time() + timeout
+    last_img = None
+    while time.time() < deadline:
+        img = capture_window(cfg["mirror_region"])
+        last_img = img
+        cp_img = getrelativeregion(img, ui["cp_region"])
+        cp_text = ocrregion(cp_img).strip()
+        if cp_text and cp_text == prev_cp_text:
+            return img
+        prev_cp_text = cp_text
+        time.sleep(poll)
+    return last_img
 
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
@@ -967,6 +988,13 @@ def pass1_catalog(args, cfg, conn,
         slot = ui["pokemon_slots"][-1] if args.mode == "newcatch" else ui["pokemon_slots"][0]
         log.info(f"Tapping {'last' if args.mode == 'newcatch' else 'first'} slot")
         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
+
+        # NEW — explicit settle-wait for the FIRST detail screen only.
+        # This is the transition from list-view to detail-view, which is
+        # heavier (asset loading, intro animation) than the swipe-based
+        # transitions used for every subsequent Pokemon in the loop.
+        log.info("Waiting for first Pokémon's detail screen to stabilize...")
+        _wait_for_cp_screen_stable(capture_window, ui, cfg)
 
     reload_calibration(cfg)
     ui = cfg["ui"]
