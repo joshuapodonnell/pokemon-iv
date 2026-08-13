@@ -1063,6 +1063,16 @@ def report_displaced(conn):
         log.info("No Pokémon displaced this session.")
     return displaced
 
+# =============================================================================
+# main.py — micro_pass2_cleanup(), safe-failure version.
+#
+# Since Pokemon GO tags are ADDITIVE (a Pokemon can hold many tags at once,
+# not a single exclusive state), skipping the deselect step doesn't just
+# apply the "wrong" tag — it STACKS the new tag on top of the old one,
+# permanently, with no record that this happened. If we can't safely
+# deselect the old tag, we must not apply the new one either.
+# =============================================================================
+
 def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
@@ -1087,16 +1097,54 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
             log.info("Clean stop requested — ending Pass 2.")
             break
 
+        old_tag = p["pending_old_tag"]
+        new_tag = p["tag"]
+
+        old_key = tag_key_map.get(old_tag) if old_tag else None
+        new_key = tag_key_map.get(new_tag)
+
+        # CHANGED: hard requirement checks BEFORE any taps happen.
+        # If we have an old tag but can't deselect it, or don't know the
+        # new tag at all, SKIP this Pokemon entirely rather than risk
+        # stacking tags. Flag it for manual review instead.
+        if old_tag and (old_key is None or old_key not in tag_layout):
+            log.error(
+                f"Cannot safely re-tag {p['name']} CP{p['cp']}: old tag "
+                f"'{old_tag}' is not calibrated for layout '{args.tag_layout}'. "
+                f"Skipping to avoid stacking tags — flagging for manual review."
+            )
+            conn.execute("""
+                UPDATE pokemon
+                SET needs_review = 1,
+                    review_reason = 'retag_skipped_old_tag_uncalibrated'
+                WHERE id = ?
+            """, (p["id"],))
+            conn.commit()
+            continue
+
+        if new_key is None or new_key not in tag_layout:
+            log.error(
+                f"Cannot safely re-tag {p['name']} CP{p['cp']}: new tag "
+                f"'{new_tag}' is not calibrated for layout '{args.tag_layout}'. "
+                f"Skipping — flagging for manual review."
+            )
+            conn.execute("""
+                UPDATE pokemon
+                SET needs_review = 1,
+                    review_reason = 'retag_skipped_new_tag_uncalibrated'
+                WHERE id = ?
+            """, (p["id"],))
+            conn.commit()
+            continue
+
         img = capture_window(cfg["mirror_region"])
         if freeze.update(img):
             recovered = _handle_freeze(tap, cfg, capture_window, freeze)
             if not recovered:
                 log.error("[FREEZE] Could not recover in micro Pass 2 — stopping.")
                 break
-            continue
+            continue  # retry this Pokemon after recovery, taps haven't started yet
 
-        old_tag = p["pending_old_tag"]
-        new_tag = p["tag"]
         log.info(f"Re-tagging {p['name']} CP {p['cp']}, HP {p['hp']}: "
                  f"{old_tag or '(none)'} → {new_tag}...")
 
@@ -1113,24 +1161,14 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         tap.tap(tag_layout["tag_option_btn"]["x"], tag_layout["tag_option_btn"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
 
-        # CHANGED: deselect the OLD tag first (if there was one and it's
-        # calibrated), then select the NEW tag. This matches the toggle
-        # behavior of the in-game tag menu — tapping a tag that's already
-        # selected turns it off, so we must deselect before selecting a
-        # different one.
-        old_key = tag_key_map.get(old_tag)
-        if old_key and old_key in tag_layout:
+        # Deselect old tag first (only reached if old_key was verified
+        # calibrated above, or there was no old tag to deselect).
+        if old_key:
             tap.tap(tag_layout[old_key]["x"], tag_layout[old_key]["y"])
             time.sleep(cfg["timing"].get("after_tap", 0.5))
-        elif old_tag:
-            log.warning(f"Old tag '{old_tag}' not calibrated — cannot deselect, "
-                        f"proceeding to select new tag anyway.")
 
-        new_key = tag_key_map.get(new_tag)
-        if new_key and new_key in tag_layout:
-            tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
-        else:
-            log.warning(f"New tag '{new_tag}' not calibrated — skipping tap.")
+        # Select new tag (verified calibrated above).
+        tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
 
         tap.tap(0.5, 0.2, base_delay=cfg["timing"].get("after_tap"))
         tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
@@ -1145,6 +1183,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         conn.commit()
 
     log.info("Micro Pass 2 complete.")
+
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -1196,7 +1235,7 @@ def run_bot(args):
                 log.warning(f"{len(demoted)} Pokémon demoted after flag sync")
 
             if tags_are_calibrated(tag_layout):
-                micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
+                micro_pass2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         except Exception as e:
             log.error(f"Sync-flags mode failed: {e}")
             traceback.print_exc()
@@ -1237,7 +1276,7 @@ def run_bot(args):
         vision_agent.reset_remote_status()
 
         if not args.dry_run and tags_are_calibrated(tag_layout):
-            micro_pass_2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
+            micro_pass2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
         else:
