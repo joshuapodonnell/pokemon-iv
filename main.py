@@ -23,7 +23,7 @@ from ocr_parser import (
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
-from evaluator import evaluate_catch, find_displaced, flag_displaced, get_best_in_db
+from evaluator import evaluate_catch, get_best_in_db, enforce_top_n, promote_newly_immune
 from tagger import apply_ingame_tag, tags_are_calibrated
 
 logging.basicConfig(
@@ -1048,20 +1048,20 @@ def pass1_catalog(args, cfg, conn,
 
 # ── Displacement check ────────────────────────────────────────────────────────
 
-def report_displaced(conn):
-    displaced = flag_displaced(conn)
-    if displaced:
-        log.warning(f"\n⚠️  {len(displaced)} Pokémon displaced this session:")
-        for p in displaced:
-            search = f"{p['name'].lower()}&cp{p['cp']}"
-            log.warning(
-                f"  DISPLACED  {search:<28}  "
-                f"{p['iv_atk']}/{p['iv_def']}/{p['iv_sta']}  "
-                f"GL #{p['gl_rank']}  UL #{p['ul_rank']}"
-            )
-    else:
-        log.info("No Pokémon displaced this session.")
-    return displaced
+# def report_displaced(conn):
+#     displaced = flag_displaced(conn)
+#     if displaced:
+#         log.warning(f"\n⚠️  {len(displaced)} Pokémon displaced this session:")
+#         for p in displaced:
+#             search = f"{p['name'].lower()}&cp{p['cp']}"
+#             log.warning(
+#                 f"  DISPLACED  {search:<28}  "
+#                 f"{p['iv_atk']}/{p['iv_def']}/{p['iv_sta']}  "
+#                 f"GL #{p['gl_rank']}  UL #{p['ul_rank']}"
+#             )
+#     else:
+#         log.info("No Pokémon displaced this session.")
+#     return displaced
 
 # =============================================================================
 # main.py — micro_pass2_cleanup(), safe-failure version.

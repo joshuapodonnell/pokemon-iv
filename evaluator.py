@@ -77,15 +77,13 @@ def promote_newly_immune(conn) -> list[dict]:
         SELECT id, name, cp, hp, level, tag, iv_atk, iv_def, iv_sta, iv_pct,
                is_shiny, form_status
         FROM pokemon
-        WHERE tag != 'KEEP'
+        WHERE tag IS NULL OR tag != 'KEEP'
     """).fetchall()
 
     promoted = []
     for row in candidates:
         poke = dict(row)
         if _is_immune(poke):
-            # CHANGED: capture whatever the CURRENT tag is (TRANSFER,
-            # REVIEW, or NULL) into pending_old_tag before flipping to KEEP.
             conn.execute("""
                 UPDATE pokemon
                 SET pending_old_tag = tag,
@@ -98,6 +96,7 @@ def promote_newly_immune(conn) -> list[dict]:
 
     conn.commit()
     return promoted
+
 
 def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
                    pvp: dict, evo_rankings: dict, level: float = None,
