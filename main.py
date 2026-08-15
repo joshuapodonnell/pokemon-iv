@@ -721,6 +721,21 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     iv_data["pvp"] = pvp
 
     if existing_id is None:
+        is_dup = find_duplicate(
+            conn, name, cp, atk_iv, def_iv, sta_iv, caught_date
+        )
+        if is_dup:
+            log.warning(
+                f"[DUPLICATE] {name} CP{cp} caught {caught_date!r} already "
+                f"exists in DB — skipping insert to avoid double-counting."
+            )
+            return None, {
+                "action": "SKIPPED_DUPLICATE",
+                "reasons": [f"Duplicate of existing catch: {name} CP{cp} {caught_date}"],
+                "beats_existing": False,
+                "existing_best": None,
+                "existing_top": [],
+            }
         poke_id = insert_pokemon(conn, iv_data)
     else:
         poke_id = existing_id

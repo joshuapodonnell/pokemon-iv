@@ -50,6 +50,11 @@ HANDLES = [
     ("Appraise Btn",   "#FFFF00", "ui.appraise_button",      "point"),
     ("Back Button",    "#FF6600", "ui.back_button",          "point"),
     ("Clear Search",   "#FF6600", "ui.clear_search",         "point"),
+    # NEW — required by main.py's micro_pass2_cleanup() and sync_special_flags(),
+    # which look up ui["search_icon"] and ui["first_search_result"] but had no
+    # calibrated coordinates and no way to set them from this viewer.
+    ("Search Icon",     "#00CCFF", "ui.search_icon",          "point"),
+    ("First Result",    "#CCFF00", "ui.first_search_result",  "point"),
     ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",      "point_slot"),
     ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",      "point_slot"),
     ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",      "point_slot"),
@@ -100,6 +105,14 @@ REGION_DEFAULTS = {
     "type_region":   {"x1": 0.10, "y1": 0.28, "x2": 0.90, "y2": 0.36},
     "weight_region": {"x1": 0.10, "y1": 0.38, "x2": 0.55, "y2": 0.46},
     "height_region": {"x1": 0.55, "y1": 0.38, "x2": 0.90, "y2": 0.46},
+}
+
+# NEW — default placeholder positions for search_icon / first_search_result.
+# These are rough guesses (search icon top-right, first result roughly where
+# pokemon_slots[0] sits) — drag them to the correct spot in-app, then Save.
+POINT_DEFAULTS = {
+    "search_icon":         {"x": 0.90, "y": 0.06},
+    "first_search_result": {"x": 0.20, "y": 0.31},
 }
 
 TAG_DEFAULTS = {
@@ -163,6 +176,13 @@ def load_config():
     for key, default in REGION_DEFAULTS.items():
         if key not in ui:
             ui[key] = default
+
+    # NEW — ensure search_icon / first_search_result exist so the viewer has
+    # something to draw/drag on first launch, and so main.py's ui[...] lookups
+    # never KeyError even before you've manually calibrated them.
+    for key, default in POINT_DEFAULTS.items():
+        if key not in ui:
+            ui[key] = dict(default)
 
     # --- NEW TAG LAYOUT LOGIC ---
     # Ensure default and ff layouts exist
@@ -232,6 +252,9 @@ class CalibrationApp:
                 ("#FFFF00", "Appraise button"),
                 ("#FF6600", "Back button"),
                 ("#FF6600", "Clear Search"),
+                # NEW
+                ("#00CCFF", "Search icon"),
+                ("#CCFF00", "First search result"),
             ],
             "Slots": [
                 ("#00FF88", "Pokémon slots"),
@@ -642,6 +665,9 @@ class CalibrationApp:
                 ("appraise_button", "#FFFF00", "Appraise"),
                 ("back_button",     "#FF6600", "Back"),
                 ("clear_search",    "#FF6600", "Clear"),
+                # NEW
+                ("search_icon",          "#00CCFF", "Search"),
+                ("first_search_result",  "#CCFF00", "1st Result"),
             ]:
                 p = ui.get(cfg_key, {})
                 dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
@@ -694,7 +720,10 @@ class CalibrationApp:
                         candidates.append((dist, f"rect_{corner}_{cfg_key}", xk, yk, cfg_key, "rect_corner"))
 
         if cat in ("Buttons", "Legend"):
-            for cfg_key in ("menu_button", "appraise_button", "back_button", "clear_search"):
+            # NEW: added "search_icon" and "first_search_result" so they're
+            # draggable/nudgeable the same way every other button already is.
+            for cfg_key in ("menu_button", "appraise_button", "back_button",
+                             "clear_search", "search_icon", "first_search_result"):
                 p = ui.get(cfg_key, {})
                 hx, hy = p.get("x", 0.5) * self.img_w * s, p.get("y", 0.5) * self.img_h * s
                 dist = abs(cx - hx) + abs(cy - hy)
