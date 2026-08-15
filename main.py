@@ -1013,6 +1013,8 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
 
         tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
+        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap", 1.0))
         tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
 
