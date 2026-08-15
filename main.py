@@ -935,19 +935,52 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             visited += 1
 
             if name and name != "Unknown" and cp:
+                log.info(f"[{keyword}] Read entry: name={name!r} cp={cp} caught_date={caught_date!r}")
+
                 row = None
                 if caught_date:
                     row = conn.execute(f"""
-                        SELECT id FROM pokemon
-                        WHERE name = ? AND cp = ? AND caught_date = ? AND {column} != ?
-                        LIMIT 1
-                    """, (name, cp, caught_date, value)).fetchone()
+                                SELECT id, {column} FROM pokemon
+                                WHERE name = ? AND cp = ? AND caught_date = ? AND {column} != ?
+                                LIMIT 1
+                            """, (name, cp, caught_date, value)).fetchone()
+                    if row:
+                        log.debug(
+                            f"[{keyword}] Matched via (name, cp, caught_date): "
+                            f"id={row['id']} current {column}={row[column]!r}"
+                        )
+                    else:
+                        log.debug(
+                            f"[{keyword}] No exact (name, cp, caught_date) match for "
+                            f"name={name!r} cp={cp} date={caught_date!r} — trying (name, cp) fallback"
+                        )
+                else:
+                    log.debug(f"[{keyword}] caught_date OCR was empty — going straight to (name, cp) fallback")
+
                 if not row:
                     candidates = conn.execute("""
-                        SELECT id FROM pokemon WHERE name = ? AND cp = ?
-                    """, (name, cp)).fetchall()
+                                SELECT id, cp, caught_date FROM pokemon WHERE name = ? AND cp = ?
+                            """, (name, cp)).fetchall()
+
                     if len(candidates) == 1:
                         row = candidates[0]
+                        log.debug(
+                            f"[{keyword}] Matched via unique (name, cp) fallback: "
+                            f"id={row['id']} (only candidate for {name!r} CP{cp})"
+                        )
+                    elif len(candidates) > 1:
+                        log.warning(
+                            f"[{keyword}] Ambiguous match for {name!r} CP{cp}: "
+                            f"{len(candidates)} candidates found "
+                            f"(caught_dates={[c['caught_date'] for c in candidates]}) — "
+                            f"skipping rather than risk flagging the wrong row"
+                        )
+                    else:
+                        log.warning(
+                            f"[{keyword}] Zero DB matches at all for {name!r} CP{cp} "
+                            f"date={caught_date!r} — this Pokemon may not be in the "
+                            f"database yet, or name/cp OCR is wrong"
+                        )
 
                 if row:
                     conn.execute(
@@ -955,14 +988,19 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                         (value, row["id"])
                     )
                     matched += 1
+                    log.info(f"[{keyword}] FLAGGED id={row['id']} ({name} CP{cp}) → {column}={value!r}")
                 else:
                     skipped_no_match += 1
                     log.debug(
-                        f"No unique DB match for {name} CP{cp} date={caught_date} "
-                        f"({keyword}) — skipped"
+                        f"[{keyword}] No unique DB match for {name} CP{cp} date={caught_date} "
+                        f"— skipped"
                     )
             else:
                 skipped_no_match += 1
+                log.warning(
+                    f"[{keyword}] Skipping entry — OCR gave unusable data: "
+                    f"name={name!r} cp={cp!r} caught_date={caught_date!r}"
+                )
 
             tap_next_arrow(tap, ui, cfg)
             time.sleep(cfg["timing"].get("after_swipe", 0.8))
