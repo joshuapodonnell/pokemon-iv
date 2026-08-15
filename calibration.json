@@ -35,8 +35,8 @@
       "y": 0.93
     },
     "clear_search": {
-      "x": 0.126,
-      "y": 0.198
+      "x": 0.898,
+      "y": 0.197
     },
     "appraisal_next": {
       "x": 0.5,
@@ -134,7 +134,15 @@
     "sta_bar_y_4lines": 0.8,
     "atk_bar_y_5lines": 0.694,
     "def_bar_y_5lines": 0.733,
-    "sta_bar_y_5lines": 0.773
+    "sta_bar_y_5lines": 0.773,
+    "search_icon": {
+      "x": 0.49,
+      "y": 0.199
+    },
+    "first_search_result": {
+      "x": 0.207,
+      "y": 0.325
+    }
   },
   "bar_fill_brightness": 160,
   "bar_segments": 15,

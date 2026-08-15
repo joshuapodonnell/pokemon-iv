@@ -334,3 +334,51 @@ def get_species_summary(conn, name: str) -> dict:
         WHERE name = ?
     """, (name,)).fetchone()
     return dict(row) if row else {}
+def recompute_shadow_rankings(conn) -> int:
+    """
+    Run after sync_special_flags() sets form_status='shadow' on any rows.
+    Those rows were originally ranked at catch time using UN-shadow-adjusted
+    stats (since form_status was 'normal' then) — this recomputes gl_rank/
+    ul_rank/etc. using the shadow-adjusted stat product instead.
+
+    Requires all_league_rankings_with_evos() and rank_ivs_for_league() in
+    pvp_rankings.py to accept an is_shadow parameter. See the companion
+    pvp_rankings.py patch — without it, this will raise a TypeError.
+    """
+    from pvp_rankings import all_league_rankings_with_evos
+    from database import insert_evo_rankings
+
+    rows = conn.execute("""
+        SELECT id, name, iv_atk, iv_def, iv_sta
+        FROM pokemon WHERE form_status = 'shadow'
+    """).fetchall()
+
+    for r in rows:
+        rankings = all_league_rankings_with_evos(
+            r["name"], r["iv_atk"], r["iv_def"], r["iv_sta"], is_shadow=True
+        )
+        base = rankings.get(r["name"], {})
+        gl = base.get("great", {})
+        ul = base.get("ultra", {})
+
+        conn.execute("""
+            UPDATE pokemon SET
+                gl_rank = ?, gl_percentile = ?, gl_sp = ?, gl_sp_pct = ?,
+                gl_best_level = ?, gl_best_cp = ?,
+                ul_rank = ?, ul_percentile = ?, ul_sp = ?, ul_sp_pct = ?,
+                ul_best_level = ?, ul_best_cp = ?
+            WHERE id = ?
+        """, (
+            gl.get("rank"), gl.get("percentile"), gl.get("stat_product"),
+            gl.get("sp_pct_of_max"), gl.get("best_level"), gl.get("best_cp"),
+            ul.get("rank"), ul.get("percentile"), ul.get("stat_product"),
+            ul.get("sp_pct_of_max"), ul.get("best_level"), ul.get("best_cp"),
+            r["id"],
+        ))
+
+        evo_rankings = {s: l for s, l in rankings.items() if s != r["name"]}
+        if evo_rankings:
+            insert_evo_rankings(conn, r["id"], evo_rankings)
+
+    conn.commit()
+    return len(rows)

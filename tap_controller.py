@@ -6,7 +6,7 @@ import random
 import math
 import numpy as np
 import pyautogui
-
+import subprocess
 pyautogui.FAILSAFE = True   # move mouse to top-left corner to abort
 
 # ── Humanization helpers ──────────────────────────────────────────────────────
@@ -22,6 +22,14 @@ def _human_delay(base: float, sigma: float = 0.3,
     delay = base * factor
     time.sleep(delay)
     return delay
+def _activate_mirroring_window():
+    """Bring iPhone Mirroring to the front so keyboard input actually
+    reaches it, rather than whatever window happens to have focus."""
+    script = 'tell application "Mirroring" to activate'
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=3)
+    except Exception:
+        pass  # best-effort; if this fails, type_text still attempts to type
 
 def _bezier_path(x0, y0, x1, y1, steps=20):
     """Generate a slightly curved (bezier) path between two points."""
@@ -163,3 +171,17 @@ class TapController:
         dur = random.uniform(0.25, 0.45)
         pyautogui.dragTo(end_x, end_y, duration=dur, button="left")
         _human_delay(self.timing.get("after_swipe", 0.8), self.rand.get("timing_sigma", 0.1))
+
+    def type_text(self, text: str, interval: float = 0.03) -> None:
+        """
+        Types `text` via the Mac's keyboard, which iPhone Mirroring passes
+        through to whichever text field is currently focused on the phone.
+
+        Explicitly activates the Mirroring window first, so a stray focus
+        change (e.g. clicking your terminal to watch logs) can't cause
+        keystrokes to silently land in the wrong application.
+        """
+        _activate_mirroring_window()
+        time.sleep(0.3)  # give the window manager a moment to actually switch focus
+        pyautogui.write(text, interval=interval)
+        _human_delay(self.timing.get("after_tap", 0.3), self.rand.get("timing_sigma", 0.1))
