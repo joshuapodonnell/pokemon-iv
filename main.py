@@ -890,6 +890,14 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         last_entry = None
         visited = 0
 
+        # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
+        tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=random.uniform(0.1, 0.2))
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=random.uniform(0.2, 0.3))
+
         while True:
             if pause.wait_if_paused():
                 pass
@@ -906,23 +914,18 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                     break
                 continue
 
-            # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
-            tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-                    base_delay=cfg["timing"].get("after_tap"))
-            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                    base_delay=random.uniform(0.1, 0.2))
-            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                    base_delay=random.uniform(0.2, 0.3))
+
             appraisal_img = capture_window(cfg["mirror_region"])
 
             entry = read_list_entry(base_img, appraisal_img, ui)
             name, cp, caught_date = entry
+            log.info(f"{keyword} sync: read entry {visited+1}: {name} CP{cp} caught {caught_date}\n")
 
             # NEW — dismiss appraisal WITHOUT tagging, using appraisal_done.
             # Do this before the end-of-list check / next_arrow tap, so we
             # always return to the base list-browsing state.
-            tap.tap(ui["appraisal_done"]["x"], ui["appraisal_done"]["y"],
-                    base_delay=cfg["timing"].get("after_tap"))
+            # tap.tap(ui["appraisal_done"]["x"], ui["appraisal_done"]["y"],
+            #         base_delay=cfg["timing"].get("after_tap"))
 
             # End of list: next_arrow stopped advancing, same Pokemon showing twice
             if entry == last_entry:
