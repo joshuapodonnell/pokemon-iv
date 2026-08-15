@@ -824,22 +824,27 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 # caught_date and skips the appraisal/IV/tagging steps entirely.
 # =============================================================================
 
-def read_list_entry(img, ui) -> tuple:
-    """Read just name + cp + caught_date from the current detail screen.
-    Lighter-weight than scan_one_pokemon() — no appraisal, no IV bars,
-    no VLM calls. Used only to identify WHICH row is currently showing."""
-    cp_img = getrelativeregion(img, ui["cp_region"])
+
+def read_list_entry(base_img, appraisal_img, ui):
+    """
+    CP and type are read from the base screen (correct — those regions
+    really are calibrated for that layout, same as scan_one_pokemon).
+
+    Name and caught_date MUST come from the appraisal overlay — name_region
+    is calibrated for that layout's position of the "This X was caught on..."
+    text, which doesn't exist anywhere on the plain base screen.
+    """
+    cp_img = getrelativeregion(base_img, ui["cp_region"])
     cp_text = ocrregion(cp_img)
     cp = parsecp(cp_text)
 
-    type_img = getrelativeregion(img, ui["type_region"])
+    type_img = getrelativeregion(base_img, ui["type_region"])
     type_text = ocr_type_region(type_img)
 
-    name = resolvespeciesname(img, ui, cp, type_text)
+    # CHANGED: use appraisal_img, not base_img
+    name = resolvespeciesname(appraisal_img, ui, cp, type_text)
 
-    # caught_date lives in the description text below the stats —
-    # reuse the same region/parsing main.py already does for cataloging
-    desc_img = getrelativeregion(img, ui["name_region"])
+    desc_img = getrelativeregion(appraisal_img, ui["name_region"])
     _, raw_text, _ = detect_description_lines(desc_img)
     caught_date = parse_caught_date(raw_text)
 
@@ -850,13 +855,15 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
     """
     Syncs is_shiny / form_status flags using the in-game search bar's own
     "Shiny" / "Shadow" / "Purified" filters as ground truth. Walks the
-    filtered list ONE Pokemon at a time via next_arrow — same mechanism
-    pass1_catalog() already uses — instead of trying to OCR a scrolling
-    grid view, which breaks once the list clamps at the bottom.
+    filtered list one Pokemon at a time via next_arrow.
 
-    Matches on (name, cp, caught_date) — the same composite key
-    find_duplicate() uses — since name+cp alone isn't unique across an
-    11,000+ record collection.
+    CHANGED: now opens the appraisal overlay for each Pokemon (same tap
+    sequence scan_one_pokemon uses to open it) before reading name/
+    caught_date, then dismisses it via appraisal_done — WITHOUT applying
+    any tag — before advancing. This is heavier per-Pokemon than the
+    previous base-screen-only version, but it's necessary since the
+    description text this function needs to match against the DB simply
+    doesn't exist on the base screen.
     """
     ui = cfg["ui"]
     freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
@@ -875,8 +882,6 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         tap.type_text(keyword)
         time.sleep(1.5)
 
-        # Enter the filtered list at its first entry — same slot tap
-        # pass1_catalog() uses to enter the normal (unfiltered) list.
         tap.tap(ui["pokemon_slots"][0]["x"], ui["pokemon_slots"][0]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
 
@@ -892,17 +897,32 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                 log.info(f"Stop requested — ending {keyword} sync early.")
                 break
 
-            img = capture_window(cfg["mirror_region"])
+            base_img = capture_window(cfg["mirror_region"])
 
-            if freeze.update(img):
+            if freeze.update(base_img):
                 recovered = _handle_freeze(tap, cfg, capture_window, freeze)
                 if not recovered:
                     log.error(f"[FREEZE] Could not recover during {keyword} sync — stopping.")
                     break
                 continue
 
-            entry = read_list_entry(img, ui)
+            # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
+            tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                    base_delay=cfg["timing"].get("after_tap"))
+            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                    base_delay=random.uniform(0.1, 0.2))
+            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                    base_delay=random.uniform(0.2, 0.3))
+            appraisal_img = capture_window(cfg["mirror_region"])
+
+            entry = read_list_entry(base_img, appraisal_img, ui)
             name, cp, caught_date = entry
+
+            # NEW — dismiss appraisal WITHOUT tagging, using appraisal_done.
+            # Do this before the end-of-list check / next_arrow tap, so we
+            # always return to the base list-browsing state.
+            tap.tap(ui["appraisal_done"]["x"], ui["appraisal_done"]["y"],
+                    base_delay=cfg["timing"].get("after_tap"))
 
             # End of list: next_arrow stopped advancing, same Pokemon showing twice
             if entry == last_entry:
@@ -920,8 +940,6 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                         LIMIT 1
                     """, (name, cp, caught_date, value)).fetchone()
                 if not row:
-                    # Fallback if caught_date OCR failed — riskier, only use
-                    # when the (name, cp) pair is unique in the DB.
                     candidates = conn.execute("""
                         SELECT id FROM pokemon WHERE name = ? AND cp = ?
                     """, (name, cp)).fetchall()
@@ -956,6 +974,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                 base_delay=cfg["timing"].get("after_tap", 1.0))
         tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
+
 
 def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
     """
