@@ -1381,6 +1381,10 @@ def run_bot(args):
         vision_agent.reset_remote_status()
 
         if not args.dry_run and tags_are_calibrated(tag_layout):
+            tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
+                    base_delay=cfg["timing"].get("after_tap"))
+            tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
+                    base_delay=cfg["timing"].get("after_tap"))
             micro_pass2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
