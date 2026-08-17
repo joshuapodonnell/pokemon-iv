@@ -253,3 +253,30 @@ def find_duplicate(conn, name, cp, iv_atk, iv_def, iv_sta, caught_date) -> bool:
             LIMIT 1
         """, (name, cp, iv_atk, iv_def, iv_sta)).fetchone()
     return row is not None
+
+def get_best_evo_rank(conn, pokemon_id: int) -> dict:
+    """
+    Returns the best (lowest) GL/UL rank among all evolutions of this catch,
+    or None per league if it has no evolutions or none are ranked.
+    """
+    row = conn.execute("""
+        SELECT MIN(gl_rank) as best_evo_gl, MIN(ul_rank) as best_evo_ul
+        FROM evo_rankings
+        WHERE pokemon_id = ?
+    """, (pokemon_id,)).fetchone()
+    if not row:
+        return {"gl_rank": None, "ul_rank": None}
+    return {"gl_rank": row["best_evo_gl"], "ul_rank": row["best_evo_ul"]}
+
+
+def get_effective_rank(conn, pokemon_id: int, own_gl: int, own_ul: int) -> dict:
+    """
+    The rank that should actually be used for demotion/eviction comparisons:
+    the BETTER (lower/more competitive) of the Pokemon's own rank and its
+    best evolution's rank. This is what makes a Bulbasaur kept for its
+    Venusaur potential actually defensible/comparable on that same basis.
+    """
+    evo = get_best_evo_rank(conn, pokemon_id)
+    eff_gl = min((r for r in (own_gl, evo["gl_rank"]) if r is not None), default=None)
+    eff_ul = min((r for r in (own_ul, evo["ul_rank"]) if r is not None), default=None)
+    return {"gl_rank": eff_gl, "ul_rank": eff_ul}

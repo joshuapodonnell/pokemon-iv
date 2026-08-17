@@ -148,8 +148,33 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
             action = "KEEP"
 
     beats_existing = False
-    new_gl = gl.get("rank")
-    new_ul = ul.get("rank")
+
+    # ────────────────────────────────────────────────────────────────────
+    # NEW — replaces the old two lines:
+    #     new_gl = gl.get("rank")
+    #     new_ul = ul.get("rank")
+    #
+    # new_gl / new_ul now represent the EFFECTIVE rank (own form's rank,
+    # or the best evolution's rank, whichever is more competitive) — same
+    # basis used for old_poke's eff_gl_rank/eff_ul_rank later in the
+    # demotion loop below, so both sides of every comparison are apples-
+    # to-apples.
+    # ────────────────────────────────────────────────────────────────────
+    new_gl_own = gl.get("rank")
+    new_ul_own = ul.get("rank")
+    evo_best_gl = min(
+        (e.get("great", {}).get("rank") for e in evo_rankings.values()
+         if e.get("great", {}).get("rank") is not None),
+        default=None,
+    )
+    evo_best_ul = min(
+        (e.get("ultra", {}).get("rank") for e in evo_rankings.values()
+         if e.get("ultra", {}).get("rank") is not None),
+        default=None,
+    )
+    new_gl = min((r for r in (new_gl_own, evo_best_gl) if r is not None), default=None)
+    new_ul = min((r for r in (new_ul_own, evo_best_ul) if r is not None), default=None)
+    # ────────────────────────────────────────────────────────────────────
 
     if is_hundo or is_nundo:
         beats_existing = True
@@ -186,29 +211,22 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     # ────────────────────────────────────────────────────────────────────────────────
     if action == "KEEP" and beats_existing and existing_top:
         for old_poke in existing_top:
-            # We only care about demoting things we were previously planning to KEEP
             if old_poke.get('tag', 'KEEP') != 'KEEP':
                 continue
 
-            # Immunity check — CHANGED: now uses the shared _is_immune() helper,
-            # which includes is_shiny in addition to the original hundo/nundo/
-            # legendary/high-IV/high-level checks. Previously a shiny old_poke
-            # had no protection here.
             if _is_immune(old_poke):
                 continue  # IMMUNE! Do not demote.
 
-            # Check if the new catch strictly beats this specific old one
             demote_reasons = []
 
-            old_gl = old_poke.get("gl_rank")
+            old_gl = old_poke.get("eff_gl_rank")
             if new_gl and old_gl and new_gl < old_gl:
                 demote_reasons.append(f"GL #{new_gl} beats old #{old_gl}")
 
-            old_ul = old_poke.get("ul_rank")
+            old_ul = old_poke.get("eff_ul_rank")
             if new_ul and old_ul and new_ul < old_ul:
                 demote_reasons.append(f"UL #{new_ul} beats old #{old_ul}")
 
-            # Ensure we don't demote an old one if it is STILL our best in a different league!
             is_still_best_ul = (old_ul is not None and (new_ul is None or old_ul < new_ul))
             is_still_best_gl = (old_gl is not None and (new_gl is None or old_gl < new_gl))
 
@@ -233,14 +251,12 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     }
 
 
+
 def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> list[dict]:
     exclude_clause = "AND id != ?" if exclude_id is not None else ""
     params_gl = (name, exclude_id, limit) if exclude_id is not None else (name, limit)
     params_ul = (name, exclude_id) if exclude_id is not None else (name,)
 
-    # CHANGED: added `is_shiny` to the SELECT columns (both queries below),
-    # alongside the previously-added `tag` and `level`. Without this,
-    # _is_immune() can never see whether an old_poke is shiny.
     gl_rows = conn.execute(f"""
         SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
                gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
@@ -248,9 +264,11 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
         WHERE name = ? {exclude_clause}
         ORDER BY
             CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
-            iv_pct DESC
+            iv_pct DESC,
+            is_shiny DESC
         LIMIT ?
     """, params_gl).fetchall()
+
 
     ul_best = conn.execute(f"""
         SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
@@ -267,10 +285,20 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
     combined = [dict(r) for r in gl_rows]
     if ul_best and ul_best["id"] not in seen_ids:
         combined.append(dict(ul_best))
+
+    # NEW — attach effective (own-vs-best-evolution) rank to each candidate
+    from database import get_effective_rank
+    for poke in combined:
+        eff = get_effective_rank(conn, poke["id"], poke["gl_rank"], poke["ul_rank"])
+        poke["eff_gl_rank"] = eff["gl_rank"]
+        poke["eff_ul_rank"] = eff["ul_rank"]
+
     return combined
 
 
 def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
+    from database import get_effective_rank
+
     groups = conn.execute("""
         SELECT DISTINCT name, (form_status = 'shadow') AS is_shadow
         FROM pokemon WHERE tag = 'KEEP'
@@ -288,13 +316,27 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
         """, (name, is_shadow)).fetchall()
         rows = [dict(r) for r in rows]
 
+        # NEW — attach effective rank to every row before ranking
+        for r in rows:
+            eff = get_effective_rank(conn, r["id"], r["gl_rank"], r["ul_rank"])
+            r["eff_gl_rank"] = eff["gl_rank"]
+            r["eff_ul_rank"] = eff["ul_rank"]
+
         gl_full = sorted(
-            (r for r in rows if r["gl_rank"] is not None),
-            key=lambda r: (r["gl_rank"], -(r["iv_pct"] or 0.0)),
+            (r for r in rows if r["eff_gl_rank"] is not None),
+            key=lambda r: (
+                r["eff_gl_rank"],
+                -(r["iv_pct"] or 0.0),
+                -int(bool(r.get("is_shiny"))),   # NEW — shiny wins ties
+            ),
         )
         ul_full = sorted(
-            (r for r in rows if r["ul_rank"] is not None),
-            key=lambda r: (r["ul_rank"], -(r["iv_pct"] or 0.0)),
+            (r for r in rows if r["eff_ul_rank"] is not None),
+            key=lambda r: (
+                r["eff_ul_rank"],
+                -(r["iv_pct"] or 0.0),
+                -int(bool(r.get("is_shiny"))),   # NEW — shiny wins ties
+            ),
         )
         safe_by_rank = (
             {r["id"] for r in gl_full[:top_n]} | {r["id"] for r in ul_full[:top_n]}
@@ -306,9 +348,6 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
             if poke["id"] in safe_by_rank:
                 continue
             kind = "shadow" if is_shadow else "non-shadow"
-            # CHANGED: capture pending_old_tag = 'KEEP' (guaranteed, since
-            # this query only ever touches rows currently tagged KEEP)
-            # before overwriting tag to TRANSFER.
             conn.execute("""
                 UPDATE pokemon
                 SET pending_old_tag = tag,
