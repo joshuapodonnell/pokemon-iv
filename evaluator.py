@@ -150,10 +150,6 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     beats_existing = False
 
     # ────────────────────────────────────────────────────────────────────
-    # NEW — replaces the old two lines:
-    #     new_gl = gl.get("rank")
-    #     new_ul = ul.get("rank")
-    #
     # new_gl / new_ul now represent the EFFECTIVE rank (own form's rank,
     # or the best evolution's rank, whichever is more competitive) — same
     # basis used for old_poke's eff_gl_rank/eff_ul_rank later in the
@@ -252,6 +248,7 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
 
 
 
+
 def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> list[dict]:
     exclude_clause = "AND id != ?" if exclude_id is not None else ""
     params_gl = (name, exclude_id, limit) if exclude_id is not None else (name, limit)
@@ -265,10 +262,10 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
         ORDER BY
             CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
             iv_pct DESC,
-            is_shiny DESC
+            is_shiny DESC,
+            cp DESC
         LIMIT ?
     """, params_gl).fetchall()
-
 
     ul_best = conn.execute(f"""
         SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
@@ -277,7 +274,9 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
         WHERE name = ? {exclude_clause}
         ORDER BY
             CASE WHEN ul_rank IS NOT NULL THEN ul_rank ELSE 99999 END ASC,
-            iv_pct DESC
+            iv_pct DESC,
+            is_shiny DESC,
+            cp DESC
         LIMIT 1
     """, params_ul).fetchone()
 
@@ -327,7 +326,8 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
             key=lambda r: (
                 r["eff_gl_rank"],
                 -(r["iv_pct"] or 0.0),
-                -int(bool(r.get("is_shiny"))),   # NEW — shiny wins ties
+                -int(bool(r.get("is_shiny"))),
+                -(r.get("cp") or 0),
             ),
         )
         ul_full = sorted(
@@ -335,7 +335,8 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
             key=lambda r: (
                 r["eff_ul_rank"],
                 -(r["iv_pct"] or 0.0),
-                -int(bool(r.get("is_shiny"))),   # NEW — shiny wins ties
+                -int(bool(r.get("is_shiny"))),
+                -(r.get("cp") or 0),
             ),
         )
         safe_by_rank = (
