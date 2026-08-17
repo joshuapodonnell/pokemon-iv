@@ -1255,7 +1255,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
-        search_str = f"{p['name']}CP{p['cp']}HP{p['hp']}"
+        search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
         tap.type_text(search_str)
         time.sleep(1.5)
         tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
