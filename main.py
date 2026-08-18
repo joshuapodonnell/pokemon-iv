@@ -1277,8 +1277,8 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
 
         # Select new tag (verified calibrated above).
         tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
-
-        tap.tap(0.5, 0.2, base_delay=cfg["timing"].get("after_tap"))
+        dismiss = ui.get("tag_dismiss", {"x": 0.500, "y": 0.850})
+        tap.tap(dismiss["x"], dismiss["y"])
         tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
         tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
