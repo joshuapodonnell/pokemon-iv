@@ -729,6 +729,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                 f"[DUPLICATE] {name} CP{cp} caught {caught_date!r} already "
                 f"exists in DB — skipping insert to avoid double-counting."
             )
+            tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
+                    base_delay=random.uniform(0.1, 0.2))
+            tap.swipe_left()
             return None, {
                 "action": "SKIPPED_DUPLICATE",
                 "reasons": [f"Duplicate of existing catch: {name} CP{cp} {caught_date}"],
