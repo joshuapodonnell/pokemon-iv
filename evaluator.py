@@ -312,7 +312,7 @@ def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> l
 
 
 def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
-    from database import get_effective_rank
+    from database import get_effective_rank, get_best_evo_rank
 
     groups = conn.execute("""
         SELECT DISTINCT name, (form_status = 'shadow') AS is_shadow
@@ -332,30 +332,54 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
         rows = [dict(r) for r in rows]
 
         for r in rows:
+            # Kept for backward compatibility / other callers that may still
+            # want a single blended "best of own-or-evo" number.
             eff = get_effective_rank(conn, r["id"], r["gl_rank"], r["ul_rank"])
             r["eff_gl_rank"] = eff["gl_rank"]
             r["eff_ul_rank"] = eff["ul_rank"]
 
-        gl_full = sorted(
-            (r for r in rows if r["eff_gl_rank"] is not None),
-            key=lambda r: (
-                r["eff_gl_rank"],
+            # NEW: own-form and evolution rank tracked separately so one
+            # can't crowd the other out of a shared top-N slice.
+            evo = get_best_evo_rank(conn, r["id"])
+            r["evo_gl_rank"] = evo["gl_rank"]
+            r["evo_ul_rank"] = evo["ul_rank"]
+
+        def _rank_sort_key(rank_field):
+            return lambda r: (
+                r[rank_field],
                 -(r["iv_pct"] or 0.0),
                 -int(bool(r.get("is_shiny"))),
                 -(r.get("cp") or 0),
-            ),
+            )
+
+        own_gl_full = sorted(
+            (r for r in rows if r["gl_rank"] is not None),
+            key=_rank_sort_key("gl_rank"),
         )
-        ul_full = sorted(
-            (r for r in rows if r["eff_ul_rank"] is not None),
-            key=lambda r: (
-                r["eff_ul_rank"],
-                -(r["iv_pct"] or 0.0),
-                -int(bool(r.get("is_shiny"))),
-                -(r.get("cp") or 0),
-            ),
+        own_ul_full = sorted(
+            (r for r in rows if r["ul_rank"] is not None),
+            key=_rank_sort_key("ul_rank"),
         )
+        evo_gl_full = sorted(
+            (r for r in rows if r["evo_gl_rank"] is not None),
+            key=_rank_sort_key("evo_gl_rank"),
+        )
+        evo_ul_full = sorted(
+            (r for r in rows if r["evo_ul_rank"] is not None),
+            key=_rank_sort_key("evo_ul_rank"),
+        )
+
+        # Four independent quotas: best own-form for GL, best own-form for
+        # UL, best evolution potential for GL, best evolution potential for
+        # UL. A mon only needs to win ONE of these to survive — but it can
+        # no longer be bumped out of an evolution-potential slot by an
+        # unrelated high-IV own-form catch (or vice versa), since each
+        # quota is scored and sliced independently before the union.
         safe_by_rank = (
-            {r["id"] for r in gl_full[:top_n]} | {r["id"] for r in ul_full[:top_n]}
+            {r["id"] for r in own_gl_full[:top_n]}
+            | {r["id"] for r in own_ul_full[:top_n]}
+            | {r["id"] for r in evo_gl_full[:top_n]}
+            | {r["id"] for r in evo_ul_full[:top_n]}
         )
 
         for poke in rows:
@@ -372,11 +396,12 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
                     needs_review = 1,
                     review_reason = ?
                 WHERE id = ?
-            """, (f"outside_top_{top_n}_{kind}_both_leagues", poke["id"]))
+            """, (f"outside_top_{top_n}_{kind}_own_and_evo", poke["id"]))
             demoted_all.append(poke)
 
     conn.commit()
     return demoted_all
+
 
 
 def get_species_summary(conn, name: str) -> dict:
