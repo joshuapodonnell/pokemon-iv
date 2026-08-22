@@ -248,67 +248,50 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
 # Unified VLM dispatcher with circuit breaker
 # ---------------------------------------------------------------------------
 
-def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
-    """
-    Try the remote Windows PC first.
-    On any connection error, fall back to the local MLX model (unless disabled).
-
-    Circuit breaker: if local inference throws an exception, _local_broken is
-    set to True and all subsequent calls skip local entirely.
-    """
+def _dispatch_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> tuple[str, str]:
+    """Core dispatcher. Returns (text, backend) where backend is 'remote' or 'local'."""
     global _remote_available, _local_broken
 
-    # ── 1. Remote ─────────────────────────────────────────────────────────
     if _remote_available is not False:
         try:
             result = _call_vlm_remote(prompt, images)
             if _remote_available is not True:
                 log.info("[VLM] Remote PC is reachable — using remote inference.")
             _remote_available = True
-            return result
-
+            return result, "remote"
         except requests.exceptions.ConnectionError:
-            log.warning("[VLM] Remote PC unreachable (connection refused). "
-                        "Switching to local MLX model for this session.")
+            log.warning("[VLM] Remote PC unreachable — switching to local MLX model.")
             _remote_available = False
-
         except requests.exceptions.Timeout:
-            log.warning(f"[VLM] Remote PC did not respond within "
-                        f"{REMOTE_CONNECT_TIMEOUT}s connect / "
-                        f"{REMOTE_READ_TIMEOUT}s read. "
-                        "Switching to local MLX model for this session.")
+            log.warning("[VLM] Remote PC timed out — switching to local MLX model.")
             _remote_available = False
-
         except requests.exceptions.RequestException as e:
-            log.warning(f"[VLM] Remote request failed ({e}). "
-                        "Trying local MLX model.")
+            log.warning(f"[VLM] Remote request failed ({e}). Trying local MLX model.")
             _remote_available = False
 
-    # ── 2. Local MLX fallback ─────────────────────────────────────────────
     if _DISABLE_LOCAL_VLM:
-        raise RuntimeError(
-            "VLM unavailable: remote PC is down and local fallback is disabled "
-            "(POGO_DISABLE_LOCAL_VLM=1). Degrading to OCR/review."
-        )
-
+        raise RuntimeError("VLM unavailable: remote down, local fallback disabled.")
     if _local_broken:
-        raise RuntimeError(
-            "VLM unavailable: remote PC is down and local MLX model is disabled "
-            "for this session after a previous inference failure."
-        )
-
+        raise RuntimeError("VLM unavailable: remote down, local disabled after prior failure.")
     if _load_local_model():
         try:
             log.debug("[VLM-local] Running local inference.")
-            return _call_vlm_local(prompt, images, max_tokens=max_tokens)
+            return _call_vlm_local(prompt, images, max_tokens=max_tokens), "local"
         except Exception as e:
-            raise RuntimeError(
-                f"Local VLM inference failed; disabled for this session: {e}"
-            ) from e
+            raise RuntimeError(f"Local VLM inference failed; disabled for this session: {e}") from e
 
-    raise RuntimeError(
-        "VLM unavailable: remote PC is down and local MLX model failed to load."
-    )
+    raise RuntimeError("VLM unavailable: remote down and local model failed to load.")
+
+
+def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
+    """Unchanged public signature — existing callers (analyze_base_screen, _safe_call, etc.) keep working."""
+    text, _backend = _dispatch_vlm(prompt, images, max_tokens)
+    return text
+
+
+def call_vlm_with_backend(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> tuple[str, str]:
+    """Same as call_vlm but also returns 'remote' or 'local' — use this for anything you're benchmarking."""
+    return _dispatch_vlm(prompt, images, max_tokens)
 
 
 def reset_remote_status() -> None:
@@ -610,7 +593,7 @@ CANDY: <number>
 CANDY_XL: <number>
 CANDY_SPECIES: <species name>"""
 
-def analyze_base_screen(img: Image.Image) -> dict:
+def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
         cp_img    = _crop_cp_region(img)
@@ -618,10 +601,10 @@ def analyze_base_screen(img: Image.Image) -> dict:
         type_img  = _crop_type_region(img)
         candy_img = _crop_candy_region(img)
 
-        cp_img.save("cp_region.png")
-        hp_img.save("hp_region.png")
-        type_img.save("type_region.png")
-        candy_img.save("candy_region.png")
+        cp_img.save(f"screenshots/vlm_cp_region_{visit_num:03d}.png")
+        hp_img.save(f"screenshots/vlm_hp_region_{visit_num:03d}.png")
+        type_img.save(f"screenshots/vlm_type_region_{visit_num:03d}.png")
+        candy_img.save(f"screenshots/vlm_candy_region_{visit_num:03d}.png")
 
         cp_raw    = call_vlm(_CP_PROMPT,    [cp_img])
         hp_raw    = call_vlm(_HP_PROMPT,    [hp_img])

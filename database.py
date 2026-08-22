@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS cp_consensus_log (
     visit_num         INTEGER,
     ocr_cp            INTEGER,
     ocr_raw           TEXT,
+    ocr_image_path    TEXT,        -- NEW
     vlm_votes         TEXT,
+    vlm_backends      TEXT,        -- from the vision_agent change, if you added it
     vlm_consensus     INTEGER,
     reconciled_cp     INTEGER,
     reconcile_reason  TEXT,
@@ -249,14 +251,15 @@ def get_evo_rankings(conn, pokemon_id: int) -> dict:
 
 def log_cp_consensus(conn: sqlite3.Connection, visit_num: int, ocr_cp, ocr_raw: str,
                       vlm_votes: list, vlm_consensus, reconciled_cp,
-                      reconcile_reason: str, frame_paths: list = None) -> int:
+                      reconcile_reason: str, frame_paths: list = None,
+                      ocr_image_path: str = None) -> int:      # NEW param
     cur = conn.execute("""
         INSERT INTO cp_consensus_log (
-            visit_num, ocr_cp, ocr_raw, vlm_votes, vlm_consensus,
+            visit_num, ocr_cp, ocr_raw, ocr_image_path, vlm_votes, vlm_consensus,
             reconciled_cp, reconcile_reason, frame_paths
-        ) VALUES (?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?)
     """, (
-        visit_num, ocr_cp, ocr_raw, json.dumps(vlm_votes), vlm_consensus,
+        visit_num, ocr_cp, ocr_raw, ocr_image_path, json.dumps(vlm_votes), vlm_consensus,
         reconciled_cp, reconcile_reason, json.dumps(frame_paths or []),
     ))
     conn.commit()

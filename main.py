@@ -52,6 +52,8 @@ def parse_args():
         default="default",
         help="Choose which in-game tag menu layout to use."
     )
+    p.add_argument("--log-cp-images", action="store_true",
+                   help="Save OCR/VLM CP crops for consensus benchmarking, without full --debug overhead")
     return p.parse_args()
 
 
@@ -379,17 +381,18 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
 
 def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> tuple:
     from collections import Counter
-    votes = []
+    votes, backends = [], []
     ocr_len = len(str(ocr_cp)) if ocr_cp and ocr_cp > 0 else None
 
     for i, frame in enumerate(frames):
         try:
-            raw = vision_agent.call_vlm(vision_agent._CP_PROMPT, [frame])
+            raw, backend = vision_agent.call_vlm_with_backend(vision_agent._CP_PROMPT, [frame])
             parsed = vision_agent._parse_qa_response(raw)
             cp = parsecp(parsed.get("cp", {}).get("text", ""))
             if not cp:
                 continue
             votes.append(cp)
+            backends.append(backend)
             counts = Counter(votes)
             if ocr_len:
                 matching = [v for v in votes if len(str(v)) == ocr_len]
@@ -435,14 +438,14 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         base_img = capture_window(cfg["mirror_region"])
 
     cp_image = getrelativeregion(base_img, ui["cp_region"])
-    if args.debug:
+    if args.debug or args.log_cp_images:
         os.makedirs("screenshots", exist_ok=True)
         cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text!r}")
     type_img = getrelativeregion(base_img, ui["type_region"])
-    type_img.save("raw_type_region.png")
+    type_img.save(f"screenshots/type_{visit_num:03d}.png")
     type_text = ocr_type_region(type_img)
     # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
     # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
@@ -465,7 +468,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     # Capture frames immediately so all 5 land on the base screen
     _cp_frames = _capture_cp_frames(
         capture_window, cfg, n=capture_frames, interval=0.2,
-        debug=args.debug, visit_num=visit_num,
+        debug=(args.debug or args.log_cp_images), visit_num=visit_num,
     )
     _ocr_cp_at_capture = cp  # snapshot before any mutation
 
@@ -479,7 +482,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     _base_vlm_used = False
     if not _is_valid_base_parse(cp, hp, type_text):
         log.info("Base-screen OCR suspect – calling VisionAgent")
-        _bvlm = vision_agent.analyze_base_screen(base_img)
+        _bvlm = vision_agent.analyze_base_screen(base_img, visit_num)
 
         if vision_agent.is_reliable(_bvlm):
             _base_vlm_used = True
@@ -549,12 +552,15 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         else:
             log.warning(f"Could not reconcile CP from OCR={_ocr_cp_at_capture}, vlm={vlm_cp}; keeping {cp}")
 
+        _wants_cp_images = args.debug or args.log_cp_images
+
         try:
             log_cp_consensus(
                 conn, visit_num, _ocr_cp_at_capture, cp_text,
                 vlm_votes, vlm_cp, reconciled, reconcile_reason,
                 frame_paths=[f"screenshots/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
-                             for i in range(len(_cp_frames))] if args.debug else [],
+                             for i in range(len(_cp_frames))] if _wants_cp_images else [],
+                ocr_image_path=f"screenshots/cp_ocr_{visit_num:03d}.png" if _wants_cp_images else None,
             )
         except Exception as log_err:
             log.debug(f"cp_consensus_log insert failed (non-fatal): {log_err}")
@@ -599,7 +605,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     if _name_needs_vlm or _bars_need_vlm:
         log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
                  f"– calling VisionAgent")
-        _avlm = vision_agent.analyze_appraisal_screen(img_initial)
+        _avlm = vision_agent.analyze_appraisal_screen(img_initial, visit_num)
 
         if vision_agent.is_reliable(_avlm):
             _appraisal_vlm_used = True
