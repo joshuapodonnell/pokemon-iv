@@ -337,29 +337,32 @@ def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
     for attempt in range(1, max_attempts + 1):
         log.warning(f"[FREEZE] Recovery attempt {attempt}/{max_attempts}...")
 
-        # Try tapping the center of the screen to wake it
-        tap.tap(0.5, 0.5, base_delay=2.0)
-
-        img = capture_window(cfg["mirror_region"])
-        small = np.array(img.resize((64, 128)).convert("L"), dtype=np.int16)
-
-        if freeze._last_pixels is not None:
-            diff  = np.abs(small - freeze._last_pixels)
-            ratio = int(np.sum(diff < 8)) / diff.size
-            if ratio < freeze._threshold:
-                log.info(f"[FREEZE] Screen changed after tap — recovered!")
-                freeze.reset()
-                return True
-
-        # Escalate: tap back button to escape any stuck screen
-        if attempt == 2:
+        # Attempt 1: no tap yet — just re-check in case it was a
+        # transient stall (or a false trigger) that resolves on its own.
+        if attempt == 1:
+            time.sleep(1.5)
+        # Attempt 2: safer nudge via a known control, not a blind
+        # screen-center tap that could land on arbitrary UI.
+        elif attempt == 2:
             log.warning("[FREEZE] Trying back button...")
             tap.tap(ui["back_button"]["x"], ui["back_button"]["y"], base_delay=2.0)
+        else:
+            log.warning("[FREEZE] Trying center-screen tap as last resort...")
+            tap.tap(0.5, 0.5, base_delay=2.0)
+
+        img   = capture_window(cfg["mirror_region"])
+        ratio = freeze.similarity_to_last(img)
+
+        if ratio < freeze._threshold:
+            log.info(f"[FREEZE] Screen changed (similarity={ratio:.4f}) — recovered!")
+            freeze.reset()
+            return True
 
         time.sleep(3.0)
 
     log.error("[FREEZE] All recovery attempts failed.")
     return False
+
 def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
                        debug=False, visit_num=0) -> list:
     frames = []
@@ -1027,6 +1030,12 @@ def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
         time.sleep(poll)
     return last_img
 
+def check_freeze(capture_window, cfg, freeze, tap):
+    img = capture_window(cfg["mirror_region"])
+    if freeze.update(img):
+        return _handle_freeze(tap, cfg, capture_window, freeze)
+    return True  # not frozen (or recovered)
+
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn,
@@ -1233,23 +1242,30 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
             if not recovered:
                 log.error("[FREEZE] Could not recover in micro Pass 2 — stopping.")
                 break
-            continue  # retry this Pokemon after recovery, taps haven't started yet
-
-        log.info(f"Re-tagging {p['name']} CP {p['cp']}, HP {p['hp']}: "
-                 f"{old_tag or '(none)'} → {new_tag}...")
+            continue
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
+
+        if not check_freeze(capture_window, cfg, freeze, tap):
+            break
+
         search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
         tap.type_text(search_str)
         time.sleep(1.5)
         tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
 
+        if not check_freeze(capture_window, cfg, freeze, tap):
+            break
+
         tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
         tap.tap(tag_layout["tag_option_btn"]["x"], tag_layout["tag_option_btn"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
+
+        if not check_freeze(capture_window, cfg, freeze, tap):
+            break
 
         # Deselect old tag first (only reached if old_key was verified
         # calibrated above, or there was no old tag to deselect).
