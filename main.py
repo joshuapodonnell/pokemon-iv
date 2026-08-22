@@ -22,7 +22,7 @@ from ocr_parser import (
     readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, normalize_species_name
 )
 from pvp_rankings import all_league_rankings_with_evos
-from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings
+from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus
 from evaluator import evaluate_catch, get_best_in_db, enforce_top_n, promote_newly_immune
 from tagger import apply_ingame_tag, tags_are_calibrated
 
@@ -254,40 +254,34 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     return 0, img
 
 def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
-    # If OCR raw text had a slash, assume it was a misread 7 and trust OCR.
     if "/" in ocr_raw or "\\" in ocr_raw:
         if ocr_cp:
-            log.info(
-                f"CP reconcile: OCR raw {ocr_raw!r} has slash/backslash — "
-                f"assuming 7 and trusting OCR {ocr_cp}"
-            )
-            return ocr_cp
-        return vlm_cp
+            log.info(f"CP reconcile: OCR raw {ocr_raw!r} has slash/backslash — assuming 7 and trusting OCR {ocr_cp}")
+            return ocr_cp, "slash_assumed_7"
+        return vlm_cp, "slash_no_ocr_fallback_vlm"
 
     if ocr_cp is None:
-        return vlm_cp
+        return vlm_cp, "ocr_missing_fallback_vlm"
     if vlm_cp is None:
-        return ocr_cp
+        return ocr_cp, "vlm_missing_fallback_ocr"
     if ocr_cp == vlm_cp:
-        return ocr_cp
+        return ocr_cp, "agree"
 
     ocr_s, vlm_s = str(ocr_cp), str(vlm_cp)
-
     if len(vlm_s) == len(ocr_s) + 1:
         if vlm_s.startswith(ocr_s):
             log.info(f"CP reconcile: VLM {vlm_cp} has spurious trailing digit vs OCR {ocr_cp} — trusting OCR")
-            return ocr_cp
+            return ocr_cp, "vlm_trailing_digit"
         if vlm_s.endswith(ocr_s):
             log.info(f"CP reconcile: VLM {vlm_cp} has spurious leading digit vs OCR {ocr_cp} — trusting OCR")
-            return ocr_cp
-
+            return ocr_cp, "vlm_leading_digit"
     if len(ocr_s) == len(vlm_s) + 1:
         if ocr_s.startswith(vlm_s) or ocr_s.endswith(vlm_s):
             log.info(f"CP reconcile: OCR {ocr_cp} has extra digit vs VLM {vlm_cp} — trusting VLM")
-            return vlm_cp
+            return vlm_cp, "ocr_extra_digit"
 
     log.info(f"CP reconcile: same length OCR={ocr_cp} VLM={vlm_cp} — trusting VLM")
-    return vlm_cp
+    return vlm_cp, "same_length_trust_vlm"
 
 def reload_calibration(cfg):
     try:
@@ -380,9 +374,8 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
     return frames
 
 
-def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
+def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> tuple:
     from collections import Counter
-
     votes = []
     ocr_len = len(str(ocr_cp)) if ocr_cp and ocr_cp > 0 else None
 
@@ -391,56 +384,40 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> int | None:
             raw = vision_agent.call_vlm(vision_agent._CP_PROMPT, [frame])
             parsed = vision_agent._parse_qa_response(raw)
             cp = parsecp(parsed.get("cp", {}).get("text", ""))
-
             if not cp:
                 continue
-
             votes.append(cp)
-
-            # Early exit: if two votes already match, we're done.
             counts = Counter(votes)
-
-            # Prefer OCR-length-matching votes when OCR gave us a usable anchor.
             if ocr_len:
                 matching = [v for v in votes if len(str(v)) == ocr_len]
                 if len(matching) >= 2:
                     mcounts = Counter(matching)
                     best, count = mcounts.most_common(1)[0]
                     if count >= 2:
-                        log.info(
-                            f"VLM CP early consensus (digit-filtered to {ocr_len} digits): "
-                            f"{best} ({count}/{len(matching)} matching votes, total votes={votes})"
-                        )
-                        return best
-
+                        log.info(f"VLM CP early consensus (digit-filtered to {ocr_len} digits): "
+                                 f"{best} ({count}/{len(matching)} matching votes, total votes={votes})")
+                        return best, votes          # CHANGED
             best, count = counts.most_common(1)[0]
             if count >= 2:
-                log.info(
-                    f"VLM CP early consensus: {best} ({count}/{len(votes)} votes so far, total votes={votes})"
-                )
-                return best
-
+                log.info(f"VLM CP early consensus: {best} ({count}/{len(votes)} votes so far, total votes={votes})")
+                return best, votes                  # CHANGED
         except Exception as e:
             log.debug(f"  CP frame {i+1} failed: {e}")
 
     if not votes:
-        return None
+        return None, votes                          # CHANGED
 
     log.info(f"VLM CP consensus: all votes: {votes}")
-
     if ocr_len:
         matching = [v for v in votes if len(str(v)) == ocr_len]
         if matching:
             best, count = Counter(matching).most_common(1)[0]
-            log.info(
-                f"VLM CP (digit-filtered to {ocr_len} digits): "
-                f"{best} ({count}/{len(matching)} matching votes)"
-            )
-            return best
+            log.info(f"VLM CP (digit-filtered to {ocr_len} digits): {best} ({count}/{len(matching)} matching votes)")
+            return best, votes                      # CHANGED
 
     best, count = Counter(votes).most_common(1)[0]
     log.info(f"VLM CP consensus: {best} ({count}/{len(votes)} votes)")
-    return best if count >= 2 else None
+    return (best if count >= 2 else None), votes     # CHANGED
 # ── Core scan logic ───────────────────────────────────────────────────────────
 
 def scan_one_pokemon(visit_num, args, cfg, conn,
@@ -559,21 +536,26 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     # ── Collect VLM CP consensus (frames were captured before any taps) ───
     try:
-        vlm_cp = _cp_vlm_future.result(timeout=60)
-        reconciled = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
-
+        vlm_cp, vlm_votes = _cp_vlm_future.result(timeout=60)
+        reconciled, reconcile_reason = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
         if reconciled and reconciled > 0:
             if reconciled != cp:
-                log.info(
-                    f"CP correction: {cp} → {reconciled} "
-                    f"(ocr_at_capture={_ocr_cp_at_capture}, raw={cp_text!r}, vlm={vlm_cp})"
-                )
+                log.info(f"CP correction: {cp} → {reconciled} "
+                         f"(ocr_at_capture={_ocr_cp_at_capture}, raw={cp_text!r}, vlm={vlm_cp})")
             cp = reconciled
         else:
-            log.warning(
-                f"Could not reconcile CP from OCR={_ocr_cp_at_capture}, "
-                f"vlm={vlm_cp}; keeping {cp}"
+            log.warning(f"Could not reconcile CP from OCR={_ocr_cp_at_capture}, vlm={vlm_cp}; keeping {cp}")
+
+        try:
+            log_cp_consensus(
+                conn, visit_num, _ocr_cp_at_capture, cp_text,
+                vlm_votes, vlm_cp, reconciled, reconcile_reason,
+                frame_paths=[f"screenshots/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
+                             for i in range(len(_cp_frames))] if args.debug else [],
             )
+        except Exception as log_err:
+            log.debug(f"cp_consensus_log insert failed (non-fatal): {log_err}")
+
     except Exception as e:
         log.warning(f"VLM CP consensus failed: {e} — keeping OCR CP {cp}")
     # ─────────────────────────────────────────────────────────────────────

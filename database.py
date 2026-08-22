@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS evo_rankings (
     ul_best_cp      INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS cp_consensus_log (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts                TEXT DEFAULT (datetime('now')),
+    visit_num         INTEGER,
+    ocr_cp            INTEGER,
+    ocr_raw           TEXT,
+    vlm_votes         TEXT,
+    vlm_consensus     INTEGER,
+    reconciled_cp     INTEGER,
+    reconcile_reason  TEXT,
+    ground_truth_cp   INTEGER,
+    frame_paths       TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_name        ON pokemon(name);
 CREATE INDEX IF NOT EXISTS idx_iv_pct      ON pokemon(iv_pct DESC);
 CREATE INDEX IF NOT EXISTS idx_gl_rank     ON pokemon(name, gl_rank);
@@ -232,6 +246,34 @@ def get_evo_rankings(conn, pokemon_id: int) -> dict:
             "ultra": {"rank": r["ul_rank"], "percentile": r["ul_percentile"]},
         }
     return result
+
+def log_cp_consensus(conn: sqlite3.Connection, visit_num: int, ocr_cp, ocr_raw: str,
+                      vlm_votes: list, vlm_consensus, reconciled_cp,
+                      reconcile_reason: str, frame_paths: list = None) -> int:
+    cur = conn.execute("""
+        INSERT INTO cp_consensus_log (
+            visit_num, ocr_cp, ocr_raw, vlm_votes, vlm_consensus,
+            reconciled_cp, reconcile_reason, frame_paths
+        ) VALUES (?,?,?,?,?,?,?,?)
+    """, (
+        visit_num, ocr_cp, ocr_raw, json.dumps(vlm_votes), vlm_consensus,
+        reconciled_cp, reconcile_reason, json.dumps(frame_paths or []),
+    ))
+    conn.commit()
+    return cur.lastrowid
+
+def get_cp_consensus_pending_review(conn: sqlite3.Connection) -> list:
+    """Rows where OCR and the reconciled result disagree and no ground truth yet — these are your review queue."""
+    return conn.execute("""
+        SELECT * FROM cp_consensus_log
+        WHERE ground_truth_cp IS NULL
+          AND (ocr_cp IS NULL OR ocr_cp != reconciled_cp)
+        ORDER BY id DESC
+    """).fetchall()
+
+def set_ground_truth_cp(conn: sqlite3.Connection, log_id: int, true_cp: int):
+    conn.execute("UPDATE cp_consensus_log SET ground_truth_cp = ? WHERE id = ?", (true_cp, log_id))
+    conn.commit()
 
 def find_duplicate(conn, name, cp, iv_atk, iv_def, iv_sta, caught_date) -> bool:
     # If we have a date, it's the strongest possible key
