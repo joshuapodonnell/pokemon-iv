@@ -195,3 +195,12 @@ class TapController:
         time.sleep(0.15)
         pyautogui.press("delete")
         time.sleep(0.15)
+
+
+    def paste_text(self, text: str) -> None:
+        _activate_mirroring_window()
+        time.sleep(0.3)
+        subprocess.run("pbcopy", input=text.encode("utf-8"))
+        time.sleep(0.15)
+        pyautogui.hotkey("command", "v")
+        _human_delay(self.timing.get("after_tap", 0.3), self.rand.get("timing_sigma", 0.1))
