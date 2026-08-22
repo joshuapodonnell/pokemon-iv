@@ -150,11 +150,8 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     beats_existing = False
 
     # ────────────────────────────────────────────────────────────────────
-    # new_gl / new_ul now represent the EFFECTIVE rank (own form's rank,
-    # or the best evolution's rank, whichever is more competitive) — same
-    # basis used for old_poke's eff_gl_rank/eff_ul_rank later in the
-    # demotion loop below, so both sides of every comparison are apples-
-    # to-apples.
+    # new_gl / new_ul represent the EFFECTIVE rank (own form's rank, or the
+    # best evolution's rank, whichever is more competitive).
     # ────────────────────────────────────────────────────────────────────
     new_gl_own = gl.get("rank")
     new_ul_own = ul.get("rank")
@@ -177,9 +174,21 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
         if not existing_top:
             reasons.append(f"First {name} in collection")
     elif existing_top:
-        # Find the absolute best ranks you ALREADY own
-        existing_gl = min((r["gl_rank"] for r in existing_top if r["gl_rank"] is not None), default=None)
-        existing_ul = min((r["ul_rank"] for r in existing_top if r["ul_rank"] is not None), default=None)
+        # FIXED: compare against the EFFECTIVE rank of existing catches
+        # (own form OR best evolution), not just their raw own-form rank.
+        # Comparing new_gl/new_ul (evolution-aware) against a raw own-form
+        # rank was apples-to-oranges — it made every evolution-boosted new
+        # catch look like an automatic "new best," and could just as
+        # easily miss a real improvement if the comparison ran the other
+        # way. Both sides must use the same basis.
+        existing_gl = min(
+            (r["eff_gl_rank"] for r in existing_top if r.get("eff_gl_rank") is not None),
+            default=None,
+        )
+        existing_ul = min(
+            (r["eff_ul_rank"] for r in existing_top if r.get("eff_ul_rank") is not None),
+            default=None,
+        )
 
         beats_gl = new_gl and (existing_gl is None or new_gl < existing_gl)
         beats_ul = new_ul and (existing_ul is None or new_ul < existing_ul)
@@ -247,52 +256,59 @@ def evaluate_catch(conn, name, cp, iv_atk, iv_def, iv_sta, iv_pct,
     }
 
 
-
-
 def get_best_in_db(conn, name: str, limit: int = 5, exclude_id: int = None) -> list[dict]:
-    exclude_clause = "AND id != ?" if exclude_id is not None else ""
-    params_gl = (name, exclude_id, limit) if exclude_id is not None else (name, limit)
-    params_ul = (name, exclude_id) if exclude_id is not None else (name,)
+    """
+    FIXED: previously fetched candidates via SQL ORDER BY on the raw
+    own-form gl_rank/ul_rank with a LIMIT applied BEFORE effective rank
+    (own vs. best evolution) was even considered. That meant a Pokémon
+    with a mediocre own-form rank but an excellent evolution rank (e.g. a
+    Nickit that evolves into a great Thievul) could get cut off by the
+    LIMIT before its evolution rank was ever taken into account — silently
+    excluding it from every downstream comparison.
 
-    gl_rows = conn.execute(f"""
-        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
-               gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
-        FROM pokemon
-        WHERE name = ? {exclude_clause}
-        ORDER BY
-            CASE WHEN gl_rank IS NOT NULL THEN gl_rank ELSE 99999 END ASC,
-            iv_pct DESC,
-            is_shiny DESC,
-            cp DESC
-        LIMIT ?
-    """, params_gl).fetchall()
-
-    ul_best = conn.execute(f"""
-        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
-               gl_rank as gl_rank, ul_rank as ul_rank, gl_best_cp as gl_best_cp, ul_best_cp as ul_best_cp
-        FROM pokemon
-        WHERE name = ? {exclude_clause}
-        ORDER BY
-            CASE WHEN ul_rank IS NOT NULL THEN ul_rank ELSE 99999 END ASC,
-            iv_pct DESC,
-            is_shiny DESC,
-            cp DESC
-        LIMIT 1
-    """, params_ul).fetchone()
-
-    seen_ids = {r["id"] for r in gl_rows}
-    combined = [dict(r) for r in gl_rows]
-    if ul_best and ul_best["id"] not in seen_ids:
-        combined.append(dict(ul_best))
-
-    # NEW — attach effective (own-vs-best-evolution) rank to each candidate
+    Now: fetch every same-species candidate, compute effective rank for
+    all of them first, THEN sort/limit by effective rank.
+    """
     from database import get_effective_rank
-    for poke in combined:
+
+    exclude_clause = "AND id != ?" if exclude_id is not None else ""
+    params = (name, exclude_id) if exclude_id is not None else (name,)
+
+    rows = conn.execute(f"""
+        SELECT id, name, cp, level, tag, iv_atk, iv_def, iv_sta, iv_pct, is_shiny,
+               gl_rank, ul_rank, gl_best_cp, ul_best_cp
+        FROM pokemon
+        WHERE name = ? {exclude_clause}
+    """, params).fetchall()
+
+    combined = []
+    for r in rows:
+        poke = dict(r)
         eff = get_effective_rank(conn, poke["id"], poke["gl_rank"], poke["ul_rank"])
         poke["eff_gl_rank"] = eff["gl_rank"]
         poke["eff_ul_rank"] = eff["ul_rank"]
+        combined.append(poke)
 
-    return combined
+    def sort_key(p):
+        gl = p["eff_gl_rank"] if p["eff_gl_rank"] is not None else 99999
+        return (
+            gl,
+            -(p["iv_pct"] or 0.0),
+            -int(bool(p.get("is_shiny"))),
+            -(p.get("cp") or 0),
+        )
+
+    combined.sort(key=sort_key)
+    top = combined[:limit]
+
+    ul_candidates = [p for p in combined if p["eff_ul_rank"] is not None]
+    if ul_candidates:
+        best_ul = min(ul_candidates, key=lambda p: p["eff_ul_rank"])
+        top_ids = {p["id"] for p in top}
+        if best_ul["id"] not in top_ids:
+            top.append(best_ul)
+
+    return top
 
 
 def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
@@ -315,7 +331,6 @@ def enforce_top_n(conn, top_n: int = 5) -> list[dict]:
         """, (name, is_shadow)).fetchall()
         rows = [dict(r) for r in rows]
 
-        # NEW — attach effective rank to every row before ranking
         for r in rows:
             eff = get_effective_rank(conn, r["id"], r["gl_rank"], r["ul_rank"])
             r["eff_gl_rank"] = eff["gl_rank"]
@@ -374,6 +389,8 @@ def get_species_summary(conn, name: str) -> dict:
         WHERE name = ?
     """, (name,)).fetchone()
     return dict(row) if row else {}
+
+
 def recompute_shadow_rankings(conn) -> int:
     """
     Run after sync_special_flags() sets form_status='shadow' on any rows.
