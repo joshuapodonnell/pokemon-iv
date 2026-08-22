@@ -3,6 +3,7 @@
 import sqlite3
 import json
 import os
+import re
 from datetime import datetime
 
 DB_FILE = os.path.join(os.path.dirname(__file__), "pokemon_ivs.db")
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS pokemon (
     caught_date     TEXT,
     tag             TEXT DEFAULT NULL,
     pending_old_tag TEXT DEFAULT NULL,
-    tag_changed     INTEGER DEFAULT 0
+    tag_changed     INTEGER DEFAULT 0,
+    nickname        TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS evo_rankings (
@@ -125,6 +127,8 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute("ALTER TABLE pokemon ADD COLUMN pending_old_tag TEXT")
     if "tag_changed" not in existing:  # ADD THIS
         conn.execute("ALTER TABLE pokemon ADD COLUMN tag_changed INTEGER DEFAULT 0")
+    if "nickname" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN nickname TEXT DEFAULT NULL")
     conn.commit()
     return conn
 
@@ -325,3 +329,99 @@ def get_effective_rank(conn, pokemon_id: int, own_gl: int, own_ul: int) -> dict:
     eff_gl = min((r for r in (own_gl, evo["gl_rank"]) if r is not None), default=None)
     eff_ul = min((r for r in (own_ul, evo["ul_rank"]) if r is not None), default=None)
     return {"gl_rank": eff_gl, "ul_rank": eff_ul}
+
+#--------------------Nickname generation --------------
+def abbreviate(name: str) -> str:
+    clean = re.sub(r"[^A-Za-z]", "", name)
+    return clean[:4].capitalize()
+
+def build_nickname(species_name: str, gl_rank, ul_rank) -> str:
+    abbr = abbreviate(species_name)
+    parts = [abbr]
+    if gl_rank is not None:
+        parts.append(f"G{gl_rank}")
+    if ul_rank is not None:
+        parts.append(f"U{ul_rank}")
+    return "".join(parts)[:12]
+
+def set_nickname(conn: sqlite3.Connection, pokemon_id: int) -> str:
+    """
+    Nickname = best-effective species (own or evo) + that species' GL/UL rank.
+    Must run AFTER insert_evo_rankings() so evo data is available.
+    """
+    p = conn.execute(
+        "SELECT name, gl_rank, ul_rank FROM pokemon WHERE id = ?", (pokemon_id,)
+    ).fetchone()
+    if not p:
+        return None
+
+    candidates = [(p["name"], p["gl_rank"], p["ul_rank"])]
+    evo_rows = conn.execute(
+        "SELECT evo_name, gl_rank, ul_rank FROM evo_rankings WHERE pokemon_id = ?",
+        (pokemon_id,)
+    ).fetchall()
+    candidates += [(e["evo_name"], e["gl_rank"], e["ul_rank"]) for e in evo_rows]
+
+    scored = [(c, min(v for v in (c[1], c[2]) if v is not None))
+              for c in candidates if c[1] is not None or c[2] is not None]
+    if not scored:
+        return None
+
+    (best_name, gl, ul), _ = min(scored, key=lambda x: x[1])
+    nickname = build_nickname(best_name, gl, ul)
+
+    conn.execute("UPDATE pokemon SET nickname = ? WHERE id = ?", (nickname, pokemon_id))
+    conn.commit()
+    return nickname
+
+#--------------------End of nickname generation --------------
+
+#--------------------Finding and updating pokemon to evolve --------------
+def find_by_nickname(conn: sqlite3.Connection, nickname: str):
+    return conn.execute(
+        "SELECT * FROM pokemon WHERE nickname = ? LIMIT 1", (nickname,)
+    ).fetchone()
+
+def promote_evolution(conn: sqlite3.Connection, pokemon_id: int, new_species: str,
+                       new_cp: int, new_hp: int, new_dust: int, new_level: float,
+                       new_pvp: dict, evolved_at: str = None) -> str:
+    """
+    Updates a row IN PLACE when a Pokemon evolves, instead of inserting a new
+    row. Skips straight to whatever species you actually land on — no need to
+    stage through intermediate evolutions in the DB.
+    """
+    old = conn.execute("SELECT name, notes FROM pokemon WHERE id = ?", (pokemon_id,)).fetchone()
+    gl = new_pvp.get("great", {})
+    ul = new_pvp.get("ultra", {})
+    ml = new_pvp.get("master", {})
+
+    note = f"Evolved: {old['name']} -> {new_species} on {evolved_at or datetime.now().date()}"
+    merged_notes = f"{old['notes']}\n{note}" if old["notes"] else note
+
+    conn.execute("""
+        UPDATE pokemon SET
+            name = ?, cp = ?, hp = ?, dust = ?, level = ?,
+            gl_rank = ?, gl_percentile = ?, gl_sp = ?, gl_sp_pct = ?, gl_best_level = ?, gl_best_cp = ?,
+            ul_rank = ?, ul_percentile = ?, ul_sp = ?, ul_sp_pct = ?, ul_best_level = ?, ul_best_cp = ?,
+            ml_sp = ?, ml_sp_pct = ?,
+            notes = ?
+        WHERE id = ?
+    """, (
+        new_species, new_cp, new_hp, new_dust, new_level,
+        gl.get("rank"), gl.get("percentile"), gl.get("stat_product"), gl.get("sp_pct_of_max"),
+        gl.get("best_level"), gl.get("best_cp"),
+        ul.get("rank"), ul.get("percentile"), ul.get("stat_product"), ul.get("sp_pct_of_max"),
+        ul.get("best_level"), ul.get("best_cp"),
+        ml.get("stat_product"), ml.get("sp_pct_of_max"),
+        merged_notes, pokemon_id,
+    ))
+
+    # The evo_rankings row for the species we just became is now redundant
+    conn.execute(
+        "DELETE FROM evo_rankings WHERE pokemon_id = ? AND evo_name = ?",
+        (pokemon_id, new_species)
+    )
+    conn.commit()
+
+    return set_nickname(conn, pokemon_id)
+# --------------------End of finding and updating pokemon to evolve --------------

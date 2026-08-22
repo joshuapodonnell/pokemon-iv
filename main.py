@@ -22,7 +22,7 @@ from ocr_parser import (
     readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, normalize_species_name
 )
 from pvp_rankings import all_league_rankings_with_evos
-from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus
+from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus, set_nickname
 from evaluator import evaluate_catch, get_best_in_db, enforce_top_n, promote_newly_immune
 from tagger import apply_ingame_tag, tags_are_calibrated
 
@@ -760,6 +760,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info(f"[REPROCESS] Updated existing row id={poke_id}")
 
     insert_evo_rankings(conn, poke_id, evo_rankings)
+    set_nickname(conn, poke_id)
 
     if not cp_valid:
         reasons = []
@@ -1190,7 +1191,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
     rows = conn.execute("""
-        SELECT id, cp, hp, name, tag, pending_old_tag FROM pokemon
+        SELECT id, cp, hp, name, nickname, tag, pending_old_tag FROM pokemon
         WHERE demoted = 1 OR tag_changed = 1
     """).fetchall()
 
@@ -1264,7 +1265,11 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
-        search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
+        if p["nickname"]:
+            search_str = p["nickname"]
+        else:
+            search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
+            log.warning(f"No nickname for {p['name']} id={p['id']} — falling back to CP+HP search")
         tap.type_text(search_str)
         time.sleep(1.5)
         tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],

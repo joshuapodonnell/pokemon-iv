@@ -1,6 +1,7 @@
 # dashboard_server.py
 from flask import Flask, jsonify, request, render_template_string
-from database import get_db
+from database import get_db, promote_evolution
+from pvp_rankings import all_league_rankings_with_evos
 
 app = Flask(__name__)
 
@@ -246,6 +247,7 @@ DASHBOARD_HTML = """
           <th data-key="evo2_ul_rank">2nd Evo UL Rank</th>
           <th data-key="tag">Decision</th>
           <th data-key="caught_date">Caught</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="pokemonRows"></tbody>
@@ -341,7 +343,25 @@ DASHBOARD_HTML = """
       }
       render();
     }
-
+    async function evolveRow(id) {
+      const options = await fetch(`/pokemon/${id}/evo_options`).then(r => r.json());
+      if (options.length === 0) {
+        alert("No known evolutions tracked for this Pokémon.");
+        return;
+      }
+      const choice = options.length === 1
+        ? options[0]
+        : prompt(`Which species is it now? (${options.join(" / ")})`, options[options.length - 1]);
+      if (!choice || !options.includes(choice)) return;
+    
+      const cp = prompt(`New CP for ${choice}?`);
+      const hp = prompt(`New HP for ${choice}?`);
+      fetch(`/pokemon/${id}/evolve`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ new_species: choice, cp: Number(cp), hp: Number(hp) })
+      }).then(() => loadDashboard());
+    }
     function renderHeader() {
       document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
         const key = header.dataset.key;
@@ -384,11 +404,12 @@ DASHBOARD_HTML = """
             <td>${formatEvoCell(p.evo2_name, p.evo2_ul_rank, p.evo2_ul_best_cp)}</td>
             <td><span class="tag tag-${p.tag || "REVIEW"}">${p.tag || "REVIEW"}</span></td>
             <td>${p.caught_date || "—"}</td>
+            <td><button onclick="event.stopPropagation(); evolveRow(${p.id})">Evolved →</button></td>
           </tr>
         `;
         const evoRow = isOpen ? `
           <tr class="evo-row">
-            <td colspan="13">
+            <td colspan="14">
               <div class="evo-panel">${evoPanelHtml(p.id)}</div>
             </td>
           </tr>
@@ -490,7 +511,38 @@ def pokemon_evolutions(pokemon_id):
         ORDER BY id ASC
     """, (pokemon_id,)).fetchall()
     return jsonify([dict(r) for r in rows])
+@app.route("/pokemon/<int:pokemon_id>/evo_options")
+def evo_options(pokemon_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT DISTINCT evo_name FROM evo_rankings WHERE pokemon_id = ?",
+        (pokemon_id,)
+    ).fetchall()
+    return jsonify([r["evo_name"] for r in rows])
 
+@app.route("/pokemon/<int:pokemon_id>/evolve", methods=["POST"])
+def evolve_pokemon(pokemon_id):
+    data = request.get_json()
+    new_species = data.get("new_species")
+    new_cp = data.get("cp")
+    new_hp = data.get("hp")
+    new_dust = data.get("dust")
+    new_level = data.get("level")
+
+    conn = get_db()
+    row = conn.execute("SELECT * FROM pokemon WHERE id = ?", (pokemon_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+
+    all_rankings = all_league_rankings_with_evos(
+        new_species, row["iv_atk"], row["iv_def"], row["iv_sta"]
+    )
+    new_pvp = all_rankings.get(new_species, {"great": {}, "ultra": {}})
+
+    nickname = promote_evolution(
+        conn, pokemon_id, new_species, new_cp, new_hp, new_dust, new_level, new_pvp
+    )
+    return jsonify({"ok": True, "nickname": nickname})
 @app.route("/stats")
 def stats():
     conn = get_db()
