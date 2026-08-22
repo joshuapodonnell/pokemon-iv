@@ -174,18 +174,12 @@ class TapController:
         pyautogui.dragTo(end_x, end_y, duration=dur, button="left")
         _human_delay(self.timing.get("after_swipe", 0.8), self.rand.get("timing_sigma", 0.1))
 
-    def type_text(self, text: str, interval: float = 0.03) -> None:
-        """
-        Types `text` via the Mac's keyboard, which iPhone Mirroring passes
-        through to whichever text field is currently focused on the phone.
-
-        Explicitly activates the Mirroring window first, so a stray focus
-        change (e.g. clicking your terminal to watch logs) can't cause
-        keystrokes to silently land in the wrong application.
-        """
+    def type_text_applescript(self, text: str) -> None:
         _activate_mirroring_window()
-        time.sleep(0.3)  # give the window manager a moment to actually switch focus
-        pyautogui.write(text, interval=interval)
+        time.sleep(0.3)
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'tell application "System Events" to keystroke "{escaped}"'
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
         _human_delay(self.timing.get("after_tap", 0.3), self.rand.get("timing_sigma", 0.1))
 
     def select_all_and_delete(self):
@@ -204,10 +198,6 @@ class TapController:
         _activate_mirroring_window()
         time.sleep(0.3)
         subprocess.run("pbcopy", input=text.encode("utf-8"))
-        time.sleep(0.15)
-        pyautogui.keyDown("command")
-        time.sleep(0.12)
-        pyautogui.press("v")
-        time.sleep(0.12)
-        pyautogui.keyUp("command")
+        time.sleep(3.0)  # give Universal Clipboard time to actually sync
+        pyautogui.hotkey("command", "v")
         _human_delay(self.timing.get("after_tap", 0.3), self.rand.get("timing_sigma", 0.1))

@@ -1,7 +1,7 @@
 {
   "mirror_region": {
-    "x": 56,
-    "y": 73,
+    "x": 18,
+    "y": 72,
     "w": 316,
     "h": 696
   },
@@ -142,6 +142,14 @@
     "first_search_result": {
       "x": 0.207,
       "y": 0.325
+    },
+    "nickname_edit_btn": {
+      "x": 0.496,
+      "y": 0.449
+    },
+    "nickname_save_btn": {
+      "x": 0.501,
+      "y": 0.559
     }
   },
   "bar_fill_brightness": 160,
@@ -195,8 +203,8 @@
         "y": 0.623
       },
       "tag_keep": {
-        "x": 0.254,
-        "y": 0.312
+        "x": 0.207,
+        "y": 0.315
       },
       "tag_transfer": {
         "x": 0.209,

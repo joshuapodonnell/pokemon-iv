@@ -891,7 +891,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
                 base_delay=cfg["timing"].get("after_tap", 1.0))
-        tap.type_text(keyword)
+        tap.type_text_applescript(keyword)
         time.sleep(1.5)
 
         tap.tap(ui["pokemon_slots"][0]["x"], ui["pokemon_slots"][0]["y"],
@@ -1069,7 +1069,7 @@ def rename_pokemon_ingame(tap, ui, cfg, nickname):
     tap.tap(ui["nickname_edit_btn"]["x"], ui["nickname_edit_btn"]["y"],
             base_delay=cfg["timing"].get("after_tap"))
     tap.select_all_and_delete()
-    tap.paste_text(nickname)
+    tap.type_text_applescript(nickname)
     tap.tap(ui["nickname_save_btn"]["x"], ui["nickname_save_btn"]["y"],
             base_delay=cfg["timing"].get("after_tap"))
 
@@ -1264,7 +1264,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         else:
             search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
             log.warning(f"No nickname for {p['name']} id={p['id']} — falling back to CP+HP search")
-        tap.paste_text(search_str)
+        tap.type_text_applescript(search_str)
         time.sleep(1.5)
         tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
