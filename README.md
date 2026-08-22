@@ -13,6 +13,7 @@ This project turns the iPhone Mirroring window on macOS Sequoia into a fully aut
 - Measures appraisal bars to recover **exact ATK / DEF / STA IVs (0–15)**.
 - Computes **exact IV percentage, level**, and **PvP stat product rankings** for Great / Ultra / Master League, including all evolutions.
 - Writes everything into a local **SQLite database (`pokemon_ivs.db`)** with flags for review, displacement, and demotion.
+- Assigns each cataloged Pokémon a **rank-encoded nickname** (e.g. `VenuG1U37`) that uniquely fingerprints it for later lookup — this is what lets Micro Pass 2 re-locate a specific Pokémon reliably even when CP/HP alone can't disambiguate it (see [Section 6.6](#66-nickname-fingerprinting--evolution-tracking)).
 - Applies **in-game tags** (keep / transfer / review) in real time using calibrated tap coordinates.
 - **Logs every OCR/VLM CP parse** to a dedicated benchmarking table so parsing accuracy can be measured and improved with real data instead of guesswork.
 
@@ -51,17 +52,18 @@ Appraisal bar analysis
 IV & PvP engine
   - Exact IVs + level
   - League rankings for current form + all evolutions
+  - Rank-encoded nickname generation (set_nickname)
          │
          ▼
 SQLite database (database.py)
-  - `pokemon` rows + evolution rankings
+  - `pokemon` rows + evolution rankings + nickname
   - `cp_consensus_log` rows for OCR/VLM benchmarking
   - displaced / demoted / needs_review flags
          │
          ▼
 Tagging & cleanup
   - Pass 1: live catalog + tagging
-  - Micro Pass 2: demotion cleanup in-game (re-tags demoted entries)
+  - Micro Pass 2: demotion cleanup in-game (nickname-based re-tagging of demoted entries)
 ```
 
 Anti-detection behaviours baked in:
@@ -186,6 +188,7 @@ Emergency mouse-kill is also supported by moving the cursor to a configured corn
   - Uses OCR + VLM to reconcile CP and description lines, logging the outcome to `cp_consensus_log`.
   - Opens the appraisal screen, reads IV bars, and computes IVs + PvP ranks.
   - Evaluates the catch (keep/transfer/review) and writes to the database.
+  - Generates and stores the rank-encoded nickname (`set_nickname()`).
   - Applies the appropriate **in-game tag**.
   - Taps the next arrow to advance.
 
@@ -284,10 +287,11 @@ Freeze handling is used both in Pass 1 and in Micro Pass 2 cleanup.
 - Identity and stats: `id`, `name`, `cp`, `hp`, `dust`, `level`.
 - IVs: `iv_atk`, `iv_def`, `iv_sta`, `iv_pct`, `iv_stars`.
 - PvP Great / Ultra / Master: `gl_rank`, `gl_percentile`, `gl_sp`, `gl_sp_pct`, `gl_best_level`, `gl_best_cp`, and the Ultra/Master equivalents.
+- **`nickname`** — the rank-encoded fingerprint (e.g. `VenuG1U37`) used to uniquely re-locate this individual Pokémon in-game. See [Section 6.6](#66-nickname-fingerprinting--evolution-tracking).
 - Metadata: `screenshot_path`, `notes`, `caught_date`.
 - Flags: `needs_review`, `tag`, `review_reason`, `demoted`, `is_shiny`, `form_status`, `tag_changed`, `pending_old_tag`.
 
-**`evo_rankings`** — per-evolution PvP rankings, populated by `insert_evo_rankings()`.
+**`evo_rankings`** — per-evolution PvP rankings, populated by `insert_evo_rankings()`. Also serves as the source of valid "evolve to" options offered by the dashboard (`/pokemon/<id>/evo_options`).
 
 **`cp_consensus_log`** — one row per CP parse attempt, independent of whether the catch itself gets inserted. Used purely for measuring OCR-vs-VLM accuracy (see [Section 9](#9-cp-consensus-benchmarking)):
 
@@ -308,13 +312,14 @@ Freeze handling is used both in Pass 1 and in Micro Pass 2 cleanup.
 
 - Inserts or updates the row in `pokemon`.
 - Writes evolution rankings.
+- Generates the nickname via `set_nickname()`.
 - Sets `tag`, `needs_review`, and `review_reason` based on the decision.
 
 ### 6.3 Pass 1 Catalog + Tagging
 
 During Pass 1:
 
-- Each Pokémon is scanned, evaluated, and tagged.
+- Each Pokémon is scanned, evaluated, tagged, and nicknamed.
 - Tagging uses the chosen `--tag-layout` (different coordinates for `default` vs `ff` layouts). The bot taps:
   - Tag menu button.
   - Tag option button.
@@ -328,7 +333,7 @@ If `tags_are_calibrated(tag_layout)` returns false, the bot logs a warning and *
 - After Pass 1, if tags are calibrated and this is not a dry run, `micro_pass2_cleanup()` runs.
 - It queries all rows where `demoted = 1` or `tag_changed = 1` — Pokémon whose desired tag changed after re-evaluation.
 - For each affected Pokémon, it:
-  - Uses in-game search (name + CP + HP) to locate the specific Pokémon.
+  - **Searches in-game by nickname** (falling back to the legacy `name&CP&HP` string only if a row has no nickname yet, e.g. rows cataloged before this feature existed) to locate the specific Pokémon. This replaces the original name+CP+HP search, which could return multiple ambiguous matches for level-1/CP10 catches whose CP and HP overlap heavily across different IV spreads.
   - Safely **deselects the old tag before applying the new one** — since in-game tags are additive rather than exclusive, skipping deselection would stack tags permanently with no record. If the old or new tag isn't calibrated for the active layout, the Pokémon is skipped and flagged `needs_review` rather than risking a silent stack.
   - Clears search and returns to the list.
 - Handles freezes and respects pause/quit signals.
@@ -339,6 +344,27 @@ This keeps in-game tags in sync with the latest evaluator rules without a separa
 
 `report_displaced(conn)` uses `flag_displaced()` / `find_displaced()` to identify Pokémon whose position in the collection is now "displaced" relative to previous evaluations (e.g., better candidates found later), and logs them for manual follow-up.
 
+### 6.6 Nickname Fingerprinting & Evolution Tracking
+
+**The problem this solves.** Level-1 (CP10) catches overlap heavily on CP and HP alone — the CP/HP formulas compress a wide range of different IV spreads into the same rounded integers at minimum level, so Micro Pass 2's original `name&CP&HP` search could return several ambiguous candidates for the same species. Two disambiguators were considered and rejected before landing on the current approach:
+
+- **Weight/height tracking** — real per-catch values, but requires an extra detail-screen visit and OCR pass per Pokémon that the pipeline doesn't otherwise need, and turned out to be unnecessary once rank injectivity was confirmed (below).
+- **A raw incrementing ID suffix** — solves uniqueness but tells you nothing about the Pokémon and adds an extra tap-typing burden for no informational gain.
+
+**The actual fix: rank-encoded nicknames.** Each cataloged Pokémon is renamed to `{Species}{G<gl_rank>}{U<ul_rank>}` (e.g. `VenuG1U37`), truncated to fit Pokémon GO's 12-character nickname limit, via `build_nickname()` / `set_nickname()` in `database.py`. The species used is whichever of the Pokémon's own species or **best future evolution** has the single best (lowest) league rank — so a Bulbasaur that projects to a rank-1 Great League Venusaur gets named for that Venusaur potential, not for itself.
+
+This works as a reliable fingerprint because **IV rank is injective**: standard PvP ranking tools assign each of the 4,096 possible IV combinations (for a given species/level cap/league) a unique ordinal position with no ties. That means:
+
+- Two Pokémon can only share a nickname if they are genuinely IV-identical duplicates — in which case it's provably safe for Micro Pass 2 to tag either one, since they're interchangeable.
+- A matching Great League rank *forces* a matching Ultra League rank (both are derived from the same fixed IV spread), so partial/prefix collisions like `VenuG1U37` vs. `VenuG1U370` are mathematically impossible — no quoting or exact-match search trickery is needed.
+- Pokémon GO nicknames persist through evolution, and there is no documented rate limit on renaming your own Pokémon (unlike the friend-nickname and trainer-username limits, which are unrelated features) — so nicknames can be assigned freely without throttling concerns.
+
+**Evolution tracking is manual, not automated.** Rather than trying to detect species changes during routine scans (which would mean re-scanning the entire ~11,000-row catalog just to catch a handful of manual evolutions), the dashboard (`dashboard_server.py`) exposes an **"Evolved →"** button per row:
+
+- `GET /pokemon/<id>/evo_options` returns the tracked evolution names for that row (pulled straight from `evo_rankings`), populating a simple choice prompt.
+- `POST /pokemon/<id>/evolve` calls `promote_evolution()`, which updates the existing row **in place** — new species, CP, HP, and PvP projection fields — rather than inserting a new row, and deletes the now-redundant `evo_rankings` entry for the species it just became. You can jump straight to whatever final form you land on (e.g. Bulbasaur → Venusaur) without needing to separately mark the intermediate stage first.
+- The nickname is re-derived after promotion via `set_nickname()`, but since nicknames are already based on projected best-evolution rank, evolving a Pokémon typically doesn't change its nickname at all — the DB catches up to a name that was already correct.
+
 ---
 
 ## 7. Querying and Review Tools
@@ -348,7 +374,13 @@ Beyond `main.py`, several helper tools exist:
 - `query_db_gui.py` — desktop GUI for browsing, filtering, and exporting the catalog to CSV.
 - `query_db_basic.py` — terminal-friendly summary of collection stats.
 - `show_review.py` — prints all rows with `needs_review = 1`.
-- `dashboard_server.py` — Flask REST API + dashboard UI exposing `/pokemon`, `/pokemon/<id>/evolutions`, and `/stats` endpoints. Binds to `0.0.0.0:8001` so it's reachable from other devices on the LAN (e.g., viewing the catalog from a bigger screen).
+- `dashboard_server.py` — Flask REST API + dashboard UI. Binds to `0.0.0.0:8001` so it's reachable from other devices on the LAN (e.g., viewing the catalog from a bigger screen). Endpoints:
+  - `GET /pokemon` — full catalog rows, including nickname and first/second evolution PvP projections, for the main table.
+  - `GET /pokemon/<id>/evolutions` — full evolution ranking breakdown for the expandable per-row panel.
+  - `GET /pokemon/<id>/evo_options` — valid "evolve to" species choices for that row, sourced from `evo_rankings`.
+  - `POST /pokemon/<id>/evolve` — manually promotes a row to a new species after an in-game evolution (see [Section 6.6](#66-nickname-fingerprinting--evolution-tracking)).
+  - `GET /stats` — KEEP/TRANSFER/REVIEW totals for the summary cards.
+  - `GET /all` — unfiltered dump of every column for every row.
 
 Example SQL queries:
 
@@ -370,6 +402,9 @@ WHERE iv_pct < 82.2
   AND (gl_rank IS NULL OR gl_rank > 500)
   AND (ul_rank IS NULL OR ul_rank > 500)
 ORDER BY iv_pct ASC;
+
+-- Find a specific individual by its rank-encoded nickname
+SELECT * FROM pokemon WHERE nickname = 'VenuG1U37';
 ```
 
 ---
@@ -378,6 +413,7 @@ ORDER BY iv_pct ASC;
 
 - **`slash_assumed_7` reconciliation bug (fixed).** Earlier versions of `_reconcile_cp()` trusted any OCR reading containing a slash/backslash unconditionally, without checking plausibility or cross-referencing the VLM. This produced at least one confirmed impossible CP (6775, outside the valid 10–5500 range) that was only caught by downstream validation forcing `REVIEW` — while the VLM had already unanimously read the correct value. The reconciler now requires the OCR-derived CP to be in range and non-conflicting with a valid VLM reading before trusting it; otherwise it defers to VLM (`slash_ocr_rejected_trust_vlm`).
 - **Auto-labeling ground truth only from `reconcile_reason == 'agree'`.** Any reconciliation branch that "picks a side" (e.g. `slash_assumed_7`, `same_length_trust_vlm`) makes `ocr_cp == reconciled_cp` (or `vlm_cp == reconciled_cp`) trivially true by construction — that's not independent confirmation, so the benchmarking tools never treat it as ground truth automatically.
+- **CP10/level-1 duplicate ambiguity (fixed).** The original Micro Pass 2 search key (`name&CP&HP`) could return multiple candidates for level-1 catches, since the CP/HP formulas compress many distinct IV spreads into identical rounded values at minimum level. Fixed by switching to nickname-based search — see [Section 6.6](#66-nickname-fingerprinting--evolution-tracking) for the full reasoning, including why weight/height tracking and quote-wrapped exact-match search both turned out to be unnecessary once IV-rank injectivity was confirmed.
 
 ---
 
@@ -436,7 +472,7 @@ Approximate structure:
 
 ```text
 pokemon-iv/
-├── main.py                  # Entry point: Pass 1 catalog + Micro Pass 2 cleanup
+├── main.py                  # Entry point: Pass 1 catalog + nickname-based Micro Pass 2 cleanup
 ├── calibrate.py             # Interactive UI calibration to generate calibration.json
 ├── calibration_viewer.py    # Inspect and tweak saved calibration coordinates
 ├── download_data.py         # Base stats downloader (GameMaster + PokeAPI)
@@ -456,14 +492,14 @@ pokemon-iv/
 ├── pvp_rankings.py          # Great / Ultra / Master league ranking engine
 ├── evolution_chains.py      # Evolution chain data (including branches)
 │
-├── database.py              # SQLite schema, inserts, exports, and stats
+├── database.py              # SQLite schema, inserts, exports, stats, nickname generation, evolution promotion
 ├── evaluator.py             # Keep/transfer/review rules and displacement logic
 ├── tagger.py                # In-game tagging primitives
 │
 ├── query_db_gui.py          # Desktop GUI viewer
 ├── query_db_basic.py        # CLI summary tool
 ├── show_review.py           # Needs-review listing script
-├── dashboard_server.py      # Local REST API + dashboard for the catalog (0.0.0.0:8001)
+├── dashboard_server.py      # Local REST API + dashboard for the catalog, incl. manual evolution promotion (0.0.0.0:8001)
 ├── benchmark_report.py      # CLI: auto-label + review + accuracy report for cp_consensus_log
 ├── benchmark_gui.py         # Local web GUI for reviewing/labeling CP consensus ground truth (0.0.0.0:5051)
 │
