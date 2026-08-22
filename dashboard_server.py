@@ -93,13 +93,14 @@ DASHBOARD_HTML = """
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 800px;
+      min-width: 1180px;
     }
 
     th, td {
       padding: 12px 14px;
       text-align: left;
       border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
 
     th {
@@ -108,6 +109,12 @@ DASHBOARD_HTML = """
       font-size: 12px;
       letter-spacing: .04em;
       text-transform: uppercase;
+    }
+
+    th .sort-arrow {
+      display: inline-block;
+      margin-left: 4px;
+      opacity: 0.6;
     }
 
     tr:last-child td { border-bottom: 0; }
@@ -127,6 +134,13 @@ DASHBOARD_HTML = """
     .tag-TRANSFER { background: #7f1d1d; color: #fca5a5; }
     .tag-REVIEW { background: #78350f; color: #fcd34d; }
     .iv-high { color: #86efac; font-weight: 800; }
+
+    .evo-name-tag {
+      color: var(--muted);
+      font-size: 11px;
+      display: block;
+      margin-bottom: 1px;
+    }
 
     .expand-toggle {
       display: inline-block;
@@ -168,12 +182,6 @@ DASHBOARD_HTML = """
       font-size: 11px;
       padding: 6px 10px;
       user-select: none;
-    }
-
-    table.evo-table th .sort-arrow {
-      display: inline-block;
-      margin-left: 4px;
-      opacity: 0.6;
     }
 
     table.evo-table td {
@@ -224,7 +232,7 @@ DASHBOARD_HTML = """
   <section class="table-wrap">
     <table>
       <thead>
-        <tr>
+        <tr id="headerRow">
           <th></th>
           <th data-key="name">Pokémon</th>
           <th data-key="cp">CP</th>
@@ -232,6 +240,10 @@ DASHBOARD_HTML = """
           <th>IVs</th>
           <th data-key="gl_rank">GL Rank</th>
           <th data-key="ul_rank">UL Rank</th>
+          <th data-key="evo1_gl_rank">1st Evo GL Rank</th>
+          <th data-key="evo1_ul_rank">1st Evo UL Rank</th>
+          <th data-key="evo2_gl_rank">2nd Evo GL Rank</th>
+          <th data-key="evo2_ul_rank">2nd Evo UL Rank</th>
           <th data-key="tag">Decision</th>
           <th data-key="caught_date">Caught</th>
         </tr>
@@ -258,9 +270,19 @@ DASHBOARD_HTML = """
       return `<span class="${cls}">#${rank}</span>${cpText}`;
     }
 
+    function formatEvoCell(name, rank, cp) {
+      if (!name) return "—";
+      return `<span class="evo-name-tag">${name}</span>${formatRank(rank, cp)}`;
+    }
+
     function evoArrow(key) {
       if (key !== evoSortKey) return "";
       return `<span class="sort-arrow">${evoSortAscending ? "▲" : "▼"}</span>`;
+    }
+
+    function mainArrow(key) {
+      if (key !== sortKey) return "";
+      return `<span class="sort-arrow">${sortAscending ? "▲" : "▼"}</span>`;
     }
 
     function evoPanelHtml(pokemonId) {
@@ -287,7 +309,7 @@ DASHBOARD_HTML = """
         </tr>
       `).join("");
       return `
-        <div class="evo-title">Ranking by evolution</div>
+        <div class="evo-title">Full evolution breakdown</div>
         <table class="evo-table">
           <thead>
             <tr>
@@ -320,6 +342,15 @@ DASHBOARD_HTML = """
       render();
     }
 
+    function renderHeader() {
+      document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
+        const key = header.dataset.key;
+        const label = header.dataset.label || header.textContent.replace(/[▲▼]/g, "").trim();
+        header.dataset.label = label;
+        header.innerHTML = `${label}${mainArrow(key)}`;
+      });
+    }
+
     function render() {
       const search = document.getElementById("search").value.toLowerCase();
       const tag = document.getElementById("tagFilter").value;
@@ -347,19 +378,25 @@ DASHBOARD_HTML = """
             <td>${p.iv_atk} / ${p.iv_def} / ${p.iv_sta}</td>
             <td>${p.gl_rank ?? "—"}</td>
             <td>${p.ul_rank ?? "—"}</td>
+            <td>${formatEvoCell(p.evo1_name, p.evo1_gl_rank, p.evo1_gl_best_cp)}</td>
+            <td>${formatEvoCell(p.evo1_name, p.evo1_ul_rank, p.evo1_ul_best_cp)}</td>
+            <td>${formatEvoCell(p.evo2_name, p.evo2_gl_rank, p.evo2_gl_best_cp)}</td>
+            <td>${formatEvoCell(p.evo2_name, p.evo2_ul_rank, p.evo2_ul_best_cp)}</td>
             <td><span class="tag tag-${p.tag || "REVIEW"}">${p.tag || "REVIEW"}</span></td>
             <td>${p.caught_date || "—"}</td>
           </tr>
         `;
         const evoRow = isOpen ? `
           <tr class="evo-row">
-            <td colspan="9">
+            <td colspan="13">
               <div class="evo-panel">${evoPanelHtml(p.id)}</div>
             </td>
           </tr>
         ` : "";
         return mainRow + evoRow;
       }).join("");
+
+      renderHeader();
     }
 
     document.getElementById("pokemonRows").addEventListener("click", (e) => {
@@ -395,7 +432,7 @@ DASHBOARD_HTML = """
     document.getElementById("search").addEventListener("input", render);
     document.getElementById("tagFilter").addEventListener("change", render);
 
-    document.querySelectorAll("th[data-key]").forEach(header => {
+    document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
       header.addEventListener("click", () => {
         const key = header.dataset.key;
         sortAscending = key === sortKey ? !sortAscending : true;
@@ -418,9 +455,27 @@ def dashboard():
 def list_pokemon():
     conn = get_db()
     rows = conn.execute("""
-        SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct, tag,
-               gl_rank, ul_rank, caught_date
-        FROM pokemon ORDER BY id DESC LIMIT 200
+        WITH staged AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY pokemon_id ORDER BY id ASC) AS stage
+            FROM evo_rankings
+        )
+        SELECT
+            p.id, p.name, p.cp, p.iv_atk, p.iv_def, p.iv_sta, p.iv_pct, p.tag,
+            p.gl_rank, p.ul_rank, p.caught_date,
+            e1.evo_name   AS evo1_name,
+            e1.gl_rank    AS evo1_gl_rank,
+            e1.gl_best_cp AS evo1_gl_best_cp,
+            e1.ul_rank    AS evo1_ul_rank,
+            e1.ul_best_cp AS evo1_ul_best_cp,
+            e2.evo_name   AS evo2_name,
+            e2.gl_rank    AS evo2_gl_rank,
+            e2.gl_best_cp AS evo2_gl_best_cp,
+            e2.ul_rank    AS evo2_ul_rank,
+            e2.ul_best_cp AS evo2_ul_best_cp
+        FROM pokemon p
+        LEFT JOIN staged e1 ON e1.pokemon_id = p.id AND e1.stage = 1
+        LEFT JOIN staged e2 ON e2.pokemon_id = p.id AND e2.stage = 2
+        ORDER BY p.id DESC LIMIT 200
     """).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -432,7 +487,7 @@ def pokemon_evolutions(pokemon_id):
                ul_rank, ul_percentile, ul_best_level, ul_best_cp
         FROM evo_rankings
         WHERE pokemon_id = ?
-        ORDER BY gl_rank ASC
+        ORDER BY id ASC
     """, (pokemon_id,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
