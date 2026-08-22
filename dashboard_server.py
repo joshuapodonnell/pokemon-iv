@@ -111,7 +111,7 @@ DASHBOARD_HTML = """
     }
 
     tr:last-child td { border-bottom: 0; }
-    tbody tr:hover { background: #202d44; }
+    tbody tr.main-row:hover { background: #202d44; cursor: pointer; }
 
     .tag {
       display: inline-block;
@@ -128,11 +128,68 @@ DASHBOARD_HTML = """
     .tag-REVIEW { background: #78350f; color: #fcd34d; }
     .iv-high { color: #86efac; font-weight: 800; }
 
+    .expand-toggle {
+      display: inline-block;
+      width: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 800;
+      transition: transform 0.15s ease;
+    }
+    .expand-toggle.open { transform: rotate(90deg); }
+
+    tr.evo-row td {
+      background: #0f1729;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .evo-panel {
+      padding: 14px 18px 18px 46px;
+    }
+
+    .evo-panel .evo-title {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    table.evo-table {
+      width: 100%;
+      min-width: 0;
+      background: transparent;
+    }
+
+    table.evo-table th {
+      cursor: default;
+      font-size: 11px;
+      padding: 6px 10px;
+    }
+
+    table.evo-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293f;
+      font-size: 13px;
+    }
+
+    table.evo-table tr:last-child td { border-bottom: 0; }
+
+    .best-rank { color: #86efac; font-weight: 800; }
+    .evo-loading, .evo-empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 4px 0;
+    }
+
     @media (max-width: 650px) {
       body { padding: 16px; }
       .stats { grid-template-columns: repeat(2, 1fr); }
       .controls { flex-direction: column; }
       input { width: 100%; }
+      .evo-panel { padding-left: 20px; }
     }
   </style>
 </head>
@@ -161,6 +218,7 @@ DASHBOARD_HTML = """
     <table>
       <thead>
         <tr>
+          <th></th>
           <th data-key="name">Pokémon</th>
           <th data-key="cp">CP</th>
           <th data-key="iv_pct">IV %</th>
@@ -179,8 +237,67 @@ DASHBOARD_HTML = """
     let pokemon = [];
     let sortKey = "iv_pct";
     let sortAscending = false;
+    let expandedIds = new Set();
+    let evoCache = new Map();
 
     const value = (item, key) => item[key] ?? "";
+
+    function formatRank(rank, cp) {
+      if (rank === null || rank === undefined) return "—";
+      const cls = rank <= 100 ? "best-rank" : "";
+      const cpText = cp ? ` (${cp} CP)` : "";
+      return `<span class="${cls}">#${rank}</span>${cpText}`;
+    }
+
+    function evoPanelHtml(pokemonId) {
+      const cached = evoCache.get(pokemonId);
+      if (!cached) {
+        return `<div class="evo-loading">Loading evolution rankings…</div>`;
+      }
+      if (!cached.length) {
+        return `<div class="evo-empty">No evolution ranking data for this Pokémon.</div>`;
+      }
+      const sorted = [...cached].sort((a, b) => {
+        const av = a.gl_rank ?? Infinity;
+        const bv = b.gl_rank ?? Infinity;
+        return av - bv;
+      });
+      const rows = sorted.map(e => `
+        <tr>
+          <td><strong>${e.evo_name}</strong></td>
+          <td>${formatRank(e.gl_rank, e.gl_best_cp)}</td>
+          <td>${formatRank(e.ul_rank, e.ul_best_cp)}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="evo-title">Ranking by evolution</div>
+        <table class="evo-table">
+          <thead>
+            <tr><th>Evolution</th><th>GL Rank (best CP)</th><th>UL Rank (best CP)</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function toggleEvoRow(pokemonId) {
+      if (expandedIds.has(pokemonId)) {
+        expandedIds.delete(pokemonId);
+      } else {
+        expandedIds.add(pokemonId);
+        if (!evoCache.has(pokemonId)) {
+          render();
+          try {
+            const resp = await fetch(`/pokemon/${pokemonId}/evolutions`);
+            const data = await resp.json();
+            evoCache.set(pokemonId, data);
+          } catch (err) {
+            evoCache.set(pokemonId, []);
+          }
+        }
+      }
+      render();
+    }
 
     function render() {
       const search = document.getElementById("search").value.toLowerCase();
@@ -198,18 +315,36 @@ DASHBOARD_HTML = """
           return sortAscending ? comparison : -comparison;
         });
 
-      document.getElementById("pokemonRows").innerHTML = filtered.map(p => `
-        <tr>
-          <td><strong>${p.name}</strong></td>
-          <td>${p.cp ?? "—"}</td>
-          <td class="${p.iv_pct >= 82.2 ? "iv-high" : ""}">${p.iv_pct ?? "—"}%</td>
-          <td>${p.iv_atk} / ${p.iv_def} / ${p.iv_sta}</td>
-          <td>${p.gl_rank ?? "—"}</td>
-          <td>${p.ul_rank ?? "—"}</td>
-          <td><span class="tag tag-${p.tag || "REVIEW"}">${p.tag || "REVIEW"}</span></td>
-          <td>${p.caught_date || "—"}</td>
-        </tr>
-      `).join("");
+      document.getElementById("pokemonRows").innerHTML = filtered.map(p => {
+        const isOpen = expandedIds.has(p.id);
+        const mainRow = `
+          <tr class="main-row" data-id="${p.id}">
+            <td><span class="expand-toggle ${isOpen ? "open" : ""}">▶</span></td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.cp ?? "—"}</td>
+            <td class="${p.iv_pct >= 82.2 ? "iv-high" : ""}">${p.iv_pct ?? "—"}%</td>
+            <td>${p.iv_atk} / ${p.iv_def} / ${p.iv_sta}</td>
+            <td>${p.gl_rank ?? "—"}</td>
+            <td>${p.ul_rank ?? "—"}</td>
+            <td><span class="tag tag-${p.tag || "REVIEW"}">${p.tag || "REVIEW"}</span></td>
+            <td>${p.caught_date || "—"}</td>
+          </tr>
+        `;
+        const evoRow = isOpen ? `
+          <tr class="evo-row">
+            <td colspan="9">
+              <div class="evo-panel">${evoPanelHtml(p.id)}</div>
+            </td>
+          </tr>
+        ` : "";
+        return mainRow + evoRow;
+      }).join("");
+
+      document.querySelectorAll("tr.main-row").forEach(row => {
+        row.addEventListener("click", () => {
+          toggleEvoRow(Number(row.dataset.id));
+        });
+      });
     }
 
     async function loadDashboard() {
@@ -253,10 +388,22 @@ def dashboard():
 def list_pokemon():
     conn = get_db()
     rows = conn.execute("""
-        SELECT name, cp, iv_atk, iv_def, iv_sta, iv_pct, tag,
+        SELECT id, name, cp, iv_atk, iv_def, iv_sta, iv_pct, tag,
                gl_rank, ul_rank, caught_date
         FROM pokemon ORDER BY id DESC LIMIT 200
     """).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/pokemon/<int:pokemon_id>/evolutions")
+def pokemon_evolutions(pokemon_id):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT evo_name, gl_rank, gl_percentile, gl_best_level, gl_best_cp,
+               ul_rank, ul_percentile, ul_best_level, ul_best_cp
+        FROM evo_rankings
+        WHERE pokemon_id = ?
+        ORDER BY gl_rank ASC
+    """, (pokemon_id,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/stats")
@@ -279,5 +426,6 @@ def list_all_pokemon():
         FROM pokemon ORDER BY id DESC
     """).fetchall()
     return jsonify([dict(r) for r in rows])
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8001)
