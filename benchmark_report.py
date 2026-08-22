@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """
-benchmark_report.py — Review CP-consensus disagreements and report OCR/VLM/
-reconciled accuracy for the Pokemon GO IV Cataloger's CP parsing pipeline.
+benchmark_report.py — Review CP-consensus rows and report OCR/VLM/reconciled
+accuracy for the Pokemon GO IV Cataloger's CP parsing pipeline.
 
-Usage:
-    python benchmark_report.py                    # auto-label agreements, print report
-    python benchmark_report.py --review            # also interactively label disagreements
-    python benchmark_report.py --review --limit 20 # only review 20 rows this run
-    python benchmark_report.py --skip-auto-label    # report only, no auto-labeling
+Modes:
+    python benchmark_report.py                     # auto-label true agreements, print report
+    python benchmark_report.py --review             # review only rows that still need a label
+    python benchmark_report.py --audit               # review EVERY row (including auto-labeled
+                                                       # 'agree' rows) — use this to spot-check that
+                                                       # OCR/VLM agreement is actually correct, not
+                                                       # just self-consistent
+    python benchmark_report.py --audit --limit 20     # cap how many rows to look at this run
+    python benchmark_report.py --skip-auto-label       # report only, no auto-labeling
+
+Ground-truth labeling rules:
+    - Only reconcile_reason == 'agree' rows are auto-labeled. Every other
+      reason (slash_assumed_7, vlm_trailing_digit, same_length_trust_vlm, ...)
+      means the reconciler picked a side WITHOUT independent confirmation —
+      auto-trusting those would just measure the reconciler agreeing with
+      itself, not whether it was right.
+    - label_source tracks how each ground_truth_cp was set: 'auto_agree'
+      (both sides matched independently) or 'manual' (you looked at the
+      image and typed/confirmed a value).
 """
 import argparse
 import json
@@ -22,6 +36,7 @@ DB_FILE = "pokemon_ivs.db"
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    _ensure_label_source_column(conn)
     return conn
 
 
@@ -30,17 +45,36 @@ def has_column(conn, table, col):
     return col in cols
 
 
-def auto_label_agreements(conn):
-    """Rows where OCR and the reconciled result already agree are treated as
-    ground truth automatically. This is an assumption, not proof — it can't
-    catch cases where OCR and VLM agree on the same wrong number — so the
-    disagreement subset (reviewed separately) still matters."""
+def _ensure_label_source_column(conn):
+    if not has_column(conn, "cp_consensus_log", "label_source"):
+        conn.execute("ALTER TABLE cp_consensus_log ADD COLUMN label_source TEXT")
+        conn.commit()
+
+
+def retract_untrustworthy_autolabels(conn):
+    """One-time cleanup: undo ground truth that was set to reconciled_cp for
+    any row whose reconcile_reason wasn't 'agree' (i.e. labeled by the old,
+    buggy version of this script before reason-filtering was added)."""
     cur = conn.execute("""
         UPDATE cp_consensus_log
-        SET ground_truth_cp = reconciled_cp
+        SET ground_truth_cp = NULL, label_source = NULL
+        WHERE reconcile_reason != 'agree'
+          AND ground_truth_cp = reconciled_cp
+          AND (label_source IS NULL OR label_source = 'auto_agree')
+    """)
+    conn.commit()
+    return cur.rowcount
+
+
+def auto_label_agreements(conn):
+    """Only trust rows where OCR and VLM independently landed on the same
+    number (reconcile_reason == 'agree'). Any other reason means the
+    reconciler picked a side without cross-confirmation."""
+    cur = conn.execute("""
+        UPDATE cp_consensus_log
+        SET ground_truth_cp = reconciled_cp, label_source = 'auto_agree'
         WHERE ground_truth_cp IS NULL
-          AND ocr_cp IS NOT NULL
-          AND ocr_cp = reconciled_cp
+          AND reconcile_reason = 'agree'
     """)
     conn.commit()
     return cur.rowcount
@@ -54,57 +88,86 @@ def open_images(paths):
     return existing, missing
 
 
+def _print_row(r, index, total):
+    votes = json.loads(r["vlm_votes"] or "[]")
+    print(f"\n[{index}/{total}] id={r['id']}  visit={r['visit_num']}")
+    print(f"  OCR raw={r['ocr_raw']!r}  ->  OCR_CP={r['ocr_cp']}")
+    print(f"  VLM votes={votes}  ->  VLM_consensus={r['vlm_consensus']}")
+    print(f"  Reconciled={r['reconciled_cp']}   reason={r['reconcile_reason']}")
+    print(f"  Current ground_truth={r['ground_truth_cp']}   label_source={r['label_source']}")
+
+
+def _prompt_and_label(conn, r, allow_confirm_default=False):
+    votes = json.loads(r["vlm_votes"] or "[]")
+    frames = json.loads(r["frame_paths"] or "[]")
+    all_images = [r["ocr_image_path"]] + frames
+    existing, missing = open_images(all_images)
+    if missing:
+        print(f"  (missing image files, could not open: {missing})")
+    if not existing:
+        print("  No images available for this row — label from context only.")
+
+    default_hint = f" [enter = keep {r['ground_truth_cp']}]" if allow_confirm_default and r["ground_truth_cp"] is not None else ""
+    while True:
+        ans = input(f"  True CP (number / s=skip / q=quit){default_hint}: ").strip().lower()
+        if ans == "q":
+            return "quit"
+        if ans == "s":
+            return "skip"
+        if ans == "" and allow_confirm_default and r["ground_truth_cp"] is not None:
+            conn.execute(
+                "UPDATE cp_consensus_log SET label_source = 'manual' WHERE id = ?",
+                (r["id"],),
+            )
+            conn.commit()
+            return "confirmed"
+        if ans.isdigit():
+            conn.execute(
+                "UPDATE cp_consensus_log SET ground_truth_cp = ?, label_source = 'manual' WHERE id = ?",
+                (int(ans), r["id"]),
+            )
+            conn.commit()
+            return "labeled"
+        print("  Please enter a number, 's', or 'q' (or press enter to confirm the current value).")
+
+
 def review_pending(conn, limit=None):
-    query = """
-        SELECT id, visit_num, ocr_cp, ocr_raw, ocr_image_path,
-               vlm_votes, vlm_consensus, reconciled_cp, reconcile_reason, frame_paths
-        FROM cp_consensus_log
-        WHERE ground_truth_cp IS NULL
-        ORDER BY id
-    """
-    rows = conn.execute(query).fetchall()
+    rows = conn.execute("""
+        SELECT * FROM cp_consensus_log WHERE ground_truth_cp IS NULL ORDER BY id
+    """).fetchall()
     if limit:
         rows = rows[:limit]
-
     if not rows:
         print("No pending rows need review — every logged catch already has ground truth.")
         return
-
-    print(f"\n{len(rows)} rows pending review.")
-    print("Images will open in Preview for each row. Enter the TRUE CP you see,")
-    print("'s' to skip (leave unlabeled), or 'q' to stop reviewing.\n")
-
+    print(f"\n{len(rows)} rows pending review. Images open in Preview for each.\n")
     for i, r in enumerate(rows, 1):
-        votes = json.loads(r["vlm_votes"] or "[]")
-        frames = json.loads(r["frame_paths"] or "[]")
-        all_images = [r["ocr_image_path"]] + frames
+        _print_row(r, i, len(rows))
+        result = _prompt_and_label(conn, r)
+        if result == "quit":
+            print("Stopping review — progress saved so far.")
+            return
 
-        print(f"\n[{i}/{len(rows)}] id={r['id']}  visit={r['visit_num']}")
-        print(f"  OCR raw={r['ocr_raw']!r}  ->  OCR_CP={r['ocr_cp']}")
-        print(f"  VLM votes={votes}  ->  VLM_consensus={r['vlm_consensus']}")
-        print(f"  Reconciled={r['reconciled_cp']}   reason={r['reconcile_reason']}")
 
-        existing, missing = open_images(all_images)
-        if missing:
-            print(f"  (missing image files, could not open: {missing})")
-        if not existing:
-            print("  No images available for this row — you'll need to label from context only.")
-
-        while True:
-            ans = input("  True CP (number / s=skip / q=quit): ").strip().lower()
-            if ans == "q":
-                print("Stopping review — progress saved so far.")
-                return
-            if ans == "s":
-                break
-            if ans.isdigit():
-                conn.execute(
-                    "UPDATE cp_consensus_log SET ground_truth_cp = ? WHERE id = ?",
-                    (int(ans), r["id"]),
-                )
-                conn.commit()
-                break
-            print("  Please enter a number, 's', or 'q'.")
+def audit_all(conn, limit=None):
+    """Walk EVERY row, including already-labeled 'agree' rows, so you can
+    spot-check that agreement actually means correctness, not just that the
+    reconciler was internally consistent."""
+    rows = conn.execute("SELECT * FROM cp_consensus_log ORDER BY id").fetchall()
+    if limit:
+        rows = rows[:limit]
+    if not rows:
+        print("No rows logged yet.")
+        return
+    print(f"\nAuditing {len(rows)} rows (all of them, labeled or not).")
+    print("Press enter to confirm the current ground truth, type a number to correct it,\n"
+          "'s' to skip without touching this row, or 'q' to stop.\n")
+    for i, r in enumerate(rows, 1):
+        _print_row(r, i, len(rows))
+        result = _prompt_and_label(conn, r, allow_confirm_default=True)
+        if result == "quit":
+            print("Stopping audit — progress saved so far.")
+            return
 
 
 def print_report(conn):
@@ -124,9 +187,14 @@ def print_report(conn):
 
     if total == 0:
         print("\nNo labeled rows yet.")
-        print("Run: python benchmark_report.py --review   (to label disagreements)")
+        print("Run: python benchmark_report.py --review   (label pending rows)")
+        print("Run: python benchmark_report.py --audit     (spot-check everything)")
         print("=" * 64 + "\n")
         return
+
+    auto_n = sum(1 for r in rows if r["label_source"] == "auto_agree")
+    manual_n = sum(1 for r in rows if r["label_source"] == "manual")
+    print(f"  (auto-labeled: {auto_n}, manually verified: {manual_n}, other/legacy: {total - auto_n - manual_n})")
 
     ocr_correct = sum(1 for r in rows if r["ocr_cp"] == r["ground_truth_cp"])
     vlm_correct = sum(1 for r in rows if r["vlm_consensus"] == r["ground_truth_cp"])
@@ -148,7 +216,7 @@ def print_report(conn):
             by_reason[reason]["correct"] += 1
     for reason, d in sorted(by_reason.items(), key=lambda kv: -kv[1]["n"]):
         pct = d["correct"] / d["n"] if d["n"] else 0
-        print(f"  {reason:<28} n={d['n']:<4} correct={d['correct']:<4} ({pct:.1%})")
+        print(f"  {reason:<32} n={d['n']:<4} correct={d['correct']:<4} ({pct:.1%})")
 
     if has_column(conn, "cp_consensus_log", "vlm_backends"):
         print("\nBy VLM backend (remote 30B vs local 4B fallback):")
@@ -181,21 +249,30 @@ def print_report(conn):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--review", action="store_true",
-                    help="Interactively label pending disagreement rows using saved images")
+                    help="Interactively label rows that still need ground truth")
+    p.add_argument("--audit", action="store_true",
+                    help="Interactively spot-check EVERY row, including auto-labeled agreements")
     p.add_argument("--limit", type=int, default=None,
-                    help="Limit number of rows to review this run")
+                    help="Limit number of rows to review/audit this run")
     p.add_argument("--skip-auto-label", action="store_true",
-                    help="Don't auto-label OCR==reconciled rows before reporting")
+                    help="Don't auto-label true-agreement rows before reporting")
     args = p.parse_args()
 
     conn = get_conn()
 
+    retracted = retract_untrustworthy_autolabels(conn)
+    if retracted:
+        print(f"Retracted {retracted} previously auto-labeled rows whose reconcile_reason "
+              f"wasn't 'agree' (they weren't independently cross-checked).")
+
     if not args.skip_auto_label:
         n = auto_label_agreements(conn)
         if n:
-            print(f"Auto-labeled {n} rows where OCR and the reconciled CP already agreed.")
+            print(f"Auto-labeled {n} rows where OCR and VLM independently agreed.")
 
-    if args.review:
+    if args.audit:
+        audit_all(conn, limit=args.limit)
+    elif args.review:
         review_pending(conn, limit=args.limit)
 
     print_report(conn)

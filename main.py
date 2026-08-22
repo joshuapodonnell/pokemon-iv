@@ -255,12 +255,20 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for review")
     return 0, img
 
+def _valid_cp(cp):
+    return cp is not None and 10 <= cp <= 5500
+
 def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
     if "/" in ocr_raw or "\\" in ocr_raw:
-        if ocr_cp:
+        ocr_valid = _valid_cp(ocr_cp)
+        vlm_valid = _valid_cp(vlm_cp)
+        if ocr_valid and (not vlm_valid or ocr_cp == vlm_cp):
             log.info(f"CP reconcile: OCR raw {ocr_raw!r} has slash/backslash — assuming 7 and trusting OCR {ocr_cp}")
             return ocr_cp, "slash_assumed_7"
-        return vlm_cp, "slash_no_ocr_fallback_vlm"
+        if vlm_valid:
+            log.info(f"CP reconcile: OCR raw {ocr_raw!r} slash-parse gave {ocr_cp} (invalid or conflicts with VLM) — trusting VLM {vlm_cp}")
+            return vlm_cp, "slash_ocr_rejected_trust_vlm"
+        return ocr_cp or vlm_cp, "slash_no_valid_candidate"
 
     if ocr_cp is None:
         return vlm_cp, "ocr_missing_fallback_vlm"
