@@ -55,6 +55,11 @@ HANDLES = [
     # calibrated coordinates and no way to set them from this viewer.
     ("Search Icon",     "#00CCFF", "ui.search_icon",          "point"),
     ("First Result",    "#CCFF00", "ui.first_search_result",  "point"),
+    # NEW — required by main.py's rename_pokemon_ingame(), which looks up
+    # ui["nickname_edit_btn"] and ui["nickname_save_btn"] to set the rank-
+    # encoded nickname on the detail screen after appraisal closes.
+    ("Nickname Edit",   "#FF00AA", "ui.nickname_edit_btn",    "point"),
+    ("Nickname Save",   "#AA00FF", "ui.nickname_save_btn",    "point"),
     ("Slot 1",         "#00FF88", "ui.pokemon_slots.0",      "point_slot"),
     ("Slot 2",         "#00DD77", "ui.pokemon_slots.1",      "point_slot"),
     ("Slot 3",         "#00BB66", "ui.pokemon_slots.2",      "point_slot"),
@@ -113,6 +118,10 @@ REGION_DEFAULTS = {
 POINT_DEFAULTS = {
     "search_icon":         {"x": 0.90, "y": 0.06},
     "first_search_result": {"x": 0.20, "y": 0.31},
+    # NEW — rough placeholders; drag to the pencil icon / save checkmark
+    # on the rename dialog, then Save.
+    "nickname_edit_btn": {"x": 0.50, "y": 0.10},
+    "nickname_save_btn": {"x": 0.50, "y": 0.55},
 }
 
 TAG_DEFAULTS = {
@@ -252,9 +261,11 @@ class CalibrationApp:
                 ("#FFFF00", "Appraise button"),
                 ("#FF6600", "Back button"),
                 ("#FF6600", "Clear Search"),
-                # NEW
                 ("#00CCFF", "Search icon"),
                 ("#CCFF00", "First search result"),
+                # NEW
+                ("#FF00AA", "Nickname edit"),
+                ("#AA00FF", "Nickname save"),
             ],
             "Slots": [
                 ("#00FF88", "Pokémon slots"),
@@ -665,9 +676,11 @@ class CalibrationApp:
                 ("appraise_button", "#FFFF00", "Appraise"),
                 ("back_button",     "#FF6600", "Back"),
                 ("clear_search",    "#FF6600", "Clear"),
-                # NEW
                 ("search_icon",          "#00CCFF", "Search"),
                 ("first_search_result",  "#CCFF00", "1st Result"),
+                # NEW
+                ("nickname_edit_btn", "#FF00AA", "Nick Edit"),
+                ("nickname_save_btn", "#AA00FF", "Nick Save"),
             ]:
                 p = ui.get(cfg_key, {})
                 dot(p.get("x", 0.5), p.get("y", 0.5), color, f"point_{cfg_key}", label)
@@ -723,7 +736,8 @@ class CalibrationApp:
             # NEW: added "search_icon" and "first_search_result" so they're
             # draggable/nudgeable the same way every other button already is.
             for cfg_key in ("menu_button", "appraise_button", "back_button",
-                             "clear_search", "search_icon", "first_search_result"):
+                             "clear_search", "search_icon", "first_search_result",
+                            "nickname_edit_btn", "nickname_save_btn"):
                 p = ui.get(cfg_key, {})
                 hx, hy = p.get("x", 0.5) * self.img_w * s, p.get("y", 0.5) * self.img_h * s
                 dist = abs(cx - hx) + abs(cy - hy)
