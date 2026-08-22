@@ -797,9 +797,18 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     log.info(f"[TAG] {name} id={poke_id} → {tag_value}"
              + (f" | {reasons}" if reasons else ""))
 
-    # ── 6. CLOSE APPRAISAL & APPLY TAG ───────────────────────────────────
+    # ── 6. CLOSE APPRAISAL, RENAME, & APPLY TAG ───────────────────────────
+    # close appraisal
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=random.uniform(0.1, 0.2))
+    # find nickname in DB and rename in-game if present, but only if I was planning to keep it — otherwise, don't waste time renaming something I'm about to transfer or review.
+    if tag_value == "KEEP":
+        nickname_row = conn.execute("SELECT nickname FROM pokemon WHERE id = ?", (poke_id,)).fetchone()
+        if nickname_row and nickname_row["nickname"]:
+            rename_pokemon_ingame(tap, ui, cfg, nickname_row["nickname"])
+        else:
+            log.warning(f"No nickname computed for id={poke_id} — skipping in-game rename")
+    # set tag
     tap.tap(tag_layout['tag_menu_btn']['x'], tag_layout['tag_menu_btn']['y'],
             base_delay=cfg['timing']['after_tap'])
     tap.tap(tag_layout['tag_option_btn']['x'], tag_layout['tag_option_btn']['y'],
@@ -1051,6 +1060,19 @@ def check_freeze(capture_window, cfg, freeze, tap):
         return _handle_freeze(tap, cfg, capture_window, freeze)
     return True  # not frozen (or recovered)
 
+def rename_pokemon_ingame(tap, ui, cfg, nickname):
+    """
+    Renames the currently-displayed Pokemon on its detail screen (NOT the
+    appraisal overlay) to the given nickname. Requires calibrated
+    ui["nickname_edit_btn"] and ui["nickname_save_btn"] coordinates.
+    """
+    tap.tap(ui["nickname_edit_btn"]["x"], ui["nickname_edit_btn"]["y"],
+            base_delay=cfg["timing"].get("after_tap"))
+    tap.select_all_and_delete()
+    tap.type_text(nickname)
+    tap.tap(ui["nickname_save_btn"]["x"], ui["nickname_save_btn"]["y"],
+            base_delay=cfg["timing"].get("after_tap"))
+
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn,
@@ -1158,34 +1180,6 @@ def pass1_catalog(args, cfg, conn,
         f"{len(session_ids)} new rows inserted."
     )
     return session_ids, errors
-
-
-# ── Displacement check ────────────────────────────────────────────────────────
-
-# def report_displaced(conn):
-#     displaced = flag_displaced(conn)
-#     if displaced:
-#         log.warning(f"\n⚠️  {len(displaced)} Pokémon displaced this session:")
-#         for p in displaced:
-#             search = f"{p['name'].lower()}&cp{p['cp']}"
-#             log.warning(
-#                 f"  DISPLACED  {search:<28}  "
-#                 f"{p['iv_atk']}/{p['iv_def']}/{p['iv_sta']}  "
-#                 f"GL #{p['gl_rank']}  UL #{p['ul_rank']}"
-#             )
-#     else:
-#         log.info("No Pokémon displaced this session.")
-#     return displaced
-
-# =============================================================================
-# main.py — micro_pass2_cleanup(), safe-failure version.
-#
-# Since Pokemon GO tags are ADDITIVE (a Pokemon can hold many tags at once,
-# not a single exclusive state), skipping the deselect step doesn't just
-# apply the "wrong" tag — it STACKS the new tag on top of the old one,
-# permanently, with no record that this happened. If we can't safely
-# deselect the old tag, we must not apply the new one either.
-# =============================================================================
 
 def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})

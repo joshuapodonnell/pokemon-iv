@@ -44,6 +44,8 @@ def _bezier_path(x0, y0, x1, y1, steps=20):
         points.append((px, py))
     return points
 
+
+
 # ── Core tap / swipe functions ────────────────────────────────────────────────
 
 class TapController:
@@ -185,3 +187,11 @@ class TapController:
         time.sleep(0.3)  # give the window manager a moment to actually switch focus
         pyautogui.write(text, interval=interval)
         _human_delay(self.timing.get("after_tap", 0.3), self.rand.get("timing_sigma", 0.1))
+
+    def select_all_and_delete(self):
+        _activate_mirroring_window()
+        time.sleep(0.15)
+        pyautogui.hotkey("command", "a")
+        time.sleep(0.15)
+        pyautogui.press("delete")
+        time.sleep(0.15)
