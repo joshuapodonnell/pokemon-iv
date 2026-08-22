@@ -164,9 +164,16 @@ DASHBOARD_HTML = """
     }
 
     table.evo-table th {
-      cursor: default;
+      cursor: pointer;
       font-size: 11px;
       padding: 6px 10px;
+      user-select: none;
+    }
+
+    table.evo-table th .sort-arrow {
+      display: inline-block;
+      margin-left: 4px;
+      opacity: 0.6;
     }
 
     table.evo-table td {
@@ -239,6 +246,8 @@ DASHBOARD_HTML = """
     let sortAscending = false;
     let expandedIds = new Set();
     let evoCache = new Map();
+    let evoSortKey = "gl_rank";
+    let evoSortAscending = true;
 
     const value = (item, key) => item[key] ?? "";
 
@@ -247,6 +256,11 @@ DASHBOARD_HTML = """
       const cls = rank <= 100 ? "best-rank" : "";
       const cpText = cp ? ` (${cp} CP)` : "";
       return `<span class="${cls}">#${rank}</span>${cpText}`;
+    }
+
+    function evoArrow(key) {
+      if (key !== evoSortKey) return "";
+      return `<span class="sort-arrow">${evoSortAscending ? "▲" : "▼"}</span>`;
     }
 
     function evoPanelHtml(pokemonId) {
@@ -258,9 +272,12 @@ DASHBOARD_HTML = """
         return `<div class="evo-empty">No evolution ranking data for this Pokémon.</div>`;
       }
       const sorted = [...cached].sort((a, b) => {
-        const av = a.gl_rank ?? Infinity;
-        const bv = b.gl_rank ?? Infinity;
-        return av - bv;
+        const av = value(a, evoSortKey) === "" ? Infinity : value(a, evoSortKey);
+        const bv = value(b, evoSortKey) === "" ? Infinity : value(b, evoSortKey);
+        const comparison = typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+        return evoSortAscending ? comparison : -comparison;
       });
       const rows = sorted.map(e => `
         <tr>
@@ -273,7 +290,11 @@ DASHBOARD_HTML = """
         <div class="evo-title">Ranking by evolution</div>
         <table class="evo-table">
           <thead>
-            <tr><th>Evolution</th><th>GL Rank (best CP)</th><th>UL Rank (best CP)</th></tr>
+            <tr>
+              <th data-evo-key="evo_name">Evolution${evoArrow("evo_name")}</th>
+              <th data-evo-key="gl_rank">GL Rank (best CP)${evoArrow("gl_rank")}</th>
+              <th data-evo-key="ul_rank">UL Rank (best CP)${evoArrow("ul_rank")}</th>
+            </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -339,13 +360,22 @@ DASHBOARD_HTML = """
         ` : "";
         return mainRow + evoRow;
       }).join("");
-
-      document.querySelectorAll("tr.main-row").forEach(row => {
-        row.addEventListener("click", () => {
-          toggleEvoRow(Number(row.dataset.id));
-        });
-      });
     }
+
+    document.getElementById("pokemonRows").addEventListener("click", (e) => {
+      const evoHeader = e.target.closest("th[data-evo-key]");
+      if (evoHeader) {
+        const key = evoHeader.dataset.evoKey;
+        evoSortAscending = key === evoSortKey ? !evoSortAscending : true;
+        evoSortKey = key;
+        render();
+        return;
+      }
+      const mainRow = e.target.closest("tr.main-row");
+      if (mainRow) {
+        toggleEvoRow(Number(mainRow.dataset.id));
+      }
+    });
 
     async function loadDashboard() {
       const [pokemonResponse, statsResponse] = await Promise.all([
