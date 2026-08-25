@@ -1161,23 +1161,20 @@ def build_fallback_search(p) -> str:
 def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
                             target, max_candidates=15) -> bool:
     """
-    Walks the currently-filtered search results one at a time (via the same
-    pokemon_slots / swipe mechanics pass1_catalog uses) and opens each one's
-    appraisal to compare its ACTUAL iv_atk/iv_def/iv_sta against `target`
-    (a dict with cp, iv_atk, iv_def, iv_sta pulled from the DB row).
-
-    Leaves the matching Pokemon's detail screen open on success (ready for
-    the tag-change taps that follow in micro_pass2_cleanup). Returns False
-    if no exact match was found among the first `max_candidates` results.
+    Walks the currently-filtered search results one at a time and opens
+    each one's appraisal to compare its ACTUAL iv_atk/iv_def/iv_sta against
+    `target` (cp, iv_atk, iv_def, iv_sta from the DB row). Leaves the
+    matching Pokemon's detail screen open on success. Returns False if no
+    exact match is found among the first `max_candidates` results.
     """
+
     first_slot = ui["pokemon_slots"][0]
     tap.tap(first_slot["x"], first_slot["y"], base_delay=cfg["timing"].get("after_tap"))
 
     for attempt in range(max_candidates):
         img = capture_window(cfg["mirror_region"])
         cp_img = getrelativeregion(img, ui["cp_region"])
-        cp_text = ocrregion(cp_img)
-        cp = parsecp(cp_text)
+        cp = parsecp(ocrregion(cp_img))
 
         if cp != target["cp"]:
             log.debug(f"  Candidate {attempt + 1}: CP{cp} != target CP{target['cp']}, skipping")
@@ -1191,25 +1188,46 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
                 base_delay=random.uniform(0.2, 0.3))
 
-        bar_img = wait_for_bars_stable_image(
+        # --- Determine description line count, same as scan_one_pokemon ---
+        appraisal_img = capture_window(cfg["mirror_region"])
+        raw_crop = getrelativeregion(appraisal_img, ui["name_region"])
+        num_lines, _, _ = detect_description_lines(raw_crop)
+
+        # --- Wait for bars to finish animating, using the FULL-SCREEN
+        #     brightness comparator (readappraisalbars) purely as the
+        #     stability check — this matches scan_one_pokemon's usage ---
+        stable_img = wait_for_bars_stable_image(
             lambda: capture_window(cfg["mirror_region"]),
-            lambda im, u, b: readappraisalbars(im, u, b, lines=None),
+            lambda im, u, b: readappraisalbars(im, u, b, lines=num_lines),
             ui, cfg,
         )
-        bars = parseivbars(bar_img) if bar_img is not None else None
+        if stable_img is None:
+            log.warning(f"  Candidate {attempt + 1}: could not capture stable bars, skipping")
+            tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                    base_delay=random.uniform(0.1, 0.2))
+            tap.swipe_left()
+            continue
+
+        # --- Crop the SAME dynamic bar region scan_one_pokemon crops,
+        #     THEN parse it with parse_iv_bars (matching coordinate systems) ---
+        offset = (num_lines - 2) * 0.027
+        dynamic_bar_region = {
+            "x1": ui["bar_region"]["x1"], "y1": ui["bar_region"]["y1"] - offset,
+            "x2": ui["bar_region"]["x2"], "y2": ui["bar_region"]["y2"] - offset,
+        }
+        bar_strip = getrelativeregion(stable_img, dynamic_bar_region)
+        bars = parseivbars(bar_strip)
         atk, def_, sta = (bars if bars else (None, None, None))
 
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
                 base_delay=random.uniform(0.1, 0.2))  # close appraisal overlay
 
         if (atk, def_, sta) == (target["iv_atk"], target["iv_def"], target["iv_sta"]):
-            log.info(f"  Candidate {attempt + 1}: exact IV match "
-                      f"({atk}/{def_}/{sta}) — locked in")
+            log.info(f"  Candidate {attempt + 1}: exact IV match ({atk}/{def_}/{sta}) — locked in")
             return True
 
         log.debug(f"  Candidate {attempt + 1}: IVs {atk}/{def_}/{sta} != "
-                  f"target {target['iv_atk']}/{target['iv_def']}/{target['iv_sta']}, "
-                  f"trying next")
+                  f"target {target['iv_atk']}/{target['iv_def']}/{target['iv_sta']}, trying next")
         tap.swipe_left()
 
     return False
@@ -1379,7 +1397,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
 
         img = capture_window(cfg["mirror_region"])
         if freeze.update(img):
-            if not handle_freeze(tap, cfg, capture_window, freeze):
+            if not _handle_freeze(tap, cfg, capture_window, freeze):
                 log.error("FREEZE: Could not recover in micro Pass 2, stopping.")
                 break
             continue
