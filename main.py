@@ -902,6 +902,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         matched = 0
         skipped_no_match = 0
         last_entry = None
+        entry = None
         visited = 0
 
         # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
