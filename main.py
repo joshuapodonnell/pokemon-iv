@@ -913,6 +913,10 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                 base_delay=random.uniform(0.2, 0.3))
 
         while True:
+            # Check if we've hit the limit for this specific category
+            if args.limit > 0 and visited >= args.limit:
+                log.info(f"Reached per-pass limit of {args.limit} for {keyword} sync.")
+                break
             if pause.wait_if_paused():
                 pass
             if pause.should_stop():
@@ -934,12 +938,6 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             entry = read_list_entry(base_img, appraisal_img, ui)
             name, cp, caught_date = entry
             log.info(f"{keyword} sync: read entry {visited+1}: {name} CP{cp} caught {caught_date}\n")
-
-            # NEW — dismiss appraisal WITHOUT tagging, using appraisal_done.
-            # Do this before the end-of-list check / next_arrow tap, so we
-            # always return to the base list-browsing state.
-            # tap.tap(ui["appraisal_done"]["x"], ui["appraisal_done"]["y"],
-            #         base_delay=cfg["timing"].get("after_tap"))
 
             # End of list: next_arrow stopped advancing, same Pokemon showing twice
             if entry == last_entry:
