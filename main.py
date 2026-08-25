@@ -1175,9 +1175,9 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
 
     for attempt in range(max_candidates):
         img = capture_window(cfg["mirror_region"])
-        cp_img = get_relative_region(img, ui["cp_region"])
-        cp_text = ocr_region(cp_img)
-        cp = parse_cp(cp_text)
+        cp_img = getrelativeregion(img, ui["cp_region"])
+        cp_text = ocrregion(cp_img)
+        cp = parsecp(cp_text)
 
         if cp != target["cp"]:
             log.debug(f"  Candidate {attempt + 1}: CP{cp} != target CP{target['cp']}, skipping")
@@ -1191,12 +1191,12 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
                 base_delay=random.uniform(0.2, 0.3))
 
-        bar_img = wait_for_bars_stable(
+        bar_img = wait_for_bars_stable_image(
             lambda: capture_window(cfg["mirror_region"]),
             lambda im, u, b: readappraisalbars(im, u, b, lines=None),
             ui, cfg,
         )
-        bars = parse_iv_bars(bar_img) if bar_img is not None else None
+        bars = parseivbars(bar_img) if bar_img is not None else None
         atk, def_, sta = (bars if bars else (None, None, None))
 
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],

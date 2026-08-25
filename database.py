@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS pokemon (
     tag             TEXT DEFAULT NULL,
     pending_old_tag TEXT DEFAULT NULL,
     tag_changed     INTEGER DEFAULT 0,
-    nickname        TEXT DEFAULT NULL
+    nickname        TEXT DEFAULT NULL,
     nickname_applied INTEGER DEFAULT 0,
     is_shiny        INTEGER DEFAULT 0,
     form_status     TEXT DEFAULT 'normal'
