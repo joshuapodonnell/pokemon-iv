@@ -448,7 +448,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     cp_image = getrelativeregion(base_img, ui["cp_region"])
     if args.debug or args.log_cp_images:
         os.makedirs("training_images", exist_ok=True)
-        cp_img.save(f"training_images/cp_ocr_{visit_num:03d}.png")
+        cp_image.save(f"training_images/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text!r}")
