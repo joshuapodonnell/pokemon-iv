@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import Flask, request, redirect, session, send_file, abort, render_template_string
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "pokemon_ivs.db")
+DB_FILE = os.path.join(os.path.dirname(__file__), "benchmark_logs.db")
 app = Flask(__name__)
 app.secret_key = "pogo-iv-benchmark-local-only"
 

@@ -1142,11 +1142,11 @@ def build_fallback_search(p) -> str:
     """
     parts = [p["name"].lower(), f"cp{p['cp']}"]
     if p["iv_atk"] is not None:
-        parts.append(f"atk{iv_to_bucket(p['iv_atk'])}")
+        parts.append(f"{iv_to_bucket(p['iv_atk'])}attack")
     if p["iv_def"] is not None:
-        parts.append(f"def{iv_to_bucket(p['iv_def'])}")
+        parts.append(f"{iv_to_bucket(p['iv_def'])}defense")
     if p["iv_sta"] is not None:
-        parts.append(f"sta{iv_to_bucket(p['iv_sta'])}")
+        parts.append(f"{iv_to_bucket(p['iv_sta'])}hp")
     if p["is_shiny"]:
         parts.append("shiny")
     form = (p["form_status"] or "normal").lower()
