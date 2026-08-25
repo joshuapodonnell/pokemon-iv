@@ -902,7 +902,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         matched = 0
         skipped_no_match = 0
         last_entry = None
-        entry = None
+        repeatFlag = False
         visited = 0
 
         # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
@@ -943,6 +943,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             # End of list: next_arrow stopped advancing, same Pokemon showing twice
             if entry == last_entry:
                 log.info(f"{keyword} sync: reached end of list after {visited} entries.")
+                repeatFlag = True
                 break
             last_entry = entry
             visited += 1
@@ -1023,7 +1024,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             f"{keyword} sync complete: {matched} flagged, "
             f"{skipped_no_match} skipped (no unique match), {visited} visited"
         )
-        if last_entry == entry:
+        if repeatFlag:
             tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
                     base_delay=cfg["timing"].get("after_tap", 1.0))
             tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
