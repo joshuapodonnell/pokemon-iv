@@ -448,8 +448,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     cp_image = getrelativeregion(base_img, ui["cp_region"])
     if args.debug or args.log_cp_images:
         os.makedirs("training_images", exist_ok=True)
+
         cp_image.save(f"training_images/cp_ocr_{visit_num:03d}.png")
 
+    os.makedirs("screenshots", exist_ok=True)
     cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text!r}")
     type_img = getrelativeregion(base_img, ui["type_region"])
@@ -564,7 +566,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
         try:
             log_cp_consensus(
-                conn, visit_num, _ocr_cp_at_capture, cp_text,
+                visit_num, _ocr_cp_at_capture, cp_text,  # Removed 'conn,' here
                 vlm_votes, vlm_cp, reconciled, reconcile_reason,
                 frame_paths=[f"training_images/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
                              for i in range(len(_cp_frames))] if _wants_cp_images else [],
