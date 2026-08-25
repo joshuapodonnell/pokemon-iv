@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
 """
 benchmark_gui.py — Local web GUI for reviewing CP-consensus rows and labeling
-ground truth, without opening a screenful of Preview windows.
-
-Setup (once):
-    pip install flask
-
-Run:
-    python benchmark_gui.py
-    # then open http://127.0.0.1:5051/?mode=review   (only rows needing a label)
-    # or         http://127.0.0.1:5051/?mode=audit    (every row, including auto-labeled)
-
-Same labeling rules as benchmark_report.py:
-    - Only reconcile_reason == 'agree' rows get auto-labeled as ground truth.
-    - Every manual save here is tagged label_source='manual'.
-    - Any previously-mislabeled non-'agree' row is retracted on startup.
+ground truth.
 """
 import json
 import sqlite3
@@ -23,9 +10,9 @@ from pathlib import Path
 
 from flask import Flask, request, redirect, session, send_file, abort, render_template_string
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "benchmark_logs.db")
+DB_FILE = os.path.join(os.path.dirname(__file__), "pokemon_ivs.db")
 app = Flask(__name__)
-app.secret_key = "pogo-iv-benchmark-local-only"  # local tool, no real secret needed
+app.secret_key = "pogo-iv-benchmark-local-only"
 
 BENCHMARK_SCHEMA = """
 CREATE TABLE IF NOT EXISTS cp_consensus_log (
@@ -46,15 +33,12 @@ CREATE TABLE IF NOT EXISTS cp_consensus_log (
 );
 """
 
+
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     conn.executescript(BENCHMARK_SCHEMA)
     return conn
-
-def _has_column(conn, table, col):
-    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
-    return col in cols
 
 
 def retract_untrustworthy_autolabels(conn):
@@ -88,9 +72,19 @@ PAGE = """
 <title>CP Consensus Review</title>
 <style>
   body { font-family: -apple-system, sans-serif; background:#1e1e1e; color:#eee; margin:0; padding:24px; }
-  .bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
-  .bar a { color:#7ab8ff; text-decoration:none; margin-left:12px; }
-  .progress { color:#aaa; }
+  .bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#2a2a2a; padding:12px 16px; border-radius:8px; }
+  .bar a { color:#7ab8ff; text-decoration:none; margin-left:12px; font-weight:600; }
+  .bar a.active { color:#fff; border-bottom: 2px solid #7ab8ff; }
+  .progress { color:#aaa; font-weight: 500; }
+
+  /* Mode Description Cards */
+  .mode-desc-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .mode-card { background:#252525; border: 1px solid #333; border-radius:8px; padding:12px 16px; text-decoration:none; color:inherit; display:block; transition: border-color 0.2s; }
+  .mode-card:hover { border-color:#7ab8ff; }
+  .mode-card.active-mode { border-color:#2d7a3d; background:#1e2e22; }
+  .mode-card h4 { margin: 0 0 6px 0; color:#7ab8ff; font-size:14px; }
+  .mode-card p { margin: 0; color:#aaa; font-size:12px; line-height:1.4; }
+
   .images { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
   .images figure { margin:0; background:#2a2a2a; padding:8px; border-radius:8px; }
   .images img { max-height:160px; display:block; border-radius:4px; }
@@ -109,18 +103,34 @@ PAGE = """
   button.skip { background:#555; color:#eee; }
   button.stop { background:#7a2d2d; color:#fff; }
   .done { font-size:20px; margin-top:40px; }
-  pre { background:#111; padding:16px; border-radius:8px; overflow-x:auto; }
 </style>
 </head>
 <body>
 
 <div class="bar">
-  <div class="progress">{{ mode|upper }} mode &middot; row {{ idx + 1 }} of {{ total }}</div>
+  <div class="progress">Active Mode: <b>{{ mode|upper }}</b> &middot; Item {{ idx + 1 }} of {{ total }}</div>
   <div>
-    <a href="/?mode=review">Review pending</a>
-    <a href="/?mode=audit">Audit all</a>
-    <a href="/report">Full report</a>
+    <a href="/?mode=pending" class="{{ 'active' if mode == 'pending' else '' }}">Pending</a>
+    <a href="/?mode=auto" class="{{ 'active' if mode == 'auto' else '' }}">Auto-Agreed</a>
+    <a href="/?mode=audit" class="{{ 'active' if mode == 'audit' else '' }}">Audit All</a>
+    <a href="/report">Full Report</a>
   </div>
+</div>
+
+<!-- Mode description navigation blocks -->
+<div class="mode-desc-container">
+  <a href="/?mode=pending" class="mode-card {{ 'active-mode' if mode == 'pending' else '' }}">
+    <h4>Pending Mode</h4>
+    <p>Shows only rows with no ground truth assigned yet (<code>ground_truth_cp IS NULL</code>). Use this to label new catches.</p>
+  </a>
+  <a href="/?mode=auto" class="mode-card {{ 'active-mode' if mode == 'auto' else '' }}">
+    <h4>Auto-Agreed Mode</h4>
+    <p>Shows rows automatically labeled because OCR and VLM independently matched. Use this to spot-check AI consensus accuracy.</p>
+  </a>
+  <a href="/?mode=audit" class="mode-card {{ 'active-mode' if mode == 'audit' else '' }}">
+    <h4>Audit All Mode</h4>
+    <p>Shows every single row in the database unconditionally for a complete end-to-end inspection pass.</p>
+  </a>
 </div>
 
 {% if row %}
@@ -171,7 +181,7 @@ REPORT_PAGE = """
   pre { background:#111; padding:16px; border-radius:8px; }
 </style></head>
 <body>
-<a href="/?mode=review">&larr; Back to review</a>
+<a href="/?mode=pending">&larr; Back to review</a>
 <pre>{{ report_text }}</pre>
 </body></html>
 """
@@ -191,8 +201,11 @@ def _row_images(row):
 def _get_rows(conn, mode, limit):
     if mode == "audit":
         q = "SELECT * FROM cp_consensus_log ORDER BY id"
-    else:
+    elif mode == "auto":
+        q = "SELECT * FROM cp_consensus_log WHERE label_source = 'auto_agree' ORDER BY id"
+    else:  # default to "pending"
         q = "SELECT * FROM cp_consensus_log WHERE ground_truth_cp IS NULL ORDER BY id"
+
     rows = conn.execute(q).fetchall()
     if limit:
         rows = rows[:limit]
@@ -201,7 +214,7 @@ def _get_rows(conn, mode, limit):
 
 @app.route("/")
 def index():
-    mode = request.args.get("mode", "review")
+    mode = request.args.get("mode", "pending")
     limit = request.args.get("limit", type=int)
 
     if session.get("mode") != mode or "row_ids" not in session or request.args.get("reset"):
@@ -238,7 +251,7 @@ def index():
 @app.route("/label", methods=["POST"])
 def label():
     row_id = int(request.form["row_id"])
-    mode = request.form.get("mode", "review")
+    mode = request.form.get("mode", "pending")
     action = request.form.get("action")
 
     conn = get_conn()
@@ -270,7 +283,6 @@ def label():
 @app.route("/img")
 def img():
     rel = request.args.get("path", "")
-    # Allow both the new training folder and legacy screenshots
     if not (rel.startswith("screenshots/") or rel.startswith("training_images/")) or ".." in rel:
         abort(403)
     full = Path(rel)
@@ -301,20 +313,20 @@ def report():
         lines += [
             "",
             f"n={total}",
-            f"  OCR accuracy:        {ocr_correct}/{total}  ({ocr_correct/total:.1%})",
-            f"  VLM accuracy:        {vlm_correct}/{total}  ({vlm_correct/total:.1%})",
-            f"  Reconciled accuracy: {final_correct}/{total}  ({final_correct/total:.1%})",
+            f"  OCR accuracy:        {ocr_correct}/{total}  ({ocr_correct / total:.1%})",
+            f"  VLM accuracy:        {vlm_correct}/{total}  ({vlm_correct / total:.1%})",
+            f"  Reconciled accuracy: {final_correct}/{total}  ({final_correct / total:.1%})",
         ]
         misses = [r for r in rows if r["reconciled_cp"] != r["ground_truth_cp"]]
         lines.append(f"\nMismatches ({len(misses)}):")
         for r in misses:
             lines.append(f"  id={r['id']} visit={r['visit_num']} OCR={r['ocr_cp']} "
-                          f"VLM={r['vlm_consensus']} final={r['reconciled_cp']} "
-                          f"truth={r['ground_truth_cp']} reason={r['reconcile_reason']}")
+                         f"VLM={r['vlm_consensus']} final={r['reconciled_cp']} "
+                         f"truth={r['ground_truth_cp']} reason={r['reconcile_reason']}")
     conn.close()
     return render_template_string(REPORT_PAGE, report_text="\n".join(lines))
 
 
 if __name__ == "__main__":
-    print("Starting review GUI at http://0.0.0.0:5051/?mode=audit")
+    print("Starting review GUI at http://0.0.0.0:5051/?mode=pending")
     app.run(host="0.0.0.0", port=5051, debug=False)
