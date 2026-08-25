@@ -805,11 +805,20 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             base_delay=random.uniform(0.1, 0.2))
     # find nickname in DB and rename in-game if present, but only if I was planning to keep it — otherwise, don't waste time renaming something I'm about to transfer or review.
     if tag_value == "KEEP":
-        nickname_row = conn.execute("SELECT nickname FROM pokemon WHERE id = ?", (poke_id,)).fetchone()
+        nickname_row = conn.execute(
+            "SELECT nickname FROM pokemon WHERE id = ?", (poke_id,)
+        ).fetchone()
         if nickname_row and nickname_row["nickname"]:
             rename_pokemon_ingame(tap, ui, cfg, nickname_row["nickname"])
+            conn.execute(
+                "UPDATE pokemon SET nickname_applied = 1 WHERE id = ?", (poke_id,)
+            )
+            conn.commit()
         else:
-            log.warning(f"No nickname computed for id={poke_id} — skipping in-game rename")
+            log.warning(f"No nickname computed for id={poke_id}, skipping in-game rename")
+    # TRANSFER / REVIEW: intentionally skip renaming, nickname_applied stays
+    # 0 (its column default). Micro Pass 2 self-heals this the first time
+    # the tag is ever revised — see PATCH 3.
     # set tag
     tap.tap(tag_layout['tag_menu_btn']['x'], tag_layout['tag_menu_btn']['y'],
             base_delay=cfg['timing']['after_tap'])
@@ -1082,6 +1091,129 @@ def rename_pokemon_ingame(tap, ui, cfg, nickname):
     tap.tap(ui["nickname_save_btn"]["x"], ui["nickname_save_btn"]["y"],
             base_delay=cfg["timing"].get("after_tap"))
 
+# =============================================================================
+# PATCH — build_fallback_search() + candidate-walking logic in
+# micro_pass2_cleanup(), replacing the v2 build_fallback_search /
+# search_result_is_unique approach entirely.
+#
+# The search bar can only narrow to an IV BUCKET (5 buckets per stat:
+#   atk0 = exact 0
+#   atk1 = 1-4
+#   atk2 = 5-9
+#   atk3 = 10-14
+#   atk4 = exact 15
+# same for def/sta), never an exact IV. So the search string narrows the
+# pool, then the bot has to open each visible result and read its real
+# appraisal bars to find the one that actually matches.
+# =============================================================================
+
+# =============================================================================
+# PATCH — build_fallback_search() gains shiny/shadow/purified filters.
+# These are exactly the columns sync_special_flags() already writes
+# (is_shiny, form_status), and exactly the keywords it already types into
+# the search bar on its own filter passes ("Shiny", "Shadow", "Purified").
+# Reusing them here narrows the fallback candidate pool further, which
+# matters most for the shiny-discovery case that motivated this whole fix.
+# =============================================================================
+
+def iv_to_bucket(iv: int) -> int:
+    """Maps an exact 0-15 IV to the search bar's 0-4 bucket filter value."""
+    if iv == 0:
+        return 0
+    if iv <= 4:
+        return 1
+    if iv <= 9:
+        return 2
+    if iv <= 14:
+        return 3
+    return 4
+
+
+def build_fallback_search(p) -> str:
+    """
+    Used only when nickname_applied = 0. Narrows the in-game search to a
+    small candidate pool via species + CP + IV buckets + shiny/shadow/
+    purified status + current tag. Still NOT guaranteed unique — caller
+    must walk the resulting candidates and verify exact IVs
+    (see locate_exact_candidate()).
+
+    e.g. "zubat&cp10&atk0&def1&sta2&shiny&#transfer"
+         "sableye&cp847&atk4&def4&sta3&shadow&#review"
+    """
+    parts = [p["name"].lower(), f"cp{p['cp']}"]
+    if p["iv_atk"] is not None:
+        parts.append(f"atk{iv_to_bucket(p['iv_atk'])}")
+    if p["iv_def"] is not None:
+        parts.append(f"def{iv_to_bucket(p['iv_def'])}")
+    if p["iv_sta"] is not None:
+        parts.append(f"sta{iv_to_bucket(p['iv_sta'])}")
+    if p["is_shiny"]:
+        parts.append("shiny")
+    form = (p["form_status"] or "normal").lower()
+    if form in ("shadow", "purified"):
+        parts.append(form)
+    old_tag = p["pending_old_tag"]
+    if old_tag:
+        parts.append(f"#{old_tag.lower()}")
+    return "&".join(parts)
+
+
+def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
+                            target, max_candidates=15) -> bool:
+    """
+    Walks the currently-filtered search results one at a time (via the same
+    pokemon_slots / swipe mechanics pass1_catalog uses) and opens each one's
+    appraisal to compare its ACTUAL iv_atk/iv_def/iv_sta against `target`
+    (a dict with cp, iv_atk, iv_def, iv_sta pulled from the DB row).
+
+    Leaves the matching Pokemon's detail screen open on success (ready for
+    the tag-change taps that follow in micro_pass2_cleanup). Returns False
+    if no exact match was found among the first `max_candidates` results.
+    """
+    first_slot = ui["pokemon_slots"][0]
+    tap.tap(first_slot["x"], first_slot["y"], base_delay=cfg["timing"].get("after_tap"))
+
+    for attempt in range(max_candidates):
+        img = capture_window(cfg["mirror_region"])
+        cp_img = get_relative_region(img, ui["cp_region"])
+        cp_text = ocr_region(cp_img)
+        cp = parse_cp(cp_text)
+
+        if cp != target["cp"]:
+            log.debug(f"  Candidate {attempt + 1}: CP{cp} != target CP{target['cp']}, skipping")
+            tap.swipe_left()
+            continue
+
+        tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=random.uniform(0.1, 0.2))
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=random.uniform(0.2, 0.3))
+
+        bar_img = wait_for_bars_stable(
+            lambda: capture_window(cfg["mirror_region"]),
+            lambda im, u, b: readappraisalbars(im, u, b, lines=None),
+            ui, cfg,
+        )
+        bars = parse_iv_bars(bar_img) if bar_img is not None else None
+        atk, def_, sta = (bars if bars else (None, None, None))
+
+        tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
+                base_delay=random.uniform(0.1, 0.2))  # close appraisal overlay
+
+        if (atk, def_, sta) == (target["iv_atk"], target["iv_def"], target["iv_sta"]):
+            log.info(f"  Candidate {attempt + 1}: exact IV match "
+                      f"({atk}/{def_}/{sta}) — locked in")
+            return True
+
+        log.debug(f"  Candidate {attempt + 1}: IVs {atk}/{def_}/{sta} != "
+                  f"target {target['iv_atk']}/{target['iv_def']}/{target['iv_sta']}, "
+                  f"trying next")
+        tap.swipe_left()
+
+    return False
+
 # ── Pass 1: Catalog ───────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn,
@@ -1190,22 +1322,35 @@ def pass1_catalog(args, cfg, conn,
     )
     return session_ids, errors
 
+# =============================================================================
+# micro_pass2_cleanup() — updated body for the fallback branch. The
+# nickname-search branch (nickname_applied = 1) is unchanged from before:
+# it's already unique by construction, so no candidate-walking needed there.
+# =============================================================================
+
 def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
+    # =============================================================================
+    # micro_pass2_cleanup() only needs its SELECT widened to pull is_shiny and
+    # form_status so build_fallback_search() has them available. Everything
+    # else in the function (locate_exact_candidate, candidate walking, retag,
+    # self-heal rename) is unchanged from the last version.
+    # =============================================================================
 
     rows = conn.execute("""
-        SELECT id, cp, hp, name, nickname, tag, pending_old_tag FROM pokemon
-        WHERE demoted = 1 OR tag_changed = 1
-    """).fetchall()
+            SELECT id, cp, hp, name, nickname, nickname_applied,
+                   iv_atk, iv_def, iv_sta, is_shiny, form_status,
+                   tag, pending_old_tag
+            FROM pokemon
+            WHERE demoted = 1 OR tag_changed = 1
+        """).fetchall()
 
     if not rows:
         log.info("No Pokémon need in-game re-tagging. Pass 2 skipped!")
         return
-
     log.info(f"Micro Pass 2: re-tagging {len(rows)} Pokémon...")
     from screen_capture import capture_window
     freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
-
     tag_key_map = {"KEEP": "tag_keep", "TRANSFER": "tag_transfer", "REVIEW": "tag_review"}
 
     for p in rows:
@@ -1216,67 +1361,62 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
 
         old_tag = p["pending_old_tag"]
         new_tag = p["tag"]
-
         old_key = tag_key_map.get(old_tag) if old_tag else None
         new_key = tag_key_map.get(new_tag)
 
-        # CHANGED: hard requirement checks BEFORE any taps happen.
-        # If we have an old tag but can't deselect it, or don't know the
-        # new tag at all, SKIP this Pokemon entirely rather than risk
-        # stacking tags. Flag it for manual review instead.
         if old_tag and (old_key is None or old_key not in tag_layout):
-            log.error(
-                f"Cannot safely re-tag {p['name']} CP{p['cp']}: old tag "
-                f"'{old_tag}' is not calibrated for layout '{args.tag_layout}'. "
-                f"Skipping to avoid stacking tags — flagging for manual review."
-            )
-            conn.execute("""
-                UPDATE pokemon
-                SET needs_review = 1,
-                    review_reason = 'retag_skipped_old_tag_uncalibrated'
-                WHERE id = ?
-            """, (p["id"],))
+            conn.execute("UPDATE pokemon SET needs_review = 1, "
+                         "review_reason = 'retag_skipped_old_tag_uncalibrated' WHERE id = ?",
+                         (p["id"],))
             conn.commit()
             continue
-
         if new_key is None or new_key not in tag_layout:
-            log.error(
-                f"Cannot safely re-tag {p['name']} CP{p['cp']}: new tag "
-                f"'{new_tag}' is not calibrated for layout '{args.tag_layout}'. "
-                f"Skipping — flagging for manual review."
-            )
-            conn.execute("""
-                UPDATE pokemon
-                SET needs_review = 1,
-                    review_reason = 'retag_skipped_new_tag_uncalibrated'
-                WHERE id = ?
-            """, (p["id"],))
+            conn.execute("UPDATE pokemon SET needs_review = 1, "
+                         "review_reason = 'retag_skipped_new_tag_uncalibrated' WHERE id = ?",
+                         (p["id"],))
             conn.commit()
             continue
 
         img = capture_window(cfg["mirror_region"])
         if freeze.update(img):
-            recovered = _handle_freeze(tap, cfg, capture_window, freeze)
-            if not recovered:
-                log.error("[FREEZE] Could not recover in micro Pass 2 — stopping.")
+            if not handle_freeze(tap, cfg, capture_window, freeze):
+                log.error("FREEZE: Could not recover in micro Pass 2, stopping.")
                 break
             continue
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
-
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
-        if p["nickname"]:
-            search_str = p["nickname"]
-        else:
-            search_str = f"{p['name']}&CP{p['cp']}&HP{p['hp']}"
-            log.warning(f"No nickname for {p['name']} id={p['id']} — falling back to CP+HP search")
+        using_nickname_search = bool(p["nickname_applied"] and p["nickname"])
+        search_str = p["nickname"] if using_nickname_search else build_fallback_search(p)
+        if not using_nickname_search:
+            log.warning(f"No in-game nickname for {p['name']} id={p['id']} — "
+                        f"narrowing via '{search_str}', will verify IVs candidate-by-candidate")
         tap.type_text_applescript(search_str)
         time.sleep(1.5)
-        tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+
+        if using_nickname_search:
+            tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
+                    base_delay=cfg["timing"].get("after_tap"))
+        else:
+            target = {"cp": p["cp"], "iv_atk": p["iv_atk"], "iv_def": p["iv_def"], "iv_sta": p["iv_sta"]}
+            found = locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars, target)
+            if not found:
+                log.warning(f"[{p['name']} id={p['id']}] no candidate matched exact IVs — "
+                            f"flagging for manual review")
+                conn.execute("""
+                    UPDATE pokemon SET needs_review = 1,
+                           review_reason = 'pass2_fallback_no_exact_iv_match'
+                    WHERE id = ?
+                """, (p["id"],))
+                conn.commit()
+                tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
+                        base_delay=cfg["timing"].get("after_tap"))
+                tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
+                        base_delay=cfg["timing"].get("after_tap"))
+                continue
 
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
@@ -1285,25 +1425,24 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
                 base_delay=cfg["timing"].get("after_tap"))
         tap.tap(tag_layout["tag_option_btn"]["x"], tag_layout["tag_option_btn"]["y"],
                 base_delay=cfg["timing"].get("after_tap"))
-
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
-        # Deselect old tag first (only reached if old_key was verified
-        # calibrated above, or there was no old tag to deselect).
         if old_key:
             tap.tap(tag_layout[old_key]["x"], tag_layout[old_key]["y"])
             time.sleep(cfg["timing"].get("after_tap", 0.5))
-
-        # Select new tag (verified calibrated above).
         tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
         dismiss = ui.get("tag_dismiss", {"x": 0.500, "y": 0.850})
         tap.tap(dismiss["x"], dismiss["y"])
-        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
-        tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
 
+        if not p["nickname_applied"] and p["nickname"]:
+            rename_pokemon_ingame(tap, ui, cfg, p["nickname"])
+            conn.execute("UPDATE pokemon SET nickname_applied = 1 WHERE id = ?", (p["id"],))
+
+        tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
+        tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
+                base_delay=cfg["timing"].get("after_tap"))
         conn.execute("""
             UPDATE pokemon SET demoted = 0, tag_changed = 0, pending_old_tag = NULL
             WHERE id = ?

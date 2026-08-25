@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS pokemon (
     pending_old_tag TEXT DEFAULT NULL,
     tag_changed     INTEGER DEFAULT 0,
     nickname        TEXT DEFAULT NULL
+    nickname_applied INTEGER DEFAULT 0,
+    is_shiny        INTEGER DEFAULT 0,
+    form_status     TEXT DEFAULT 'normal'
 );
 
 CREATE TABLE IF NOT EXISTS evo_rankings (
@@ -137,6 +140,10 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute("ALTER TABLE pokemon ADD COLUMN tag_changed INTEGER DEFAULT 0")
     if "nickname" not in existing:
         conn.execute("ALTER TABLE pokemon ADD COLUMN nickname TEXT DEFAULT NULL")
+    if "nickname_applied" not in existing:
+        conn.execute(
+            "ALTER TABLE pokemon ADD COLUMN nickname_applied INTEGER DEFAULT 0"
+        )
     conn.commit()
     return conn
 
