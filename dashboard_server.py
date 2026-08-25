@@ -336,7 +336,11 @@ DASHBOARD_HTML = """
     let evoSortAscending = true;
     let currentEvolveId = null;
 
-    const value = (item, key) => item[key] ?? "";
+    const value = (item, key) => {
+      const val = item[key];
+      if (val === null || val === undefined || val === "") return null;
+      return val;
+    };
 
     function formatRank(rank, cp) {
       if (rank === null || rank === undefined) return "—";
@@ -483,7 +487,7 @@ DASHBOARD_HTML = """
       });
     }
 
-    function render() {
+function render() {
       const search = document.getElementById("search").value.toLowerCase();
       const tag = document.getElementById("tagFilter").value;
 
@@ -493,7 +497,13 @@ DASHBOARD_HTML = """
         .sort((a, b) => {
           const av = value(a, sortKey);
           const bv = value(b, sortKey);
-          const comparison = typeof av === "number"
+
+          // Always push missing/dash values to the bottom
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+
+          const comparison = typeof av === "number" && typeof bv === "number"
             ? av - bv
             : String(av).localeCompare(String(bv));
           return sortAscending ? comparison : -comparison;
@@ -610,7 +620,7 @@ def list_pokemon():
         FROM pokemon p
         LEFT JOIN staged e1 ON e1.pokemon_id = p.id AND e1.stage = 1
         LEFT JOIN staged e2 ON e2.pokemon_id = p.id AND e2.stage = 2
-        ORDER BY p.id DESC LIMIT 200
+        ORDER BY p.id DESC
     """).fetchall()
     return jsonify([dict(r) for r in rows])
 
