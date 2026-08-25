@@ -1022,13 +1022,20 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             f"{keyword} sync complete: {matched} flagged, "
             f"{skipped_no_match} skipped (no unique match), {visited} visited"
         )
+        if last_entry == entry:
+            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                    base_delay=cfg["timing"].get("after_tap", 1.0))
+            tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
+                    base_delay=cfg["timing"].get("after_tap", 1.0))
+        else:
+            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                    base_delay=cfg["timing"].get("after_tap", 1.0))
+            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
+                    base_delay=cfg["timing"].get("after_tap", 1.0))
+            tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
+                    base_delay=cfg["timing"].get("after_tap", 1.0))
 
-        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap", 1.0))
-        tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap", 1.0))
-        tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
-                base_delay=cfg["timing"].get("after_tap", 1.0))
+
 
 
 def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
