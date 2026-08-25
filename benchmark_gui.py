@@ -18,23 +18,39 @@ Same labeling rules as benchmark_report.py:
 """
 import json
 import sqlite3
+import os
 from pathlib import Path
 
 from flask import Flask, request, redirect, session, send_file, abort, render_template_string
 
-DB_FILE = "benchmark_logs.db"
+DB_FILE = os.path.join(os.path.dirname(__file__), "benchmark_logs.db")
 app = Flask(__name__)
 app.secret_key = "pogo-iv-benchmark-local-only"  # local tool, no real secret needed
 
+BENCHMARK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS cp_consensus_log (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts                TEXT DEFAULT (datetime('now')),
+    visit_num         INTEGER,
+    ocr_cp            INTEGER,
+    ocr_raw           TEXT,
+    ocr_image_path    TEXT,
+    vlm_votes         TEXT,
+    vlm_backends      TEXT,
+    vlm_consensus     INTEGER,
+    reconciled_cp     INTEGER,
+    reconcile_reason  TEXT,
+    ground_truth_cp   INTEGER,
+    frame_paths       TEXT,
+    label_source      TEXT
+);
+"""
 
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
-    if not _has_column(conn, "cp_consensus_log", "label_source"):
-        conn.execute("ALTER TABLE cp_consensus_log ADD COLUMN label_source TEXT")
-        conn.commit()
+    conn.executescript(BENCHMARK_SCHEMA)
     return conn
-
 
 def _has_column(conn, table, col):
     cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
