@@ -30,7 +30,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
-DB_FILE = "pokemon_ivs.db"
+DB_FILE = "benchmark_logs.db"
 
 
 def get_conn():

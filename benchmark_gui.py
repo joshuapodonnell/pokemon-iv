@@ -22,7 +22,7 @@ from pathlib import Path
 
 from flask import Flask, request, redirect, session, send_file, abort, render_template_string
 
-DB_FILE = "pokemon_ivs.db"
+DB_FILE = "benchmark_logs.db"
 app = Flask(__name__)
 app.secret_key = "pogo-iv-benchmark-local-only"  # local tool, no real secret needed
 
@@ -254,7 +254,8 @@ def label():
 @app.route("/img")
 def img():
     rel = request.args.get("path", "")
-    if not rel.startswith("screenshots/") or ".." in rel:
+    # Allow both the new training folder and legacy screenshots
+    if not (rel.startswith("screenshots/") or rel.startswith("training_images/")) or ".." in rel:
         abort(403)
     full = Path(rel)
     if not full.exists():

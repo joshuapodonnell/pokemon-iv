@@ -1,4 +1,3 @@
-# dashboard_server.py
 from flask import Flask, jsonify, request, render_template_string
 from database import get_db, promote_evolution
 from pvp_rankings import all_league_rankings_with_evos
@@ -200,6 +199,56 @@ DASHBOARD_HTML = """
       padding: 4px 0;
     }
 
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 360px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .modal h3 { margin: 0 0 16px; font-size: 18px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .modal select, .modal input { width: 100%; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .modal-actions button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: var(--panel);
+      color: var(--text);
+    }
+    .modal-actions button.primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #fff;
+      font-weight: 600;
+    }
+
     @media (max-width: 650px) {
       body { padding: 16px; }
       .stats { grid-template-columns: repeat(2, 1fr); }
@@ -254,6 +303,29 @@ DASHBOARD_HTML = """
     </table>
   </section>
 
+  <!-- Evolution Modal -->
+  <div id="evolveModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modalTitle">Evolve Pokémon</h3>
+      <div class="form-group">
+        <label for="evoSpeciesSelect">New Species</label>
+        <select id="evoSpeciesSelect"></select>
+      </div>
+      <div class="form-group">
+        <label for="evoCpInput">New CP</label>
+        <input type="number" id="evoCpInput" placeholder="e.g. 1450">
+      </div>
+      <div class="form-group">
+        <label for="evoHpInput">New HP</label>
+        <input type="number" id="evoHpInput" placeholder="e.g. 112">
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="closeEvolveModal()">Cancel</button>
+        <button type="button" class="primary" onclick="submitEvolve()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let pokemon = [];
     let sortKey = "iv_pct";
@@ -262,6 +334,7 @@ DASHBOARD_HTML = """
     let evoCache = new Map();
     let evoSortKey = "gl_rank";
     let evoSortAscending = true;
+    let currentEvolveId = null;
 
     const value = (item, key) => item[key] ?? "";
 
@@ -343,25 +416,64 @@ DASHBOARD_HTML = """
       }
       render();
     }
+
     async function evolveRow(id) {
+      const p = pokemon.find(x => x.id === id);
       const options = await fetch(`/pokemon/${id}/evo_options`).then(r => r.json());
-      if (options.length === 0) {
+      if (!options || options.length === 0) {
         alert("No known evolutions tracked for this Pokémon.");
         return;
       }
-      const choice = options.length === 1
-        ? options[0]
-        : prompt(`Which species is it now? (${options.join(" / ")})`, options[options.length - 1]);
-      if (!choice || !options.includes(choice)) return;
-    
-      const cp = prompt(`New CP for ${choice}?`);
-      const hp = prompt(`New HP for ${choice}?`);
-      fetch(`/pokemon/${id}/evolve`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ new_species: choice, cp: Number(cp), hp: Number(hp) })
-      }).then(() => loadDashboard());
+
+      currentEvolveId = id;
+      document.getElementById("modalTitle").textContent = `Evolve ${p ? p.name : 'Pokémon'}`;
+
+      const select = document.getElementById("evoSpeciesSelect");
+      select.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+
+      document.getElementById("evoCpInput").value = "";
+      document.getElementById("evoHpInput").value = "";
+
+      document.getElementById("evolveModal").classList.remove("hidden");
     }
+
+    function closeEvolveModal() {
+      document.getElementById("evolveModal").classList.add("hidden");
+      currentEvolveId = null;
+    }
+
+    async function submitEvolve() {
+      if (!currentEvolveId) return;
+      const choice = document.getElementById("evoSpeciesSelect").value;
+      const cp = document.getElementById("evoCpInput").value;
+      const hp = document.getElementById("evoHpInput").value;
+
+      if (!choice) {
+        alert("Please select a species.");
+        return;
+      }
+      if (!cp || !hp) {
+        alert("Please enter both CP and HP.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/pokemon/${currentEvolveId}/evolve`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ new_species: choice, cp: Number(cp), hp: Number(hp) })
+        });
+        if (res.ok) {
+          closeEvolveModal();
+          loadDashboard();
+        } else {
+          alert("Failed to update evolution.");
+        }
+      } catch (err) {
+        alert("Error submitting evolution: " + err);
+      }
+    }
+
     function renderHeader() {
       document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
         const key = header.dataset.key;
@@ -468,9 +580,11 @@ DASHBOARD_HTML = """
 </html>
 """
 
+
 @app.route("/")
 def dashboard():
     return render_template_string(DASHBOARD_HTML)
+
 
 @app.route("/pokemon")
 def list_pokemon():
@@ -500,6 +614,7 @@ def list_pokemon():
     """).fetchall()
     return jsonify([dict(r) for r in rows])
 
+
 @app.route("/pokemon/<int:pokemon_id>/evolutions")
 def pokemon_evolutions(pokemon_id):
     conn = get_db()
@@ -511,6 +626,8 @@ def pokemon_evolutions(pokemon_id):
         ORDER BY id ASC
     """, (pokemon_id,)).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
 @app.route("/pokemon/<int:pokemon_id>/evo_options")
 def evo_options(pokemon_id):
     conn = get_db()
@@ -519,6 +636,7 @@ def evo_options(pokemon_id):
         (pokemon_id,)
     ).fetchall()
     return jsonify([r["evo_name"] for r in rows])
+
 
 @app.route("/pokemon/<int:pokemon_id>/evolve", methods=["POST"])
 def evolve_pokemon(pokemon_id):
@@ -543,6 +661,8 @@ def evolve_pokemon(pokemon_id):
         conn, pokemon_id, new_species, new_cp, new_hp, new_dust, new_level, new_pvp
     )
     return jsonify({"ok": True, "nickname": nickname})
+
+
 @app.route("/stats")
 def stats():
     conn = get_db()
@@ -555,6 +675,7 @@ def stats():
     """).fetchone()
     return jsonify(dict(row))
 
+
 @app.route("/all")
 def list_all_pokemon():
     conn = get_db()
@@ -563,6 +684,7 @@ def list_all_pokemon():
         FROM pokemon ORDER BY id DESC
     """).fetchall()
     return jsonify([dict(r) for r in rows])
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8001)

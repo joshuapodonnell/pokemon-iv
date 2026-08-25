@@ -380,8 +380,8 @@ def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
         img = capture_fn(cfg["mirror_region"])
         frame = getrelativeregion(img, cfg["ui"]["cp_region"])
         if debug:
-            os.makedirs("screenshots", exist_ok=True)
-            frame.save(f"screenshots/cp_vlm_{visit_num:03d}_frame{i+1}.png")
+            os.makedirs("training_images", exist_ok=True)
+            frame.save(f"training_images/cp_vlm_{visit_num:03d}_frame{i + 1}.png")
         frames.append(frame)
         time.sleep(interval)
     return frames
@@ -447,8 +447,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     cp_image = getrelativeregion(base_img, ui["cp_region"])
     if args.debug or args.log_cp_images:
-        os.makedirs("screenshots", exist_ok=True)
-        cp_image.save(f"screenshots/cp_ocr_{visit_num:03d}.png")
+        os.makedirs("training_images", exist_ok=True)
+        cp_img.save(f"training_images/cp_ocr_{visit_num:03d}.png")
 
     cp_text     = ocrregion(cp_image)
     log.info(f"raw cp_text: {cp_text!r}")
@@ -566,9 +566,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             log_cp_consensus(
                 conn, visit_num, _ocr_cp_at_capture, cp_text,
                 vlm_votes, vlm_cp, reconciled, reconcile_reason,
-                frame_paths=[f"screenshots/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
+                frame_paths=[f"training_images/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
                              for i in range(len(_cp_frames))] if _wants_cp_images else [],
-                ocr_image_path=f"screenshots/cp_ocr_{visit_num:03d}.png" if _wants_cp_images else None,
+                ocr_image_path=f"training_images/cp_ocr_{visit_num:03d}.png" if _wants_cp_images else None,
             )
         except Exception as log_err:
             log.debug(f"cp_consensus_log insert failed (non-fatal): {log_err}")
@@ -1343,12 +1343,17 @@ def run_bot(args):
             sync_special_flags(args, cfg, conn, tap, capture_window, pause)
 
             log.info("Recomputing PvP rankings for newly-flagged shadows…")
-            from evaluator import recompute_shadow_rankings
+            from evaluator import recompute_shadow_rankings, promote_newly_immune, enforce_top_n
             n = recompute_shadow_rankings(conn)
             log.info(f"Recomputed rankings for {n} shadow Pokémon")
 
+            # ADD THIS BLOCK to promote shinies/immunes:
+            log.info("Promoting newly-immune Pokémon (e.g., shinies)…")
+            promoted = promote_newly_immune(conn)
+            if promoted:
+                log.info(f"Promoted {len(promoted)} Pokémon to KEEP after flag sync")
+
             log.info("Re-running top-N enforcement with updated flags…")
-            from evaluator import enforce_top_n
             demoted = enforce_top_n(conn, top_n=5)
             if demoted:
                 log.warning(f"{len(demoted)} Pokémon demoted after flag sync")
