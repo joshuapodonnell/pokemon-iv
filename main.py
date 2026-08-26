@@ -1031,7 +1031,9 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                     f"[{keyword}] Skipping entry — OCR gave unusable data: "
                     f"name={name!r} cp={cp!r} caught_date={caught_date!r}"
                 )
-
+            if args.limit > 0 and visited >= args.limit:
+                log.info(f"Reached per-pass limit of {args.limit} for {keyword} sync.")
+                break
             tap_next_arrow(tap, ui, cfg)
             time.sleep(cfg["timing"].get("after_swipe", 0.8))
 
