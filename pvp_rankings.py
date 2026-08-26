@@ -20,32 +20,6 @@ LEAGUE_CAPS = {
 }
 
 
-def all_league_rankings_with_evos(
-    pokemon_name: str, iv_atk: int, iv_def: int, iv_sta: int
-) -> dict:
-    """
-    Rankings for the Pokémon itself plus all its evolved forms.
-    IVs are identical across evolutions in Pokémon GO.
-
-    Returns:
-    {
-        "Panpour":   {"great": {...}, "ultra": {...}, "master": {...}},
-        "Simipour":  {"great": {...}, "ultra": {...}, "master": {...}},
-    }
-    """
-    results = {}
-
-    # Rankings for the Pokémon itself
-    results[pokemon_name] = all_league_rankings(pokemon_name, iv_atk, iv_def, iv_sta)
-    evos = get_evolutions(pokemon_name)
-    if not evos:
-        log.debug(f"pvp_rankings: no evolutions found for {pokemon_name!r} — check EVOLUTION_CHAINS")
-    # Rankings for each evolved form with the same IVs
-    for evo in get_evolutions(pokemon_name):
-        results[evo] = all_league_rankings(evo, iv_atk, iv_def, iv_sta)
-
-    return results
-
 
 def stat_product(base_atk, base_def, base_sta, iv_atk, iv_def, iv_sta, level) -> float:
     """Compute the PvP stat product at a given level."""
@@ -165,7 +139,7 @@ def all_league_rankings(pokemon_name: str, iv_atk: int, iv_def: int, iv_sta: int
 
 
 def all_league_rankings_with_evos(pokemon_name: str, iv_atk: int, iv_def: int, iv_sta: int,
-                                   observed_level: float = None) -> dict:
+                                   observed_level: float = None, is_shadow=False) -> dict:
     """
     Rankings for the Pokemon itself plus all its evolved forms.
     IVs are identical across evolutions — but CP is NOT, since evolving
