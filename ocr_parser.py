@@ -66,7 +66,7 @@ def ocr_type_region(img):
     return raw
 
 VARIANT_TYPE_MAP = {
-    ("Slowpoke",    "Poison"):          "Slowpoke (Galarian)",
+    ("Slowpoke",    "Psychic"):          "Slowpoke (Galarian)",
     ("Slowbro",     "Poison"):          "Slowbro (Galarian)",
     ("Slowking",    "Poison"):          "Slowking (Galarian)",
     ("Meowth",      "Steel"):           "Meowth (Galarian)",
@@ -141,6 +141,74 @@ def getrelativeregion(img, region):
         y2 = y1 + int(region["h"] * H)
     return img.crop((x1, y1, x2, y2))
 
+def is_lucky_pokemon(img: Image.Image, ui: dict) -> bool:
+    """
+    Cheap layout detector. OCR only the small label region where
+    'Lucky Pokemon' is displayed.
+    """
+    region = ui.get("lucky_label_region")
+    if not region:
+        return False
+
+    crop = getrelativeregion(img, region)
+    w, h = crop.size
+    crop = crop.resize((w * 3, h * 3), Image.Resampling.LANCZOS).convert("L")
+    crop = ImageEnhance.Contrast(crop).enhance(2.0)
+
+    text = pytesseract.image_to_string(
+        crop,
+        config=(
+            "--psm 7 --oem 3 "
+            "-c tessedit_char_whitelist="
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz "
+        ),
+    ).strip().lower()
+
+    is_lucky = "lucky" in text
+    log.debug("Lucky detection: raw=%r is_lucky=%s", text, is_lucky)
+    return is_lucky
+
+def ocr_hp_region(img: Image.Image, ui: dict) -> tuple[int, bool, str]:
+    """
+    Pick normal or Lucky HP layout, OCR it, and return:
+    (parsed_hp, is_lucky, raw_ocr_text).
+    """
+    is_lucky = is_lucky_pokemon(img, ui)
+
+    if is_lucky:
+        region = ui.get("hp_region_lucky", ui.get("hp_region"))
+    else:
+        region = ui.get("hp_region")
+
+    if not region:
+        log.warning("No HP region configured")
+        return 0, is_lucky, ""
+
+    crop = getrelativeregion(img, region)
+    w, h = crop.size
+
+    # HP text is small; enlarge it before OCR.
+    crop = crop.resize((w * 4, h * 4), Image.Resampling.LANCZOS).convert("L")
+    crop = ImageEnhance.Contrast(crop).enhance(2.5)
+
+    raw = pytesseract.image_to_string(
+        crop,
+        config=(
+            "--psm 7 --oem 3 "
+            "-c tessedit_char_whitelist=0123456789HP/ "
+        ),
+    ).strip()
+
+    hp = parsehp(raw)
+    log.info(
+        "HP OCR: layout=%s raw=%r parsed=%s",
+        "lucky" if is_lucky else "normal",
+        raw,
+        hp,
+    )
+    return hp, is_lucky, raw
+
+
 def normalize_species_name(name: str) -> str:
     if not name:
         return name
@@ -189,12 +257,16 @@ def parsecp(text: str) -> int:
 
 
 def parsehp(text: str) -> int:
-    """Extract HP integer from OCR text like '47 / 47 HP'."""
-    m = re.search(r"(\d{1,5})", text.replace(",", ""))
-    try:
-        return int(m.group(1)) if m else 0
-    except (ValueError, TypeError):
-        return 0
+    """Extract maximum HP from OCR text such as '31 / 47 HP'."""
+    cleaned = text.replace(",", "")
+
+    m = re.search(r"\d{1,5}\s*/\s*(\d{1,5})", cleaned)
+    if m:
+        return int(m.group(1))
+
+    # Keep this only as an OCR fallback.
+    m = re.search(r"(\d{1,5})", cleaned)
+    return int(m.group(1)) if m else 0
 
 
 def parseweight(text: str) -> float | None:
@@ -283,8 +355,6 @@ def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str) -> s
             return variant
 
     return canonical
-
-
 
 # ---------------------------------------------------------------------------
 # IV bar parsing  (FIXED)

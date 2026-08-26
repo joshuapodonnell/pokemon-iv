@@ -19,7 +19,7 @@ from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseivbars, parseivbarsdebug, parse_caught_date,
-    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, normalize_species_name
+    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, ocr_hp_region
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus, set_nickname
@@ -466,13 +466,20 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     if _ocr_has_slash:
         log.info("CP text contains slash/backslash — assuming it is a 7")
 
-    hp_img = getrelativeregion(base_img, ui["hp_region"])
-    hp_img.save(f"screenshots/hp{visit_num:03d}.png")
-    try:
-        hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
-        log.info(f"HP text converted to number: {hp}")
-    except (ValueError, TypeError):
-        hp = 0
+    hp, is_lucky, hp_raw = ocr_hp_region(base_img, ui)
+    log.info(
+        "Visit %d: HP=%s, lucky=%s, raw_hp=%r",
+        visit_num,
+        hp,
+        is_lucky,
+        hp_raw,
+    )
+    # hp_img.save(f"screenshots/hp{visit_num:03d}.png")
+    # try:
+    #     hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
+    #     log.info(f"HP text converted to number: {hp}")
+    # except (ValueError, TypeError):
+    #     hp = 0
 
     # ── Submit CP consensus BEFORE any taps, while base screen is still visible
     # Capture frames immediately so all 5 land on the base screen
@@ -1128,6 +1135,29 @@ def iv_to_bucket(iv: int) -> int:
         return 3
     return 4
 
+SEARCH_BASE_NAME_OVERRIDES = {
+    "oricorio": "oricorio",
+    "giratina": "giratina",
+    "deoxys": "deoxys",
+    "shaymin": "shaymin",
+    "wormadam": "wormadam",
+    "castform": "castform",
+    "basculin": "basculin",
+    "darmanitan": "darmanitan",
+}
+
+def pokemon_go_search_species(name: str) -> str:
+    compact = (name or "").strip().lower()
+
+    for stored_prefix, search_name in SEARCH_BASE_NAME_OVERRIDES.items():
+        if compact.startswith(stored_prefix):
+            return search_name
+
+    for marker in (" Style", " Forme", " Form", " Mode", " Cloak", " Trim"):
+        if marker in name:
+            return name.split(marker, 1)[0].lower()
+
+    return compact
 
 def build_fallback_search(p) -> str:
     """
@@ -1140,7 +1170,10 @@ def build_fallback_search(p) -> str:
     e.g. "zubat&cp10&atk0&def1&sta2&shiny&#transfer"
          "sableye&cp847&atk4&def4&sta3&shadow&#review"
     """
-    parts = [p["name"].lower(), f"cp{p['cp']}"]
+    parts = [
+        pokemon_go_search_species(p["name"]),  # changed
+        f"cp{p['cp']}",
+    ]
     if p["iv_atk"] is not None:
         parts.append(f"{iv_to_bucket(p['iv_atk'])}attack")
     if p["iv_def"] is not None:

@@ -100,6 +100,7 @@ RECT_REGIONS = [
     ("cp_region",     "#FF4444"),
     ("name_region",   "#44FF44"),
     ("hp_region",     "#4488FF"),
+    ("hp_region_lucky", "#00BFFF"),
     ("dust_region",   "#FF44FF"),
     ("type_region",   "#FF9900"),
     ("weight_region", "#AAFFAA"),
@@ -107,6 +108,10 @@ RECT_REGIONS = [
 ]
 
 REGION_DEFAULTS = {
+"hp_region_lucky": {
+        "x1": 0.10, "y1": 0.56,
+        "x2": 0.90, "y2": 0.64
+    },
     "type_region":   {"x1": 0.10, "y1": 0.28, "x2": 0.90, "y2": 0.36},
     "weight_region": {"x1": 0.10, "y1": 0.38, "x2": 0.55, "y2": 0.46},
     "height_region": {"x1": 0.55, "y1": 0.38, "x2": 0.90, "y2": 0.46},
@@ -251,6 +256,7 @@ class CalibrationApp:
                 ("#FF4444", "CP region corners"),
                 ("#44FF44", "Name region corners"),
                 ("#4488FF", "HP region corners"),
+                ("#00BFFF", "Lucky HP region corners"),
                 ("#FF44FF", "Dust region corners"),
                 ("#FF9900", "Type region corners"),
                 ("#AAFFAA", "Weight region corners"),
@@ -660,6 +666,7 @@ class CalibrationApp:
                 ("cp_region",     "#FF4444", "CP"),
                 ("name_region",   "#44FF44", "Name"),
                 ("hp_region",     "#4488FF", "HP"),
+                ("hp_region_lucky", "#00BFFF", "Lucky HP"),
                 ("dust_region",   "#FF44FF", "Dust"),
                 ("type_region",   "#FF9900", "Type"),
                 ("weight_region", "#AAFFAA", "Wt"),
@@ -721,7 +728,7 @@ class CalibrationApp:
         candidates = []
 
         if cat in ("OCR Regions", "Legend"):
-            all_rect_keys = ("cp_region", "name_region", "hp_region", "dust_region", "type_region", "weight_region",
+            all_rect_keys = ("cp_region", "name_region", "hp_region", "hp_region_lucky", "dust_region", "type_region", "weight_region",
                              "height_region")
             for cfg_key in all_rect_keys:
                 reg = ui.get(cfg_key, {})
