@@ -653,8 +653,13 @@ def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
 
-def analyze_appraisal_screen(img: Image.Image) -> dict:
+def analyze_appraisal_screen(img: Image.Image, visit_num: Optional[int] = None) -> dict:
     log.debug("VisionAgent.analyze_appraisal_screen called")
+    if visit_num is not None:
+        try:
+            img.save(f"screenshots/vlm_appraisal_region_{visit_num:03d}.png")
+        except Exception as e:
+            log.warning(f"Could not save appraisal debug image: {e}")
     return _safe_call(_APPRAISAL_SCREEN_PROMPT, _pil_to_list(img))
 
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
