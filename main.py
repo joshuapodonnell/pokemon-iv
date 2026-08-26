@@ -716,7 +716,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
     iv_data['caught_date'] = caught_date
-    all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv)
+    all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv, iv_data['level'])
     pvp          = all_rankings.get(name, {"great": {}, "ultra": {}})
     evo_rankings = {s: l for s, l in all_rankings.items() if s != name}
     iv_data["pvp"] = pvp
