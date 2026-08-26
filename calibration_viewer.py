@@ -101,6 +101,7 @@ RECT_REGIONS = [
     ("name_region",   "#44FF44"),
     ("hp_region",     "#4488FF"),
     ("hp_region_lucky", "#00BFFF"),
+    ("lucky_label_region", "#FFD700"),
     ("dust_region",   "#FF44FF"),
     ("type_region",   "#FF9900"),
     ("weight_region", "#AAFFAA"),
@@ -108,9 +109,13 @@ RECT_REGIONS = [
 ]
 
 REGION_DEFAULTS = {
-"hp_region_lucky": {
+    "hp_region_lucky": {
         "x1": 0.10, "y1": 0.56,
         "x2": 0.90, "y2": 0.64
+    },
+    "lucky_label_region": {
+        "x1": 0.10, "y1": 0.18,
+        "x2": 0.90, "y2": 0.28,
     },
     "type_region":   {"x1": 0.10, "y1": 0.28, "x2": 0.90, "y2": 0.36},
     "weight_region": {"x1": 0.10, "y1": 0.38, "x2": 0.55, "y2": 0.46},
@@ -189,7 +194,7 @@ def load_config():
 
     for key, default in REGION_DEFAULTS.items():
         if key not in ui:
-            ui[key] = default
+            ui[key] = dict(default)
 
     # NEW — ensure search_icon / first_search_result exist so the viewer has
     # something to draw/drag on first launch, and so main.py's ui[...] lookups
@@ -257,6 +262,7 @@ class CalibrationApp:
                 ("#44FF44", "Name region corners"),
                 ("#4488FF", "HP region corners"),
                 ("#00BFFF", "Lucky HP region corners"),
+                ("#FFD700", "Lucky-label region corners"),
                 ("#FF44FF", "Dust region corners"),
                 ("#FF9900", "Type region corners"),
                 ("#AAFFAA", "Weight region corners"),
@@ -667,6 +673,7 @@ class CalibrationApp:
                 ("name_region",   "#44FF44", "Name"),
                 ("hp_region",     "#4488FF", "HP"),
                 ("hp_region_lucky", "#00BFFF", "Lucky HP"),
+                ("lucky_label_region", "#FFD700", "Lucky Label"),
                 ("dust_region",   "#FF44FF", "Dust"),
                 ("type_region",   "#FF9900", "Type"),
                 ("weight_region", "#AAFFAA", "Wt"),
@@ -729,7 +736,7 @@ class CalibrationApp:
 
         if cat in ("OCR Regions", "Legend"):
             all_rect_keys = ("cp_region", "name_region", "hp_region", "hp_region_lucky", "dust_region", "type_region", "weight_region",
-                             "height_region")
+                             "height_region", "lucky_label_region")
             for cfg_key in all_rect_keys:
                 reg = ui.get(cfg_key, {})
                 for corner, xk, yk in [("tl", "x1", "y1"), ("br", "x2", "y2")]:
