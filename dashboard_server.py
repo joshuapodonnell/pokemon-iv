@@ -1,295 +1,700 @@
-"""Local Pokémon IV review dashboard.
-Run: python dashboard_server.py
-"""
+from flask import Flask, jsonify, request, render_template_string
+from database import get_db, promote_evolution
+from pvp_rankings import all_league_rankings_with_evos
 
-import sqlite3
-from flask import Flask, abort, redirect, render_template_string, request, url_for
-
-from database import get_db
-from iv_calculator import compute_ivs
-
-DB_FILE = "pokemon_ivs.db"
 app = Flask(__name__)
 
-PAGE = """
+DASHBOARD_HTML = """
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pokémon IV Review Dashboard</title>
+  <title>Pokémon GO IV Catalog</title>
   <style>
     :root {
-      color-scheme: dark;
       --bg: #0f172a;
-      --panel: #16213e;
-      --panel-2: #1e293b;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --border: #334155;
-      --save: #15803d;
-      --delete: #b91c1c;
-      --review: #b45309;
+      --panel: #172033;
+      --border: #2c3a55;
+      --text: #e6edf7;
+      --muted: #9bacbf;
+      --keep: #22c55e;
+      --transfer: #ef4444;
+      --review: #f59e0b;
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      padding: 24px;
-      background: var(--bg);
+      padding: 28px;
       color: var(--text);
+      background: var(--bg);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    h1 { margin: 0; font-size: 24px; }
-    .sub { color: var(--muted); margin: 8px 0 20px; }
-    .empty {
-      margin-top: 28px;
-      padding: 24px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--panel);
-      color: var(--muted);
+
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
     }
+
     .card {
-      margin: 14px 0;
-      padding: 16px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
       background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
     }
-    .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin: 0 0 12px;
+
+    .card-label {
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
     }
-    .reason {
-      color: #fbbf24;
-      font-size: 13px;
+
+    .card-value {
+      font-size: 30px;
+      font-weight: 800;
+      margin-top: 6px;
     }
-    .pokemon-form {
-      display: grid;
-      grid-template-columns: minmax(150px, 1.5fr) repeat(5, minmax(64px, 90px)) minmax(105px, 120px) minmax(160px, 1.5fr) auto;
-      gap: 8px;
-      align-items: center;
+
+    .keep { color: var(--keep); }
+    .transfer { color: var(--transfer); }
+    .review { color: var(--review); }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
     }
-    input, select, button {
-      min-width: 0;
-      border-radius: 6px;
-      font: inherit;
-    }
+
     input, select {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #475569;
-      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--panel);
       color: var(--text);
+      font-size: 14px;
     }
-    button {
-      padding: 8px 12px;
-      border: 0;
-      color: white;
-      font-weight: 600;
+
+    input { width: 280px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 1180px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
       cursor: pointer;
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
     }
-    .save { background: var(--save); }
-    .delete { background: var(--delete); }
-    .delete-form { display: inline-block; margin-top: 10px; }
-    .labels {
-      display: grid;
-      grid-template-columns: minmax(150px, 1.5fr) repeat(5, minmax(64px, 90px)) minmax(105px, 120px) minmax(160px, 1.5fr) auto;
-      gap: 8px;
-      margin: 0 0 4px;
+
+    th .sort-arrow {
+      display: inline-block;
+      margin-left: 4px;
+      opacity: 0.6;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tbody tr.main-row:hover { background: #202d44; cursor: pointer; }
+
+    .tag {
+      display: inline-block;
+      min-width: 80px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .tag-KEEP { background: #14532d; color: #86efac; }
+    .tag-TRANSFER { background: #7f1d1d; color: #fca5a5; }
+    .tag-REVIEW { background: #78350f; color: #fcd34d; }
+    .iv-high { color: #86efac; font-weight: 800; }
+
+    .evo-name-tag {
       color: var(--muted);
       font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
+      display: block;
+      margin-bottom: 1px;
     }
-    @media (max-width: 1050px) {
-      .pokemon-form, .labels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .labels { display: none; }
+
+    .expand-toggle {
+      display: inline-block;
+      width: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 800;
+      transition: transform 0.15s ease;
+    }
+    .expand-toggle.open { transform: rotate(90deg); }
+
+    tr.evo-row td {
+      background: #0f1729;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .evo-panel {
+      padding: 14px 18px 18px 46px;
+    }
+
+    .evo-panel .evo-title {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    table.evo-table {
+      width: 100%;
+      min-width: 0;
+      background: transparent;
+    }
+
+    table.evo-table th {
+      cursor: pointer;
+      font-size: 11px;
+      padding: 6px 10px;
+      user-select: none;
+    }
+
+    table.evo-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293f;
+      font-size: 13px;
+    }
+
+    table.evo-table tr:last-child td { border-bottom: 0; }
+
+    .best-rank { color: #86efac; font-weight: 800; }
+    .evo-loading, .evo-empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 4px 0;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 360px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .modal h3 { margin: 0 0 16px; font-size: 18px; }
+    .modal .form-group { margin-bottom: 14px; }
+    .modal label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .modal select, .modal input { width: 100%; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .modal-actions button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: var(--panel);
+      color: var(--text);
+    }
+    .modal-actions button.primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    @media (max-width: 650px) {
+      body { padding: 16px; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .controls { flex-direction: column; }
+      input { width: 100%; }
+      .evo-panel { padding-left: 20px; }
     }
   </style>
 </head>
 <body>
-  <h1>Pokémon IV Review Dashboard</h1>
-  <p class="sub">Showing {{ rows|length }} unresolved Review-tagged record{{ '' if rows|length == 1 else 's' }}. Saving Keep or Transfer clears its review status.</p>
+  <h1>Pokémon GO IV Catalog</h1>
+  <p class="subtitle">Latest scanned Pokémon and tagging decisions</p>
 
-  {% if rows %}
-    <div class="labels">
-      <span>Name / Form</span><span>CP</span><span>Max HP</span><span>ATK IV</span><span>DEF IV</span><span>STA IV</span><span>Decision</span><span>Review reason</span><span>Save</span>
+  <section class="stats">
+    <div class="card"><div class="card-label">TOTAL</div><div class="card-value" id="total">—</div></div>
+    <div class="card"><div class="card-label">KEEP</div><div class="card-value keep" id="keep">—</div></div>
+    <div class="card"><div class="card-label">TRANSFER</div><div class="card-value transfer" id="transfer">—</div></div>
+    <div class="card"><div class="card-label">REVIEW</div><div class="card-value review" id="review">—</div></div>
+  </section>
+
+  <section class="controls">
+    <input id="search" placeholder="Search Pokémon name…">
+    <select id="tagFilter">
+      <option value="">All tags</option>
+      <option value="KEEP">KEEP</option>
+      <option value="TRANSFER">TRANSFER</option>
+      <option value="REVIEW">REVIEW</option>
+    </select>
+  </section>
+
+  <section class="table-wrap">
+    <table>
+      <thead>
+        <tr id="headerRow">
+          <th></th>
+          <th data-key="name">Pokémon</th>
+          <th data-key="cp">CP</th>
+          <th data-key="iv_pct">IV %</th>
+          <th>IVs</th>
+          <th data-key="gl_rank">GL Rank</th>
+          <th data-key="ul_rank">UL Rank</th>
+          <th data-key="evo1_gl_rank">1st Evo GL Rank</th>
+          <th data-key="evo1_ul_rank">1st Evo UL Rank</th>
+          <th data-key="evo2_gl_rank">2nd Evo GL Rank</th>
+          <th data-key="evo2_ul_rank">2nd Evo UL Rank</th>
+          <th data-key="tag">Decision</th>
+          <th data-key="caught_date">Caught</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="pokemonRows"></tbody>
+    </table>
+  </section>
+
+  <!-- Evolution Modal -->
+  <div id="evolveModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modalTitle">Evolve Pokémon</h3>
+      <div class="form-group">
+        <label for="evoSpeciesSelect">New Species</label>
+        <select id="evoSpeciesSelect"></select>
+      </div>
+      <div class="form-group">
+        <label for="evoCpInput">New CP</label>
+        <input type="number" id="evoCpInput" placeholder="e.g. 1450">
+      </div>
+      <div class="form-group">
+        <label for="evoHpInput">New HP</label>
+        <input type="number" id="evoHpInput" placeholder="e.g. 112">
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="closeEvolveModal()">Cancel</button>
+        <button type="button" class="primary" onclick="submitEvolve()">Confirm</button>
+      </div>
     </div>
+  </div>
 
-    {% for row in rows %}
-      <section class="card">
-        <div class="meta">
-          <span>ID {{ row.id }}</span>
-          <span>IV% {{ "%.1f"|format(row.iv_pct or 0) }}</span>
-          {% if row.level is not none %}<span>Level {{ row.level }}</span>{% endif %}
-          {% if row.caught_date %}<span>Caught {{ row.caught_date }}</span>{% endif %}
-          {% if row.review_reason %}<span class="reason">{{ row.review_reason }}</span>{% endif %}
-        </div>
+  <script>
+    let pokemon = [];
+    let sortKey = "iv_pct";
+    let sortAscending = false;
+    let expandedIds = new Set();
+    let evoCache = new Map();
+    let evoSortKey = "gl_rank";
+    let evoSortAscending = true;
+    let currentEvolveId = null;
 
-        <form method="post" action="{{ url_for('update_pokemon', pokemon_id=row.id) }}" class="pokemon-form">
-          <input type="text" name="name" value="{{ row.name or '' }}" placeholder="Species / form" required>
-          <input type="number" name="cp" value="{{ row.cp or 0 }}" min="0" max="5500" required>
-          <input type="number" name="hp" value="{{ row.hp or 0 }}" min="0" max="999" required>
-          <input type="number" name="iv_atk" value="{{ row.iv_atk or 0 }}" min="0" max="15" required>
-          <input type="number" name="iv_def" value="{{ row.iv_def or 0 }}" min="0" max="15" required>
-          <input type="number" name="iv_sta" value="{{ row.iv_sta or 0 }}" min="0" max="15" required>
-          <select name="tag">
-            <option value="REVIEW" {% if row.tag == "REVIEW" %}selected{% endif %}>Review</option>
-            <option value="KEEP" {% if row.tag == "KEEP" %}selected{% endif %}>Keep</option>
-            <option value="TRANSFER" {% if row.tag == "TRANSFER" %}selected{% endif %}>Transfer</option>
-          </select>
-          <input type="text" name="review_reason" value="{{ row.review_reason or '' }}" placeholder="Required only if retaining Review">
-          <button class="save" type="submit">Save</button>
-        </form>
+    const value = (item, key) => {
+      const val = item[key];
+      if (val === null || val === undefined || val === "") return null;
+      return val;
+    };
 
-        <form method="post" action="{{ url_for('delete_pokemon', pokemon_id=row.id) }}" class="delete-form" onsubmit="return confirm('Delete local record ID {{ row.id }} ({{ row.name }})? This cannot be undone.');">
-          <button class="delete" type="submit">Delete failed scan</button>
-        </form>
-      </section>
-    {% endfor %}
-  {% else %}
-    <div class="empty">No unresolved Review-tagged records. Resolved Keep and Transfer records are intentionally excluded.</div>
-  {% endif %}
+    function formatRank(rank, cp) {
+      if (rank === null || rank === undefined) return "—";
+      const cls = rank <= 100 ? "best-rank" : "";
+      const cpText = cp ? ` (${cp} CP)` : "";
+      return `<span class="${cls}">#${rank}</span>${cpText}`;
+    }
+
+    function formatEvoCell(name, rank, cp) {
+      if (!name) return "—";
+      return `<span class="evo-name-tag">${name}</span>${formatRank(rank, cp)}`;
+    }
+
+    function evoArrow(key) {
+      if (key !== evoSortKey) return "";
+      return `<span class="sort-arrow">${evoSortAscending ? "▲" : "▼"}</span>`;
+    }
+
+    function mainArrow(key) {
+      if (key !== sortKey) return "";
+      return `<span class="sort-arrow">${sortAscending ? "▲" : "▼"}</span>`;
+    }
+
+    function evoPanelHtml(pokemonId) {
+      const cached = evoCache.get(pokemonId);
+      if (!cached) {
+        return `<div class="evo-loading">Loading evolution rankings…</div>`;
+      }
+      if (!cached.length) {
+        return `<div class="evo-empty">No evolution ranking data for this Pokémon.</div>`;
+      }
+      const sorted = [...cached].sort((a, b) => {
+        const av = value(a, evoSortKey) === "" ? Infinity : value(a, evoSortKey);
+        const bv = value(b, evoSortKey) === "" ? Infinity : value(b, evoSortKey);
+        const comparison = typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+        return evoSortAscending ? comparison : -comparison;
+      });
+      const rows = sorted.map(e => `
+        <tr>
+          <td><strong>${e.evo_name}</strong></td>
+          <td>${formatRank(e.gl_rank, e.gl_best_cp)}</td>
+          <td>${formatRank(e.ul_rank, e.ul_best_cp)}</td>
+        </tr>
+      `).join("");
+      return `
+        <div class="evo-title">Full evolution breakdown</div>
+        <table class="evo-table">
+          <thead>
+            <tr>
+              <th data-evo-key="evo_name">Evolution${evoArrow("evo_name")}</th>
+              <th data-evo-key="gl_rank">GL Rank (best CP)${evoArrow("gl_rank")}</th>
+              <th data-evo-key="ul_rank">UL Rank (best CP)${evoArrow("ul_rank")}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function toggleEvoRow(pokemonId) {
+      if (expandedIds.has(pokemonId)) {
+        expandedIds.delete(pokemonId);
+      } else {
+        expandedIds.add(pokemonId);
+        if (!evoCache.has(pokemonId)) {
+          render();
+          try {
+            const resp = await fetch(`/pokemon/${pokemonId}/evolutions`);
+            const data = await resp.json();
+            evoCache.set(pokemonId, data);
+          } catch (err) {
+            evoCache.set(pokemonId, []);
+          }
+        }
+      }
+      render();
+    }
+
+    async function evolveRow(id) {
+      const p = pokemon.find(x => x.id === id);
+      const options = await fetch(`/pokemon/${id}/evo_options`).then(r => r.json());
+      if (!options || options.length === 0) {
+        alert("No known evolutions tracked for this Pokémon.");
+        return;
+      }
+
+      currentEvolveId = id;
+      document.getElementById("modalTitle").textContent = `Evolve ${p ? p.name : 'Pokémon'}`;
+
+      const select = document.getElementById("evoSpeciesSelect");
+      select.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+
+      document.getElementById("evoCpInput").value = "";
+      document.getElementById("evoHpInput").value = "";
+
+      document.getElementById("evolveModal").classList.remove("hidden");
+    }
+
+    function closeEvolveModal() {
+      document.getElementById("evolveModal").classList.add("hidden");
+      currentEvolveId = null;
+    }
+
+    async function submitEvolve() {
+      if (!currentEvolveId) return;
+      const choice = document.getElementById("evoSpeciesSelect").value;
+      const cp = document.getElementById("evoCpInput").value;
+      const hp = document.getElementById("evoHpInput").value;
+
+      if (!choice) {
+        alert("Please select a species.");
+        return;
+      }
+      if (!cp || !hp) {
+        alert("Please enter both CP and HP.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/pokemon/${currentEvolveId}/evolve`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ new_species: choice, cp: Number(cp), hp: Number(hp) })
+        });
+        if (res.ok) {
+          closeEvolveModal();
+          loadDashboard();
+        } else {
+          alert("Failed to update evolution.");
+        }
+      } catch (err) {
+        alert("Error submitting evolution: " + err);
+      }
+    }
+
+    function renderHeader() {
+      document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
+        const key = header.dataset.key;
+        const label = header.dataset.label || header.textContent.replace(/[▲▼]/g, "").trim();
+        header.dataset.label = label;
+        header.innerHTML = `${label}${mainArrow(key)}`;
+      });
+    }
+
+function render() {
+      const search = document.getElementById("search").value.toLowerCase();
+      const tag = document.getElementById("tagFilter").value;
+
+      const filtered = pokemon
+        .filter(p => p.name.toLowerCase().includes(search))
+        .filter(p => !tag || p.tag === tag)
+        .sort((a, b) => {
+          const av = value(a, sortKey);
+          const bv = value(b, sortKey);
+
+          // Always push missing/dash values to the bottom
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+
+          const comparison = typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av).localeCompare(String(bv));
+          return sortAscending ? comparison : -comparison;
+        });
+
+      document.getElementById("pokemonRows").innerHTML = filtered.map(p => {
+        const isOpen = expandedIds.has(p.id);
+        const mainRow = `
+          <tr class="main-row" data-id="${p.id}">
+            <td><span class="expand-toggle ${isOpen ? "open" : ""}">▶</span></td>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.cp ?? "—"}</td>
+            <td class="${p.iv_pct >= 82.2 ? "iv-high" : ""}">${p.iv_pct ?? "—"}%</td>
+            <td>${p.iv_atk} / ${p.iv_def} / ${p.iv_sta}</td>
+            <td>${p.gl_rank ?? "—"}</td>
+            <td>${p.ul_rank ?? "—"}</td>
+            <td>${formatEvoCell(p.evo1_name, p.evo1_gl_rank, p.evo1_gl_best_cp)}</td>
+            <td>${formatEvoCell(p.evo1_name, p.evo1_ul_rank, p.evo1_ul_best_cp)}</td>
+            <td>${formatEvoCell(p.evo2_name, p.evo2_gl_rank, p.evo2_gl_best_cp)}</td>
+            <td>${formatEvoCell(p.evo2_name, p.evo2_ul_rank, p.evo2_ul_best_cp)}</td>
+            <td><span class="tag tag-${p.tag || "REVIEW"}">${p.tag || "REVIEW"}</span></td>
+            <td>${p.caught_date || "—"}</td>
+            <td><button onclick="event.stopPropagation(); evolveRow(${p.id})">Evolved →</button></td>
+          </tr>
+        `;
+        const evoRow = isOpen ? `
+          <tr class="evo-row">
+            <td colspan="14">
+              <div class="evo-panel">${evoPanelHtml(p.id)}</div>
+            </td>
+          </tr>
+        ` : "";
+        return mainRow + evoRow;
+      }).join("");
+
+      renderHeader();
+    }
+
+    document.getElementById("pokemonRows").addEventListener("click", (e) => {
+      const evoHeader = e.target.closest("th[data-evo-key]");
+      if (evoHeader) {
+        const key = evoHeader.dataset.evoKey;
+        evoSortAscending = key === evoSortKey ? !evoSortAscending : true;
+        evoSortKey = key;
+        render();
+        return;
+      }
+      const mainRow = e.target.closest("tr.main-row");
+      if (mainRow) {
+        toggleEvoRow(Number(mainRow.dataset.id));
+      }
+    });
+
+    async function loadDashboard() {
+      const [pokemonResponse, statsResponse] = await Promise.all([
+        fetch("/pokemon"),
+        fetch("/stats")
+      ]);
+
+      pokemon = await pokemonResponse.json();
+      const stats = await statsResponse.json();
+
+      for (const key of ["total", "keep", "transfer", "review"]) {
+        document.getElementById(key).textContent = stats[key] ?? 0;
+      }
+      render();
+    }
+
+    document.getElementById("search").addEventListener("input", render);
+    document.getElementById("tagFilter").addEventListener("change", render);
+
+    document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
+      header.addEventListener("click", () => {
+        const key = header.dataset.key;
+        sortAscending = key === sortKey ? !sortAscending : true;
+        sortKey = key;
+        render();
+      });
+    });
+
+    loadDashboard();
+  </script>
 </body>
 </html>
 """
 
 
-def get_conn():
-    """Open the project database with mapping-style rows."""
+@app.route("/")
+def dashboard():
+    return render_template_string(DASHBOARD_HTML)
+
+
+@app.route("/pokemon")
+def list_pokemon():
     conn = get_db()
-    conn.row_factory = sqlite3.Row
-    return conn
+    rows = conn.execute("""
+        WITH staged AS (
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY pokemon_id ORDER BY id ASC) AS stage
+            FROM evo_rankings
+        )
+        SELECT
+            p.id, p.name, p.cp, p.iv_atk, p.iv_def, p.iv_sta, p.iv_pct, p.tag,
+            p.gl_rank, p.ul_rank, p.caught_date,
+            e1.evo_name   AS evo1_name,
+            e1.gl_rank    AS evo1_gl_rank,
+            e1.gl_best_cp AS evo1_gl_best_cp,
+            e1.ul_rank    AS evo1_ul_rank,
+            e1.ul_best_cp AS evo1_ul_best_cp,
+            e2.evo_name   AS evo2_name,
+            e2.gl_rank    AS evo2_gl_rank,
+            e2.gl_best_cp AS evo2_gl_best_cp,
+            e2.ul_rank    AS evo2_ul_rank,
+            e2.ul_best_cp AS evo2_ul_best_cp
+        FROM pokemon p
+        LEFT JOIN staged e1 ON e1.pokemon_id = p.id AND e1.stage = 1
+        LEFT JOIN staged e2 ON e2.pokemon_id = p.id AND e2.stage = 2
+        ORDER BY p.id DESC
+    """).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
-def table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+@app.route("/pokemon/<int:pokemon_id>/evolutions")
+def pokemon_evolutions(pokemon_id):
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT evo_name, gl_rank, gl_percentile, gl_best_level, gl_best_cp,
+               ul_rank, ul_percentile, ul_best_level, ul_best_cp
+        FROM evo_rankings
+        WHERE pokemon_id = ?
+        ORDER BY id ASC
+    """, (pokemon_id,)).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
-def existing_columns(conn: sqlite3.Connection, requested: dict) -> dict:
-    """Keep writes compatible with small schema variations during development."""
-    available = table_columns(conn, "pokemon")
-    return {column: value for column, value in requested.items() if column in available}
+@app.route("/pokemon/<int:pokemon_id>/evo_options")
+def evo_options(pokemon_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT DISTINCT evo_name FROM evo_rankings WHERE pokemon_id = ?",
+        (pokemon_id,)
+    ).fetchall()
+    return jsonify([r["evo_name"] for r in rows])
 
 
-@app.get("/")
-def index():
-    conn = get_conn()
-    columns = table_columns(conn, "pokemon")
+@app.route("/pokemon/<int:pokemon_id>/evolve", methods=["POST"])
+def evolve_pokemon(pokemon_id):
+    data = request.get_json()
+    new_species = data.get("new_species")
+    new_cp = data.get("cp")
+    new_hp = data.get("hp")
+    new_dust = data.get("dust")
+    new_level = data.get("level")
 
-    optional = [
-        column for column in ("level", "caught_date", "iv_pct", "review_reason", "tag")
-        if column in columns
-    ]
-    selected = ["id", "name", "cp", "hp", "iv_atk", "iv_def", "iv_sta"] + optional
-
-    tag_filter = "AND tag = 'REVIEW'" if "tag" in columns else ""
-    query = f"""
-        SELECT {", ".join(selected)}
-        FROM pokemon
-        WHERE needs_review = 1
-        {tag_filter}
-        ORDER BY id DESC
-    """
-    rows = conn.execute(query).fetchall()
-    conn.close()
-    return render_template_string(PAGE, rows=rows)
-
-
-@app.post("/pokemon/<int:pokemon_id>/update")
-def update_pokemon(pokemon_id: int):
-    name = request.form.get("name", "").strip()
-    tag = request.form.get("tag", "REVIEW").strip().upper()
-    review_reason = request.form.get("review_reason", "").strip()
-
-    if not name:
-        abort(400, "Species/form name is required.")
-    if tag not in {"REVIEW", "KEEP", "TRANSFER"}:
-        abort(400, "Invalid decision.")
-    if tag == "REVIEW" and not review_reason:
-        abort(400, "Provide a reason when retaining Review.")
-
-    try:
-        cp = int(request.form.get("cp", "0"))
-        hp = int(request.form.get("hp", "0"))
-        iv_atk = int(request.form.get("iv_atk", "0"))
-        iv_def = int(request.form.get("iv_def", "0"))
-        iv_sta = int(request.form.get("iv_sta", "0"))
-    except ValueError:
-        abort(400, "CP, HP, and IVs must be integers.")
-
-    if not 10 <= cp <= 5500:
-        abort(400, "CP must be between 10 and 5500.")
-    if not 10 <= hp <= 999:
-        abort(400, "Maximum HP must be between 10 and 999.")
-    if not all(0 <= value <= 15 for value in (iv_atk, iv_def, iv_sta)):
-        abort(400, "Each IV must be between 0 and 15.")
-
-    conn = get_conn()
-    columns = table_columns(conn, "pokemon")
+    conn = get_db()
     row = conn.execute("SELECT * FROM pokemon WHERE id = ?", (pokemon_id,)).fetchone()
-    if row is None:
-        conn.close()
-        abort(404, "Pokémon record not found.")
+    if not row:
+        return jsonify({"error": "not found"}), 404
 
-    dust_cost = row["dust"] if "dust" in columns else None
-    iv_data = compute_ivs(
-        pokemon_name=name,
-        observed_cp=cp,
-        observed_hp=hp,
-        iv_atk=iv_atk,
-        iv_def=iv_def,
-        iv_sta=iv_sta,
-        dust_cost=dust_cost,
+    all_rankings = all_league_rankings_with_evos(
+        new_species, row["iv_atk"], row["iv_def"], row["iv_sta"]
     )
+    new_pvp = all_rankings.get(new_species, {"great": {}, "ultra": {}})
 
-    values = existing_columns(conn, {
-        "name": name,
-        "cp": cp,
-        "hp": hp,
-        "iv_atk": iv_atk,
-        "iv_def": iv_def,
-        "iv_sta": iv_sta,
-        "iv_pct": iv_data["iv_pct"],
-        "iv_stars": iv_data["iv_stars"],
-        "level": iv_data["level"],
-        "tag": tag,
-        "needs_review": int(tag == "REVIEW"),
-        "review_reason": review_reason if tag == "REVIEW" else None,
-    })
-
-    assignments = ", ".join(f"{column} = ?" for column in values)
-    conn.execute(
-        f"UPDATE pokemon SET {assignments} WHERE id = ?",
-        (*values.values(), pokemon_id),
+    nickname = promote_evolution(
+        conn, pokemon_id, new_species, new_cp, new_hp, new_dust, new_level, new_pvp
     )
-    conn.commit()
-    conn.close()
-    return redirect(url_for("index"))
+    return jsonify({"ok": True, "nickname": nickname})
 
 
-@app.post("/pokemon/<int:pokemon_id>/delete")
-def delete_pokemon(pokemon_id: int):
-    conn = get_conn()
-    row = conn.execute("SELECT id FROM pokemon WHERE id = ?", (pokemon_id,)).fetchone()
-    if row is None:
-        conn.close()
-        abort(404, "Pokémon record not found.")
+@app.route("/stats")
+def stats():
+    conn = get_db()
+    row = conn.execute("""
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN tag='KEEP' THEN 1 ELSE 0 END) as keep,
+               SUM(CASE WHEN tag='TRANSFER' THEN 1 ELSE 0 END) as transfer,
+               SUM(CASE WHEN tag='REVIEW' THEN 1 ELSE 0 END) as review
+        FROM pokemon
+    """).fetchone()
+    return jsonify(dict(row))
 
-    tables = {entry["name"] for entry in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    if "evo_rankings" in tables:
-        conn.execute("DELETE FROM evo_rankings WHERE pokemon_id = ?", (pokemon_id,))
 
-    conn.execute("DELETE FROM pokemon WHERE id = ?", (pokemon_id,))
-    conn.commit()
-    conn.close()
-    return redirect(url_for("index"))
+@app.route("/all")
+def list_all_pokemon():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT *
+        FROM pokemon ORDER BY id DESC
+    """).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8001)
