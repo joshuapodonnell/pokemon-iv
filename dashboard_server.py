@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, abort
 from database import get_db, promote_evolution
 from pvp_rankings import all_league_rankings_with_evos
 
@@ -256,6 +256,14 @@ DASHBOARD_HTML = """
       input { width: 100%; }
       .evo-panel { padding-left: 20px; }
     }
+     .review-button { background:#2563eb; border:1px solid #3b82f6; color:#fff; cursor:pointer; font-weight:700; }
+ .review-card { border:1px solid var(--border); border-radius:8px; padding:12px; margin:10px 0; background:#0f1729; }
+ .review-meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
+ .review-reason { color:#fcd34d; }
+ .review-form { display:grid; grid-template-columns:minmax(145px,1.5fr) repeat(5,78px) 105px minmax(170px,1.5fr) auto; gap:7px; align-items:center; }
+ .review-form input, .review-form select { width:100%; }
+ .review-delete { margin-top:8px; background:#991b1b !important; border-color:#b91c1c !important; }
+ @media (max-width: 850px) { .review-form { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -269,15 +277,24 @@ DASHBOARD_HTML = """
     <div class="card"><div class="card-label">REVIEW</div><div class="card-value review" id="review">—</div></div>
   </section>
 
-  <section class="controls">
-    <input id="search" placeholder="Search Pokémon name…">
-    <select id="tagFilter">
-      <option value="">All tags</option>
-      <option value="KEEP">KEEP</option>
-      <option value="TRANSFER">TRANSFER</option>
-      <option value="REVIEW">REVIEW</option>
-    </select>
-  </section>
+<section class="controls">
+  <input id="search" placeholder="Search Pokémon name…">
+
+  <select id="tagFilter">
+    <option value="">All tags</option>
+    <option value="KEEP">KEEP</option>
+    <option value="TRANSFER">TRANSFER</option>
+    <option value="REVIEW">REVIEW</option>
+  </select>
+
+  <button
+    type="button"
+    class="review-button"
+    onclick="openReviewModal()"
+  >
+    Fix Review Records
+  </button>
+</section>
 
   <section class="table-wrap">
     <table>
@@ -325,6 +342,17 @@ DASHBOARD_HTML = """
       </div>
     </div>
   </div>
+<!-- Manual Review Modal -->
+<div id="reviewModal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(1120px, 96vw); max-height:90vh; overflow:auto;">
+    <h3>Manual Review Queue</h3>
+    <p id="reviewSummary" style="color:var(--muted); margin-top:-6px;">Loading…</p>
+    <div id="reviewRows"></div>
+    <div class="modal-actions">
+      <button type="button" onclick="closeReviewModal()">Close</button>
+    </div>
+  </div>
+</div>
 
   <script>
     let pokemon = [];
@@ -572,6 +600,107 @@ function render() {
       render();
     }
 
+async function openReviewModal() {
+  const modal = document.getElementById("reviewModal");
+  modal.classList.remove("hidden");
+  await loadReviewQueue();
+}
+
+function closeReviewModal() {
+  document.getElementById("reviewModal").classList.add("hidden");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function reviewCardHtml(row) {
+  const id = Number(row.id);
+  const reason = escapeHtml(row.review_reason || "No reason recorded");
+  const name = escapeHtml(row.name || "");
+  const tag = row.tag || "REVIEW";
+  return `
+    <section class="review-card" id="review-card-${id}">
+      <div class="review-meta">
+        ID ${id} · Current tag: ${escapeHtml(tag)} ·
+        <span class="review-reason">${reason}</span>
+      </div>
+      <form class="review-form" onsubmit="saveReviewRecord(event, ${id})">
+        <input name="name" value="${name}" placeholder="Species / form" required>
+        <input name="cp" type="number" value="${Number(row.cp || 0)}" min="0" max="5500" required>
+        <input name="hp" type="number" value="${Number(row.hp || 0)}" min="0" max="999" required>
+        <input name="iv_atk" type="number" value="${Number(row.iv_atk || 0)}" min="0" max="15" required>
+        <input name="iv_def" type="number" value="${Number(row.iv_def || 0)}" min="0" max="15" required>
+        <input name="iv_sta" type="number" value="${Number(row.iv_sta || 0)}" min="0" max="15" required>
+        <select name="tag">
+          <option value="REVIEW" ${tag === "REVIEW" ? "selected" : ""}>Review</option>
+          <option value="KEEP">Keep</option>
+          <option value="TRANSFER">Transfer</option>
+        </select>
+        <input name="review_reason" value="${reason === "No reason recorded" ? "" : reason}" placeholder="Reason only if retaining Review">
+        <button class="primary" type="submit">Save</button>
+      </form>
+      <button class="review-delete" type="button" onclick="deleteReviewRecord(${id}, '${name.replaceAll("'", "\\'")}')">Delete failed scan</button>
+    </section>`;
+}
+
+async function loadReviewQueue() {
+  const target = document.getElementById("reviewRows");
+  const summary = document.getElementById("reviewSummary");
+  target.innerHTML = '<div class="evo-loading">Loading review records…</div>';
+  try {
+    const response = await fetch("/api/review-records");
+    const rows = await response.json();
+    summary.textContent = `${rows.length} unresolved Review-tagged record${rows.length === 1 ? "" : "s"}`;
+    target.innerHTML = rows.length
+      ? rows.map(reviewCardHtml).join("")
+      : '<div class="evo-empty">No unresolved Review-tagged records.</div>';
+  } catch (error) {
+    target.innerHTML = `<div class="evo-empty">Unable to load review records: ${escapeHtml(error)}</div>`;
+  }
+}
+
+async function saveReviewRecord(event, pokemonId) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  for (const key of ["cp", "hp", "iv_atk", "iv_def", "iv_sta"]) {
+    payload[key] = Number(payload[key]);
+  }
+
+  const response = await fetch(`/pokemon/${pokemonId}/review-update`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.error || "Failed to save record.");
+    return;
+  }
+  await loadReviewQueue();
+  await loadDashboard();
+}
+
+async function deleteReviewRecord(pokemonId, name) {
+  if (!confirm(`Delete local record ID ${pokemonId} (${name || "Unknown"})? This cannot be undone.`)) {
+    return;
+  }
+  const response = await fetch(`/pokemon/${pokemonId}/delete`, {method: "POST"});
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.error || "Failed to delete record.");
+    return;
+  }
+  await loadReviewQueue();
+  await loadDashboard();
+}
+
     document.getElementById("search").addEventListener("input", render);
     document.getElementById("tagFilter").addEventListener("change", render);
 
@@ -671,6 +800,145 @@ def evolve_pokemon(pokemon_id):
         conn, pokemon_id, new_species, new_cp, new_hp, new_dust, new_level, new_pvp
     )
     return jsonify({"ok": True, "nickname": nickname})
+
+
+@app.route("/api/review-records")
+def review_records():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, name, cp, hp, iv_atk, iv_def, iv_sta,
+               iv_pct, tag, needs_review, review_reason, caught_date
+        FROM pokemon
+        WHERE needs_review = 1
+          AND tag = 'REVIEW'
+        ORDER BY id DESC
+        """
+    ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.route("/pokemon/<int:pokemon_id>/review-update", methods=["POST"])
+def review_update_pokemon(pokemon_id):
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    tag = str(data.get("tag", "REVIEW")).strip().upper()
+    review_reason = str(data.get("review_reason", "")).strip()
+
+    if not name:
+        return jsonify(error="Species/form name is required."), 400
+    if tag not in {"REVIEW", "KEEP", "TRANSFER"}:
+        return jsonify(error="Invalid decision."), 400
+    if tag == "REVIEW" and not review_reason:
+        return jsonify(error="Enter a reason when retaining Review."), 400
+
+    try:
+        cp = int(data.get("cp", 0))
+        hp = int(data.get("hp", 0))
+        iv_atk = int(data.get("iv_atk", 0))
+        iv_def = int(data.get("iv_def", 0))
+        iv_sta = int(data.get("iv_sta", 0))
+    except (TypeError, ValueError):
+        return jsonify(error="CP, HP, and IVs must be integers."), 400
+
+    if not 10 <= cp <= 5500:
+        return jsonify(error="CP must be between 10 and 5500."), 400
+    if not 10 <= hp <= 999:
+        return jsonify(error="Maximum HP must be between 10 and 999."), 400
+    if not all(0 <= value <= 15 for value in (iv_atk, iv_def, iv_sta)):
+        return jsonify(error="Each IV must be from 0 through 15."), 400
+
+    conn = get_db()
+    row = conn.execute("SELECT * FROM pokemon WHERE id = ?", (pokemon_id,)).fetchone()
+    if row is None:
+        return jsonify(error="Pokémon record not found."), 404
+
+    dust = row["dust"] if "dust" in row.keys() else None
+    level = None
+    iv_pct = round((iv_atk + iv_def + iv_sta) / 45 * 100, 1)
+    try:
+        from iv_calculator import compute_ivs
+        iv_data = compute_ivs(name, cp, hp, iv_atk, iv_def, iv_sta, dust)
+        level = iv_data.get("level")
+        iv_pct = iv_data.get("iv_pct", iv_pct)
+    except Exception:
+        pass
+
+    available_columns = {entry[1] for entry in conn.execute("PRAGMA table_info(pokemon)")}
+    updates = {
+        "name": name,
+        "cp": cp,
+        "hp": hp,
+        "iv_atk": iv_atk,
+        "iv_def": iv_def,
+        "iv_sta": iv_sta,
+        "iv_pct": iv_pct,
+        "level": level,
+        "tag": tag,
+        "needs_review": int(tag == "REVIEW"),
+        "review_reason": review_reason if tag == "REVIEW" else None,
+    }
+    updates = {key: value for key, value in updates.items() if key in available_columns}
+    assignments = ", ".join(f"{key} = ?" for key in updates)
+    conn.execute(
+        f"UPDATE pokemon SET {assignments} WHERE id = ?",
+        (*updates.values(), pokemon_id),
+    )
+    conn.commit()
+    return jsonify(ok=True, id=pokemon_id, tag=tag)
+
+
+@app.route("/pokemon/<int:pokemon_id>/delete", methods=["POST"])
+def delete_pokemon(pokemon_id):
+    conn = get_db()
+
+    row = conn.execute(
+        """
+        SELECT id, name, cp, iv_atk, iv_def, iv_sta
+        FROM pokemon
+        WHERE id = ?
+        """,
+        (pokemon_id,),
+    ).fetchone()
+
+    if row is None:
+        return jsonify(error="Pokémon record not found."), 404
+
+    obvious_failed_scan = (
+        row["name"] in (None, "", "Unknown")
+        or (row["cp"] or 0) < 10
+        or (
+            (row["iv_atk"] or 0) == 0
+            and (row["iv_def"] or 0) == 0
+            and (row["iv_sta"] or 0) == 0
+        )
+    )
+
+    if not obvious_failed_scan:
+        return jsonify(
+            error="Deletion is limited to obvious failed scans."
+        ), 400
+
+    tables = {
+        entry["name"]
+        for entry in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+
+    if "evo_rankings" in tables:
+        conn.execute(
+            "DELETE FROM evo_rankings WHERE pokemon_id = ?",
+            (pokemon_id,),
+        )
+
+    conn.execute(
+        "DELETE FROM pokemon WHERE id = ?",
+        (pokemon_id,),
+    )
+    conn.commit()
+
+    return jsonify(ok=True, id=pokemon_id)
 
 
 @app.route("/stats")
