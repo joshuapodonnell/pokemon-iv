@@ -39,13 +39,15 @@ _vlm_executor = concurrent.futures.ThreadPoolExecutor(
     thread_name_prefix="vlm-cp"
 )
 
+capture_frames = 3
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--debug", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--mode", choices=["catalog", "newcatch", "sync-flags"], default="catalog",
-                   help="catalog: scan age0 box. newcatch: appraise most recent catch only.sync-flags: sync shiny/shadow/"                         "purified status from in-game search filters.")
+                   help="catalog: scan age0 box. newcatch: appraise most recent catch only.sync-flags: sync shiny/shadow/" "purified status from in-game search filters.")
     p.add_argument(
         "--tag-layout",
         choices=["default", "ff"],
@@ -58,6 +60,7 @@ def parse_args():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 def detect_description_lines(raw_crop, debug=False, debug_path=None):
     w, h = raw_crop.size
     img = raw_crop.resize((w * 3, h * 3), Image.Resampling.LANCZOS).convert("L")
@@ -123,8 +126,6 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         if avg_conf < 40:
             continue
         aspect = width / max(1, height)
-        # Allow confident short lines (e.g. a date fragment or short city name)
-        # even if their aspect ratio is low; only block low-confidence narrow hits
         if aspect < 2.5 and avg_conf < 70:
             continue
 
@@ -144,22 +145,15 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
     if not lines:
         return 2, "", []
 
-    # Filter out lines whose height is anomalously large vs the median —
-    # loading-bar artifacts tend to produce oversized bounding boxes
     median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
     lines = [l for l in lines if l["height"] < median_h * 2.5]
 
     if not lines:
         return 2, "", []
 
-    # Recompute median from the cleaned set so max_gap reflects real text height
     clean_median_h = sorted(x["height"] for x in lines)[len(lines) // 2]
     max_gap = max(18, int(clean_median_h * 1.25))
 
-    # Anchor on the "caught" line, the date, or the "around" location line —
-    # any of these three uniquely identifies the description block even when
-    # Tesseract splits "caught … date" and "around … location" into separate
-    # blocks due to contrast-enhanced mid-line breaks
     anchor_idx = None
     for i, line in enumerate(lines):
         txt = line["text"].lower()
@@ -172,7 +166,6 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
             break
 
     if anchor_idx is None:
-        # No anchor found — fall back to the longest unbroken run of lines
         runs = []
         start = 0
         for i in range(1, len(lines)):
@@ -184,7 +177,6 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         best = max(runs, key=lambda ab: ab[1] - ab[0] + 1)
         keep = lines[best[0] : best[1] + 1]
     else:
-        # Expand outward from the anchor as long as lines are within max_gap
         lo = hi = anchor_idx
         while lo > 0:
             gap = lines[lo]["top"] - lines[lo - 1]["bottom"]
@@ -217,6 +209,7 @@ def detect_description_lines(raw_crop, debug=False, debug_path=None):
         dbg.save(debug_path)
 
     return num_lines, raw_text, keep
+
 
 def wait_for_bars_stable_image(capture_fn, read_fn, ui, cfg, timeout=4.0, poll=0.3):
     prev_bars = None
@@ -255,8 +248,10 @@ def retry_read_cp(capture_fn, ui, cfg, max_attempts=5):
     log.warning(f"  CP OCR failed after {max_attempts} attempts — flagging for review")
     return 0, img
 
+
 def _valid_cp(cp):
     return cp is not None and 10 <= cp <= 5500
+
 
 def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
     if "/" in ocr_raw or "\\" in ocr_raw:
@@ -293,6 +288,7 @@ def _reconcile_cp(ocr_cp, vlm_cp, ocr_raw=""):
     log.info(f"CP reconcile: same length OCR={ocr_cp} VLM={vlm_cp} — trusting VLM")
     return vlm_cp, "same_length_trust_vlm"
 
+
 def reload_calibration(cfg):
     try:
         with open("calibration.json") as f:
@@ -305,7 +301,6 @@ def reload_calibration(cfg):
 
 
 def _is_valid_base_parse(cp, hp, typetext,name=None):
-    """Return True when the base-screen OCR looks trustworthy."""
     if cp is None or cp <= 0:
         return False
     if hp is None or hp <= 0:
@@ -313,65 +308,43 @@ def _is_valid_base_parse(cp, hp, typetext,name=None):
     type1, type2 = parse_types(typetext or "")
     if not type1:
         return False
-
     return True
 
 
 def crop_cp_region(img: Image.Image) -> Image.Image:
-    """Crop to just the CP number — exclude status bar and arc dot."""
     w, h = img.size
-
-    # Skip the top ~8% (status bar) and bottom of the CP zone
-    # CP number lives roughly between 8%-18% vertically
-    # Horizontally centered — exclude the star/camera icons on the right
     top = int(h * 0.10)
     bottom = int(h * 0.18)
-    left = int(w * 0.20)  # skip left edge noise
-    right = int(w * 0.80)  # skip star icon on right
-
+    left = int(w * 0.20)
+    right = int(w * 0.80)
     crop = img.crop((left, top, right, bottom))
-
-
-    # Upscale 3x — tighter crop means we can go bigger
     return crop.resize((crop.width * 3, crop.height * 3), Image.Resampling.LANCZOS)
 
 
 def _handle_freeze(tap, cfg, capture_window, freeze: FreezeDetector,
                    max_attempts: int = 3) -> bool:
-    """
-    Attempt to recover from a frozen iPhone Mirroring session.
-    Returns True if the screen started changing again.
-    """
     ui = cfg["ui"]
-
     for attempt in range(1, max_attempts + 1):
         log.warning(f"[FREEZE] Recovery attempt {attempt}/{max_attempts}...")
-
-        # Attempt 1: no tap yet — just re-check in case it was a
-        # transient stall (or a false trigger) that resolves on its own.
         if attempt == 1:
             time.sleep(1.5)
-        # Attempt 2: safer nudge via a known control, not a blind
-        # screen-center tap that could land on arbitrary UI.
         elif attempt == 2:
             log.warning("[FREEZE] Trying back button...")
-            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"], base_delay=2.0)
+            tap.tap(ui["back_button"]["x"], ui["back_button"]["y"], base_delay=2.0, elem_key="back_button")
         else:
             log.warning("[FREEZE] Trying center-screen tap as last resort...")
             tap.tap(0.5, 0.5, base_delay=2.0)
 
         img   = capture_window(cfg["mirror_region"])
         ratio = freeze.similarity_to_last(img)
-
         if ratio < freeze._threshold:
             log.info(f"[FREEZE] Screen changed (similarity={ratio:.4f}) — recovered!")
             freeze.reset()
             return True
-
         time.sleep(3.0)
-
     log.error("[FREEZE] All recovery attempts failed.")
     return False
+
 
 def _capture_cp_frames(capture_fn, cfg, n=5, interval=0.4,
                        debug=False, visit_num=0) -> list:
@@ -410,16 +383,16 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> tuple:
                     if count >= 2:
                         log.info(f"VLM CP early consensus (digit-filtered to {ocr_len} digits): "
                                  f"{best} ({count}/{len(matching)} matching votes, total votes={votes})")
-                        return best, votes          # CHANGED
+                        return best, votes
             best, count = counts.most_common(1)[0]
             if count >= 2:
                 log.info(f"VLM CP early consensus: {best} ({count}/{len(votes)} votes so far, total votes={votes})")
-                return best, votes                  # CHANGED
+                return best, votes
         except Exception as e:
             log.debug(f"  CP frame {i+1} failed: {e}")
 
     if not votes:
-        return None, votes                          # CHANGED
+        return None, votes
 
     log.info(f"VLM CP consensus: all votes: {votes}")
     if ocr_len:
@@ -427,28 +400,27 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> tuple:
         if matching:
             best, count = Counter(matching).most_common(1)[0]
             log.info(f"VLM CP (digit-filtered to {ocr_len} digits): {best} ({count}/{len(matching)} matching votes)")
-            return best, votes                      # CHANGED
+            return best, votes
 
     best, count = Counter(votes).most_common(1)[0]
     log.info(f"VLM CP consensus: {best} ({count}/{len(votes)} votes)")
-    return (best if count >= 2 else None), votes     # CHANGED
+    return (best if count >= 2 else None), votes
+
+
 # ── Core scan logic ───────────────────────────────────────────────────────────
 
 def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
     ui = cfg["ui"]
-    #log.info("args are {}".format(args))
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
-    #log.info("tag_layout is {}".format(tag_layout))
-    # ── 1. CAPTURE BASE SCREEN ────────────────────────────────────────────
+
     if base_img is None:
         base_img = capture_window(cfg["mirror_region"])
 
     cp_image = getrelativeregion(base_img, ui["cp_region"])
     if args.debug or args.log_cp_images:
         os.makedirs("training_images", exist_ok=True)
-
         cp_image.save(f"training_images/cp_ocr_{visit_num:03d}.png")
 
     os.makedirs("screenshots", exist_ok=True)
@@ -457,8 +429,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     type_img = getrelativeregion(base_img, ui["type_region"])
     type_img.save(f"screenshots/type_{visit_num:03d}.png")
     type_text = ocr_type_region(type_img)
-    # weight_text = ocrregion(getrelativeregion(base_img, ui["weight_region"]))
-    # height_text = ocrregion(getrelativeregion(base_img, ui["height_region"]))
     log.info(f"normalized type_text: {type_text!r}")
 
     cp = parsecp(cp_text)
@@ -469,64 +439,46 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     hp, is_lucky, hp_raw = ocr_hp_region(base_img, ui)
     log.info(
         "Visit %d: HP=%s, lucky=%s, raw_hp=%r",
-        visit_num,
-        hp,
-        is_lucky,
-        hp_raw,
+        visit_num, hp, is_lucky, hp_raw,
     )
-    # hp_img.save(f"screenshots/hp{visit_num:03d}.png")
-    # try:
-    #     hp = int(str(parsehp(ocrregion(hp_img))).replace(",", "").strip())
-    #     log.info(f"HP text converted to number: {hp}")
-    # except (ValueError, TypeError):
-    #     hp = 0
 
-    # ── Submit CP consensus BEFORE any taps, while base screen is still visible
-    # Capture frames immediately so all 5 land on the base screen
     _cp_frames = _capture_cp_frames(
         capture_window, cfg, n=capture_frames, interval=0.2,
         debug=(args.debug or args.log_cp_images), visit_num=visit_num,
     )
-    _ocr_cp_at_capture = cp  # snapshot before any mutation
+    _ocr_cp_at_capture = cp
 
     def _run_consensus():
         return _vlm_cp_consensus(_cp_frames, ocr_cp=_ocr_cp_at_capture)
 
     _cp_vlm_future = _vlm_executor.submit(_run_consensus)
-    # ─────────────────────────────────────────────────────────────────────
 
-    # ── Base-screen VLM fallback (only if OCR is suspect) ─────────────────
     _base_vlm_used = False
     if not _is_valid_base_parse(cp, hp, type_text):
         log.info("Base-screen OCR suspect – calling VisionAgent")
         _bvlm = vision_agent.analyze_base_screen(base_img, visit_num)
-
         if vision_agent.is_reliable(_bvlm):
             _base_vlm_used = True
-            if _bvlm.get("hp",     {}).get("confidence", 0) > 0.75:
-                hp          = parsehp(_bvlm["hp"]["text"]) or hp
-            if _bvlm.get("type1",  {}).get("confidence", 0) > 0.75:
-                type_text   = _bvlm["type1"]["text"]
+            if _bvlm.get("hp", {}).get("confidence", 0) > 0.75:
+                hp = parsehp(_bvlm["hp"]["text"]) or hp
+            if _bvlm.get("type1", {}).get("confidence", 0) > 0.75:
+                type_text = _bvlm["type1"]["text"]
             if _bvlm.get("weight", {}).get("confidence", 0) > 0.75:
                 weight_text = _bvlm["weight"]["text"]
             if _bvlm.get("height", {}).get("confidence", 0) > 0.75:
                 height_text = _bvlm["height"]["text"]
-            log.info(f"VLM base result: cp={cp} hp={hp} type={type_text} "
-                     f"conf={_bvlm['confidence']:.2f}")
+            log.info(f"VLM base result: cp={cp} hp={hp} type={type_text} conf={_bvlm['confidence']:.2f}")
         else:
-            log.warning(f"VLM base-screen confidence too low "
-                        f"({_bvlm.get('confidence', 0):.2f}), keeping OCR values")
-    # ─────────────────────────────────────────────────────────────────────
+            log.warning(f"VLM base-screen confidence too low ({_bvlm.get('confidence', 0):.2f}), keeping OCR values")
 
     # ── 2. OPEN APPRAISAL ─────────────────────────────────────────────────
-    tap.tap(ui['menu_button']['x'],     ui['menu_button']['y'],
-            base_delay=cfg['timing']['after_tap'])
+    tap.tap(ui['menu_button']['x'], ui['menu_button']['y'],
+            base_delay=cfg['timing']['after_tap'], elem_key="menu_button")
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=random.uniform(0.1, 0.2))
+            base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=random.uniform(0.2, 0.3))
+            base_delay=random.uniform(0.2, 0.3), elem_key="appraise_button")
 
-    # ── Detect text layout ────────────────────────────────────────────────
     img_initial = capture_window(cfg["mirror_region"])
     raw_crop    = getrelativeregion(img_initial, ui["name_region"])
 
@@ -544,7 +496,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info(f"  Name region OCR: {raw_text!r}")
         log.info(f"  Detected physical lines: {num_lines}")
 
-    # ── Wait for bars & read ──────────────────────────────────────────────
     img = wait_for_bars_stable_image(
         lambda: capture_window(cfg["mirror_region"]),
         lambda im, u, b: readappraisalbars(im, u, b, lines=num_lines),
@@ -557,7 +508,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.warning(f"#{visit_num} Could not capture stable image. Skipping.")
         return None, None
 
-    # ── Collect VLM CP consensus (frames were captured before any taps) ───
     try:
         vlm_cp, vlm_votes = _cp_vlm_future.result(timeout=60)
         reconciled, reconcile_reason = _reconcile_cp(_ocr_cp_at_capture, vlm_cp, ocr_raw=cp_text)
@@ -570,10 +520,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             log.warning(f"Could not reconcile CP from OCR={_ocr_cp_at_capture}, vlm={vlm_cp}; keeping {cp}")
 
         _wants_cp_images = args.debug or args.log_cp_images
-
         try:
             log_cp_consensus(
-                visit_num, _ocr_cp_at_capture, cp_text,  # Removed 'conn,' here
+                visit_num, _ocr_cp_at_capture, cp_text,
                 vlm_votes, vlm_cp, reconciled, reconcile_reason,
                 frame_paths=[f"training_images/cp_vlm_{visit_num:03d}_frame{i + 1}.png"
                              for i in range(len(_cp_frames))] if _wants_cp_images else [],
@@ -584,9 +533,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     except Exception as e:
         log.warning(f"VLM CP consensus failed: {e} — keeping OCR CP {cp}")
-    # ─────────────────────────────────────────────────────────────────────
 
-    # ── 3. OCR NAME, BARS, CAUGHT DATE ───────────────────────────────────
     name        = resolvespeciesname(img, ui, cp, type_text)
     caught_date = parse_caught_date(raw_text)
     if not name or name == "Unknown":
@@ -613,23 +560,19 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     if not bars:
         log.warning(f"#{visit_num} Bar read failed for {name}")
 
-    # ── VLM appraisal fallback ────────────────────────────────────────────
     _name_needs_vlm = not name or name == "Unknown"
     vals = bars.values() if isinstance(bars, dict) else bars
-    _bars_need_vlm = False #not bars or any(v is None for v in vals)
+    _bars_need_vlm = False
     _appraisal_vlm_used = False
 
     if _name_needs_vlm or _bars_need_vlm:
-        log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) "
-                 f"– calling VisionAgent")
+        log.info(f"Appraisal OCR suspect (name={name!r}, bars={bars}) – calling VisionAgent")
         _avlm = vision_agent.analyze_appraisal_screen(img_initial, visit_num)
-
         if vision_agent.is_reliable(_avlm):
             _appraisal_vlm_used = True
             if _name_needs_vlm:
                 vlm_name = _avlm.get("name", {}).get("text", "")
                 if vlm_name:
-                    # Use the correct resolvespeciesname signature: (img, ui, cp, type_text)
                     resolved = resolvespeciesname(img, ui, cp, type_text)
                     if resolved and resolved != "Unknown":
                         log.info(f"VLM corrected name: {name!r} → {resolved!r}")
@@ -641,10 +584,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                     bars = vlm_bars
             log.info(f"VLM appraisal conf={_avlm.get('confidence', 0):.2f}")
         else:
-            log.warning(f"VLM appraisal confidence too low "
-                        f"({_avlm.get('confidence', 0):.2f})")
+            log.warning(f"VLM appraisal confidence too low ({_avlm.get('confidence', 0):.2f})")
 
-    # ── Last-resort recovery ──────────────────────────────────────────────
     if isinstance(bars, dict):
         bars = (bars.get("atk"), bars.get("def"), bars.get("sta"))
 
@@ -661,8 +602,6 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             "hp":     str(hp)          if hp          else "",
             "name":   name             or "",
             "type1":  type_text        or "",
-            # "weight": weight_text      or "",
-            # "height": height_text      or "",
         }
         _rvlm = vision_agent.recover_failed_parse(base_img, img_initial, partial)
 
@@ -681,10 +620,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             if not cp or cp <= 0:
                 cp = parsecp(_rvlm.get("cp", {}).get("text", "")) or cp
         else:
-            log.warning(f"Recovery VLM also unreliable "
-                        f"(conf={_rvlm.get('confidence', 0):.2f})")
+            log.warning(f"Recovery VLM also unreliable (conf={_rvlm.get('confidence', 0):.2f})")
 
-    # ── Extract IVs after all fallbacks have had a chance to fix bars ─────
     if isinstance(bars, dict):
         bars = (bars.get("atk"), bars.get("def"), bars.get("sta"))
 
@@ -702,19 +639,15 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         )
     else:
         atk_iv = def_iv = sta_iv = 0
-    # ─────────────────────────────────────────────────────────────────────
 
-    # ── 4. VALIDATION ─────────────────────────────────────────────────────
     cp_valid = True
     if not cp or cp > 5500 or cp < 10:
         log.warning(f"Impossible CP: {cp!r}. Forcing REVIEW.")
         cp_valid = False
     if _still_broken:
-        log.warning(f"Unresolved name/bars after all fallbacks "
-                    f"(name={name!r}, bars={bars}) – forcing REVIEW.")
+        log.warning(f"Unresolved name/bars after all fallbacks (name={name!r}, bars={bars}) – forcing REVIEW.")
         cp_valid = False
 
-    # ── 5. INSERT / UPDATE & EVALUATE ────────────────────────────────────
     log.info(
         f"[SCAN] {name} | CP={cp} | "
         f"ATK={atk_iv} DEF={def_iv} STA={sta_iv} | "
@@ -738,7 +671,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
                 f"exists in DB — skipping insert to avoid double-counting."
             )
             tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-                    base_delay=random.uniform(0.1, 0.2))
+                    base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
             tap.swipe_left()
             return None, {
                 "action": "SKIPPED_DUPLICATE",
@@ -806,11 +739,9 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     log.info(f"[TAG] {name} id={poke_id} → {tag_value}"
              + (f" | {reasons}" if reasons else ""))
 
-    # ── 6. CLOSE APPRAISAL, RENAME, & APPLY TAG ───────────────────────────
-    # close appraisal
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
-            base_delay=random.uniform(0.1, 0.2))
-    # find nickname in DB and rename in-game if present, but only if I was planning to keep it — otherwise, don't waste time renaming something I'm about to transfer or review.
+            base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
+
     if tag_value == "KEEP":
         nickname_row = conn.execute(
             "SELECT nickname FROM pokemon WHERE id = ?", (poke_id,)
@@ -823,47 +754,20 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             conn.commit()
         else:
             log.warning(f"No nickname computed for id={poke_id}, skipping in-game rename")
-    # TRANSFER / REVIEW: intentionally skip renaming, nickname_applied stays
-    # 0 (its column default). Micro Pass 2 self-heals this the first time
-    # the tag is ever revised — see PATCH 3.
-    # set tag
-    tap.tap(tag_layout['tag_menu_btn']['x'], tag_layout['tag_menu_btn']['y'],
-            base_delay=cfg['timing']['after_tap'])
-    tap.tap(tag_layout['tag_option_btn']['x'], tag_layout['tag_option_btn']['y'],
-            base_delay=cfg['timing']['after_tap'])
 
-    if tag_value == "KEEP":
-        #log.info(f"keep tag coordinates: {tag_layout['tag_keep']['x']} {tag_layout['tag_keep']['y']}")
-        tap.tap(tag_layout['tag_keep']['x'],     tag_layout['tag_keep']['y'])
-    elif tag_value == "TRANSFER":
-        #log.info(f"transfer tag coordinates: {tag_layout['tag_transfer']['x']} {tag_layout['tag_transfer']['y']}")
-        tap.tap(tag_layout['tag_transfer']['x'], tag_layout['tag_transfer']['y'])
-    else:
-        #log.info(f"review tag coordinates: {tag_layout['tag_review']['x']} {tag_layout['tag_review']['y']}")
-        tap.tap(tag_layout['tag_review']['x'],   tag_layout['tag_review']['y'])
+    apply_ingame_tag(tap, tag_layout, cfg["mirror_region"], tag_value)
 
     tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
-            base_delay=cfg['timing']['after_tap'])
+            base_delay=cfg['timing']['after_tap'], elem_key="appraisal_done")
 
     return poke_id, decision
 
-# =============================================================================
-# main.py — sync_special_flags, REWRITTEN to walk the filtered list one
-# Pokemon at a time instead of OCR-ing a scrolling grid. Reuses the same
-# detail-screen OCR helpers as scan_one_pokemon(), just reads name/cp/
-# caught_date and skips the appraisal/IV/tagging steps entirely.
-# =============================================================================
 
+# =============================================================================
+# sync_special_flags
+# =============================================================================
 
 def read_list_entry(base_img, appraisal_img, ui):
-    """
-    CP and type are read from the base screen (correct — those regions
-    really are calibrated for that layout, same as scan_one_pokemon).
-
-    Name and caught_date MUST come from the appraisal overlay — name_region
-    is calibrated for that layout's position of the "This X was caught on..."
-    text, which doesn't exist anywhere on the plain base screen.
-    """
     cp_img = getrelativeregion(base_img, ui["cp_region"])
     cp_text = ocrregion(cp_img)
     cp = parsecp(cp_text)
@@ -871,7 +775,6 @@ def read_list_entry(base_img, appraisal_img, ui):
     type_img = getrelativeregion(base_img, ui["type_region"])
     type_text = ocr_type_region(type_img)
 
-    # CHANGED: use appraisal_img, not base_img
     name = resolvespeciesname(appraisal_img, ui, cp, type_text)
 
     desc_img = getrelativeregion(appraisal_img, ui["name_region"])
@@ -882,19 +785,6 @@ def read_list_entry(base_img, appraisal_img, ui):
 
 
 def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
-    """
-    Syncs is_shiny / form_status flags using the in-game search bar's own
-    "Shiny" / "Shadow" / "Purified" filters as ground truth. Walks the
-    filtered list one Pokemon at a time via next_arrow.
-
-    CHANGED: now opens the appraisal overlay for each Pokemon (same tap
-    sequence scan_one_pokemon uses to open it) before reading name/
-    caught_date, then dismisses it via appraisal_done — WITHOUT applying
-    any tag — before advancing. This is heavier per-Pokemon than the
-    previous base-screen-only version, but it's necessary since the
-    description text this function needs to match against the DB simply
-    doesn't exist on the base screen.
-    """
     ui = cfg["ui"]
     freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
 
@@ -908,7 +798,7 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         log.info(f"--- Syncing {keyword} flags ---")
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
-                base_delay=cfg["timing"].get("after_tap", 1.0))
+                base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="search_icon")
         tap.type_text_applescript(keyword)
         time.sleep(1.5)
 
@@ -921,16 +811,14 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         repeatFlag = False
         visited = 0
 
-        # NEW — open appraisal overlay, same sequence scan_one_pokemon uses.
         tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="menu_button")
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=random.uniform(0.1, 0.2))
+                base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=random.uniform(0.2, 0.3))
+                base_delay=random.uniform(0.2, 0.3), elem_key="appraise_button")
 
         while True:
-            # Check if we've hit the limit for this specific category
             if args.limit > 0 and visited >= args.limit:
                 log.info(f"Reached per-pass limit of {args.limit} for {keyword} sync.")
                 break
@@ -949,14 +837,12 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                     break
                 continue
 
-
             appraisal_img = capture_window(cfg["mirror_region"])
 
             entry = read_list_entry(base_img, appraisal_img, ui)
             name, cp, caught_date = entry
-            log.info(f"{keyword} sync: read entry {visited+1}: {name} CP{cp} caught {caught_date}\n")
+            log.info(f"{keyword} sync: read entry {visited+1}: {name} CP{cp} caught {caught_date}")
 
-            # End of list: next_arrow stopped advancing, same Pokemon showing twice
             if entry == last_entry:
                 log.info(f"{keyword} sync: reached end of list after {visited} entries.")
                 repeatFlag = True
@@ -1031,9 +917,11 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
                     f"[{keyword}] Skipping entry — OCR gave unusable data: "
                     f"name={name!r} cp={cp!r} caught_date={caught_date!r}"
                 )
+
             if args.limit > 0 and visited >= args.limit:
                 log.info(f"Reached per-pass limit of {args.limit} for {keyword} sync.")
                 break
+
             tap_next_arrow(tap, ui, cfg)
             time.sleep(cfg["timing"].get("after_swipe", 0.8))
 
@@ -1042,31 +930,22 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
             f"{keyword} sync complete: {matched} flagged, "
             f"{skipped_no_match} skipped (no unique match), {visited} visited"
         )
+
         if repeatFlag:
             tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                    base_delay=cfg["timing"].get("after_tap", 1.0))
+                    base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="back_button")
             tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
-                    base_delay=cfg["timing"].get("after_tap", 1.0))
+                    base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="clear_search")
         else:
             tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                    base_delay=cfg["timing"].get("after_tap", 1.0))
+                    base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="back_button")
             tap.tap(ui["back_button"]["x"], ui["back_button"]["y"],
-                    base_delay=cfg["timing"].get("after_tap", 1.0))
+                    base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="back_button")
             tap.tap(ui["clear_search"]["x"], ui["clear_search"]["y"],
-                    base_delay=cfg["timing"].get("after_tap", 1.0))
-
-
+                    base_delay=cfg["timing"].get("after_tap", 1.0), elem_key="clear_search")
 
 
 def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
-    """
-    Polls the CP region until two consecutive reads return the same
-    (non-empty) text, or timeout is hit. Prevents OCR-ing a detail screen
-    that's still mid-transition (sprite loading, intro animation, etc.) —
-    specifically needed for the FIRST Pokemon opened from the list view,
-    since that transition is heavier than swiping between two already-
-    open detail screens.
-    """
     prev_cp_text = None
     deadline = time.time() + timeout
     last_img = None
@@ -1081,99 +960,53 @@ def _wait_for_cp_screen_stable(capture_window, ui, cfg, timeout=4.0, poll=0.3):
         time.sleep(poll)
     return last_img
 
+
 def check_freeze(capture_window, cfg, freeze, tap):
     img = capture_window(cfg["mirror_region"])
     if freeze.update(img):
         return _handle_freeze(tap, cfg, capture_window, freeze)
-    return True  # not frozen (or recovered)
+    return True
+
 
 def rename_pokemon_ingame(tap, ui, cfg, nickname):
-    """
-    Renames the currently-displayed Pokemon on its detail screen (NOT the
-    appraisal overlay) to the given nickname. Requires calibrated
-    ui["nickname_edit_btn"] and ui["nickname_save_btn"] coordinates.
-    """
     tap.tap(ui["nickname_edit_btn"]["x"], ui["nickname_edit_btn"]["y"],
-            base_delay=cfg["timing"].get("after_tap"))
+            base_delay=cfg["timing"].get("after_tap"), elem_key="nickname_edit_btn")
     tap.select_all_and_delete()
     tap.type_text_applescript(nickname)
     tap.tap(ui["nickname_save_btn"]["x"], ui["nickname_save_btn"]["y"],
-            base_delay=cfg["timing"].get("after_tap"))
+            base_delay=cfg["timing"].get("after_tap"), elem_key="nickname_save_btn")
+
 
 # =============================================================================
-# PATCH — build_fallback_search() + candidate-walking logic in
-# micro_pass2_cleanup(), replacing the v2 build_fallback_search /
-# search_result_is_unique approach entirely.
-#
-# The search bar can only narrow to an IV BUCKET (5 buckets per stat:
-#   atk0 = exact 0
-#   atk1 = 1-4
-#   atk2 = 5-9
-#   atk3 = 10-14
-#   atk4 = exact 15
-# same for def/sta), never an exact IV. So the search string narrows the
-# pool, then the bot has to open each visible result and read its real
-# appraisal bars to find the one that actually matches.
-# =============================================================================
-
-# =============================================================================
-# PATCH — build_fallback_search() gains shiny/shadow/purified filters.
-# These are exactly the columns sync_special_flags() already writes
-# (is_shiny, form_status), and exactly the keywords it already types into
-# the search bar on its own filter passes ("Shiny", "Shadow", "Purified").
-# Reusing them here narrows the fallback candidate pool further, which
-# matters most for the shiny-discovery case that motivated this whole fix.
+# Fallback search + candidate walking
 # =============================================================================
 
 def iv_to_bucket(iv: int) -> int:
-    """Maps an exact 0-15 IV to the search bar's 0-4 bucket filter value."""
-    if iv == 0:
-        return 0
-    if iv <= 4:
-        return 1
-    if iv <= 9:
-        return 2
-    if iv <= 14:
-        return 3
+    if iv == 0: return 0
+    if iv <= 4: return 1
+    if iv <= 9: return 2
+    if iv <= 14: return 3
     return 4
 
 SEARCH_BASE_NAME_OVERRIDES = {
-    "oricorio": "oricorio",
-    "giratina": "giratina",
-    "deoxys": "deoxys",
-    "shaymin": "shaymin",
-    "wormadam": "wormadam",
-    "castform": "castform",
-    "basculin": "basculin",
-    "darmanitan": "darmanitan",
+    "oricorio": "oricorio", "giratina": "giratina", "deoxys": "deoxys",
+    "shaymin": "shaymin", "wormadam": "wormadam", "castform": "castform",
+    "basculin": "basculin", "darmanitan": "darmanitan",
 }
 
 def pokemon_go_search_species(name: str) -> str:
     compact = (name or "").strip().lower()
-
     for stored_prefix, search_name in SEARCH_BASE_NAME_OVERRIDES.items():
         if compact.startswith(stored_prefix):
             return search_name
-
     for marker in (" Style", " Forme", " Form", " Mode", " Cloak", " Trim"):
         if marker in name:
             return name.split(marker, 1)[0].lower()
-
     return compact
 
 def build_fallback_search(p) -> str:
-    """
-    Used only when nickname_applied = 0. Narrows the in-game search to a
-    small candidate pool via species + CP + IV buckets + shiny/shadow/
-    purified status + current tag. Still NOT guaranteed unique — caller
-    must walk the resulting candidates and verify exact IVs
-    (see locate_exact_candidate()).
-
-    e.g. "zubat&cp10&atk0&def1&sta2&shiny&#transfer"
-         "sableye&cp847&atk4&def4&sta3&shadow&#review"
-    """
     parts = [
-        pokemon_go_search_species(p["name"]),  # changed
+        pokemon_go_search_species(p["name"]),
         f"cp{p['cp']}",
     ]
     if p["iv_atk"] is not None:
@@ -1194,15 +1027,7 @@ def build_fallback_search(p) -> str:
 
 
 def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
-                            target, max_candidates=15) -> bool:
-    """
-    Walks the currently-filtered search results one at a time and opens
-    each one's appraisal to compare its ACTUAL iv_atk/iv_def/iv_sta against
-    `target` (cp, iv_atk, iv_def, iv_sta from the DB row). Leaves the
-    matching Pokemon's detail screen open on success. Returns False if no
-    exact match is found among the first `max_candidates` results.
-    """
-
+                           target, max_candidates=15) -> bool:
     first_slot = ui["pokemon_slots"][0]
     tap.tap(first_slot["x"], first_slot["y"], base_delay=cfg["timing"].get("after_tap"))
 
@@ -1217,20 +1042,16 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
             continue
 
         tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="menu_button")
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=random.uniform(0.1, 0.2))
+                base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=random.uniform(0.2, 0.3))
+                base_delay=random.uniform(0.2, 0.3), elem_key="appraise_button")
 
-        # --- Determine description line count, same as scan_one_pokemon ---
         appraisal_img = capture_window(cfg["mirror_region"])
         raw_crop = getrelativeregion(appraisal_img, ui["name_region"])
         num_lines, _, _ = detect_description_lines(raw_crop)
 
-        # --- Wait for bars to finish animating, using the FULL-SCREEN
-        #     brightness comparator (readappraisalbars) purely as the
-        #     stability check — this matches scan_one_pokemon's usage ---
         stable_img = wait_for_bars_stable_image(
             lambda: capture_window(cfg["mirror_region"]),
             lambda im, u, b: readappraisalbars(im, u, b, lines=num_lines),
@@ -1239,12 +1060,10 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
         if stable_img is None:
             log.warning(f"  Candidate {attempt + 1}: could not capture stable bars, skipping")
             tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                    base_delay=random.uniform(0.1, 0.2))
+                    base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
             tap.swipe_left()
             continue
 
-        # --- Crop the SAME dynamic bar region scan_one_pokemon crops,
-        #     THEN parse it with parse_iv_bars (matching coordinate systems) ---
         offset = (num_lines - 2) * 0.027
         dynamic_bar_region = {
             "x1": ui["bar_region"]["x1"], "y1": ui["bar_region"]["y1"] - offset,
@@ -1255,7 +1074,7 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
         atk, def_, sta = (bars if bars else (None, None, None))
 
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
-                base_delay=random.uniform(0.1, 0.2))  # close appraisal overlay
+                base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
 
         if (atk, def_, sta) == (target["iv_atk"], target["iv_def"], target["iv_sta"]):
             log.info(f"  Candidate {attempt + 1}: exact IV match ({atk}/{def_}/{sta}) — locked in")
@@ -1267,7 +1086,8 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
 
     return False
 
-# ── Pass 1: Catalog ───────────────────────────────────────────────────────────
+
+# ── Pass 1: Catalog ──────────────────────────────────────────────────────────
 
 def pass1_catalog(args, cfg, conn,
                   tap, capture_window, readappraisalbars,
@@ -1291,10 +1111,6 @@ def pass1_catalog(args, cfg, conn,
         log.info(f"Tapping {'last' if args.mode == 'newcatch' else 'first'} slot")
         tap.tap(slot["x"], slot["y"], base_delay=cfg["timing"]["after_tap"])
 
-        # NEW — explicit settle-wait for the FIRST detail screen only.
-        # This is the transition from list-view to detail-view, which is
-        # heavier (asset loading, intro animation) than the swipe-based
-        # transitions used for every subsequent Pokemon in the loop.
         log.info("Waiting for first Pokémon's detail screen to stabilize...")
         _wait_for_cp_screen_stable(capture_window, ui, cfg)
 
@@ -1304,7 +1120,6 @@ def pass1_catalog(args, cfg, conn,
     try:
         for visit_num in range(1, args.limit + 1):
 
-            # ── Pause / quit check ────────────────────────────────────
             if pause.wait_if_paused():
                 reload_calibration(cfg)
                 try:
@@ -1320,7 +1135,6 @@ def pass1_catalog(args, cfg, conn,
                 log.info("Clean stop requested — ending Pass 1.")
                 break
 
-            # ── Reprocess check ───────────────────────────────────────
             if pause.should_reprocess() and last_poke_id is not None:
                 log.info(f"[REPROCESS] Re-scanning id={last_poke_id}…")
                 poke_id, decision = scan_one_pokemon(
@@ -1331,11 +1145,9 @@ def pass1_catalog(args, cfg, conn,
                 if poke_id:
                     tap.swipe_left()
                 continue
-            # ─────────────────────────────────────────────────────────
 
             log.info(f"--- Scanning Pokemon {visit_num} ---")
 
-            # ── Freeze check ──────────────────────────────────────────
             base_img = capture_window(cfg["mirror_region"])
             if freeze.update(base_img):
                 recovered = _handle_freeze(tap, cfg, capture_window, freeze)
@@ -1343,7 +1155,6 @@ def pass1_catalog(args, cfg, conn,
                     log.error("[FREEZE] Could not recover — stopping bot.")
                     break
                 continue
-            # ─────────────────────────────────────────────────────────
 
             poke_id, decision = scan_one_pokemon(
                 visit_num, args, cfg, conn,
@@ -1360,7 +1171,6 @@ def pass1_catalog(args, cfg, conn,
             last_poke_id = poke_id
             session_ids.append(poke_id)
 
-            # ── Swipe to next ─────────────────────────────────────────
             tap.swipe_left()
 
             if args.mode == "newcatch":
@@ -1375,20 +1185,11 @@ def pass1_catalog(args, cfg, conn,
     )
     return session_ids, errors
 
-# =============================================================================
-# micro_pass2_cleanup() — updated body for the fallback branch. The
-# nickname-search branch (nickname_applied = 1) is unchanged from before:
-# it's already unique by construction, so no candidate-walking needed there.
-# =============================================================================
+
+# ── Micro Pass 2: Cleanup ─────────────────────────────────────────────────────
 
 def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
-    # =============================================================================
-    # micro_pass2_cleanup() only needs its SELECT widened to pull is_shiny and
-    # form_status so build_fallback_search() has them available. Everything
-    # else in the function (locate_exact_candidate, candidate walking, retag,
-    # self-heal rename) is unchanged from the last version.
-    # =============================================================================
 
     rows = conn.execute("""
             SELECT id, cp, hp, name, nickname, nickname_applied,
@@ -1401,6 +1202,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
     if not rows:
         log.info("No Pokémon need in-game re-tagging. Pass 2 skipped!")
         return
+
     log.info(f"Micro Pass 2: re-tagging {len(rows)} Pokémon...")
     from screen_capture import capture_window
     freeze = FreezeDetector(threshold=0.995, freeze_after=15.0)
@@ -1438,7 +1240,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
             continue
 
         tap.tap(ui["search_icon"]["x"], ui["search_icon"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="search_icon")
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
@@ -1452,7 +1254,7 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
 
         if using_nickname_search:
             tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
-                    base_delay=cfg["timing"].get("after_tap"))
+                    base_delay=cfg["timing"].get("after_tap"), elem_key="first_search_result")
         else:
             target = {"cp": p["cp"], "iv_atk": p["iv_atk"], "iv_def": p["iv_def"], "iv_sta": p["iv_sta"]}
             found = locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars, target)
@@ -1466,36 +1268,36 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
                 """, (p["id"],))
                 conn.commit()
                 tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
-                        base_delay=cfg["timing"].get("after_tap"))
+                        base_delay=cfg["timing"].get("after_tap"), elem_key="back_button")
                 tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
-                        base_delay=cfg["timing"].get("after_tap"))
+                        base_delay=cfg["timing"].get("after_tap"), elem_key="clear_search")
                 continue
 
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
         tap.tap(ui["menu_button"]["x"], ui["menu_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="menu_button")
         tap.tap(tag_layout["tag_option_btn"]["x"], tag_layout["tag_option_btn"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="tag_option_btn")
         if not check_freeze(capture_window, cfg, freeze, tap):
             break
 
         if old_key:
-            tap.tap(tag_layout[old_key]["x"], tag_layout[old_key]["y"])
+            tap.tap(tag_layout[old_key]["x"], tag_layout[old_key]["y"], elem_key=old_key)
             time.sleep(cfg["timing"].get("after_tap", 0.5))
-        tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"])
+        tap.tap(tag_layout[new_key]["x"], tag_layout[new_key]["y"], elem_key=new_key)
         dismiss = ui.get("tag_dismiss", {"x": 0.500, "y": 0.850})
-        tap.tap(dismiss["x"], dismiss["y"])
+        tap.tap(dismiss["x"], dismiss["y"], elem_key="tag_dismiss")
 
         if not p["nickname_applied"] and p["nickname"]:
             rename_pokemon_ingame(tap, ui, cfg, p["nickname"])
             conn.execute("UPDATE pokemon SET nickname_applied = 1 WHERE id = ?", (p["id"],))
 
         tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="back_button")
         tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
-                base_delay=cfg["timing"].get("after_tap"))
+                base_delay=cfg["timing"].get("after_tap"), elem_key="clear_search")
         conn.execute("""
             UPDATE pokemon SET demoted = 0, tag_changed = 0, pending_old_tag = NULL
             WHERE id = ?
@@ -1503,7 +1305,6 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         conn.commit()
 
     log.info("Micro Pass 2 complete.")
-
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -1535,7 +1336,6 @@ def run_bot(args):
     log.info(f"Pokémon GO IV Cataloger — Mode: {args.mode}")
     log.info("=" * 50)
 
-    # ── sync-flags mode: entirely separate path, skips VLM warmup/Pass 1/Pass 2 ──
     if args.mode == "sync-flags":
         try:
             for i in range(3, 0, -1):
@@ -1548,7 +1348,6 @@ def run_bot(args):
             n = recompute_shadow_rankings(conn)
             log.info(f"Recomputed rankings for {n} shadow Pokémon")
 
-            # ADD THIS BLOCK to promote shinies/immunes:
             log.info("Promoting newly-immune Pokémon (e.g., shinies)…")
             promoted = promote_newly_immune(conn)
             if promoted:
@@ -1566,9 +1365,8 @@ def run_bot(args):
             traceback.print_exc()
         finally:
             conn.close()
-        return  # don't fall through to the catalog flow below
+        return
 
-    # ── normal catalog / newcatch modes (unchanged) ──────────────────────────
     if not tags_are_calibrated(tag_layout):
         log.warning("Tag positions not calibrated — Pokémon will NOT be tagged in-game.")
 
@@ -1594,17 +1392,13 @@ def run_bot(args):
             if demoted:
                 log.warning(f"{len(demoted)} Pokémon demoted beyond top-5 this session")
 
-        # CHANGED: removed the duplicate reset_remote_status() call —
-        # your pasted version calls this twice back-to-back, once inside
-        # the `if not args.dry_run and session_ids:` block and once again
-        # unconditionally right after. Only need it once.
         vision_agent.reset_remote_status()
 
         if not args.dry_run and tags_are_calibrated(tag_layout):
             tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
-                    base_delay=cfg["timing"].get("after_tap"))
+                    base_delay=cfg["timing"].get("after_tap"), elem_key="back_button")
             tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
-                    base_delay=cfg["timing"].get("after_tap"))
+                    base_delay=cfg["timing"].get("after_tap"), elem_key="clear_search")
             micro_pass2_cleanup(args, conn, tap, cfg["ui"], cfg, pause)
         elif args.dry_run:
             log.info("Dry-run: skipping Pass 2.")
@@ -1628,4 +1422,3 @@ def run_bot(args):
 if __name__ == "__main__":
     capture_frames = 3
     run_bot(parse_args())
-
