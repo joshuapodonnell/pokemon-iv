@@ -308,6 +308,15 @@ class CalibrationApp:
         self.canvas.bind("<Shift-Right>", lambda e: self._nudge(0.01, 0))
         self.canvas.bind("<Shift-Up>", lambda e: self._nudge(0, -0.01))
         self.canvas.bind("<Shift-Down>", lambda e: self._nudge(0, 0.01))
+        self.coord_label = tk.Label(
+            panel,
+            text="Hover or click on image\nto see coordinates",
+            fg="#64748b",
+            bg="#16213e",
+            font=("Courier", 10),
+            justify="center",
+        )
+        self.coord_label.pack(side="bottom", pady=6)
         self.canvas.bind("<Motion>", self.on_motion)
         self.canvas.focus_set()
 
@@ -365,9 +374,9 @@ class CalibrationApp:
 
         ttk.Separator(panel, orient="horizontal").pack(fill="x", padx=8, pady=6)
 
-        self.coord_label = tk.Label(panel, text="Hover or click on image\nto see coordinates",
-                                     fg="#64748b", bg="#16213e", font=("Courier", 10), justify="center")
-        self.coord_label.pack(pady=6)
+        # self.coord_label = tk.Label(panel, text="Hover or click on image\nto see coordinates",
+        #                              fg="#64748b", bg="#16213e", font=("Courier", 10), justify="center")
+        # self.coord_label.pack(pady=6)
 
         self.show_category()
 
@@ -752,7 +761,11 @@ class CalibrationApp:
             bounds[cfg_key][xk] = round(rx, 3)
             bounds[cfg_key][yk] = round(ry, 3)
 
-        self.coord_label.config(text=f"Dragging: {tag}\nx={rx:.3f}  y={ry:.3f}", fg="#00FF88")
+        if hasattr(self, "coord_label"):
+            self.coord_label.config(
+                text=f"Dragging: {tag}\nx={rx:.3f}  y={ry:.3f}",
+                fg="#00FF88",
+            )
         self._redraw()
 
     def on_release(self, event):
@@ -760,15 +773,24 @@ class CalibrationApp:
         self.canvas.config(cursor="crosshair")
 
     def on_motion(self, event):
-        if self.dragging:
+        # Motion events can arrive while Tkinter is still building the UI.
+        if self.dragging or not hasattr(self, "coord_label"):
             return
+
         rx, ry = self._canvas_to_rel(event.x, event.y)
         hit = self._find_handle(event.x, event.y)
+
         if hit:
-            self.coord_label.config(text=f"Handle: {hit[1]}\nx={rx:.3f}  y={ry:.3f}\n← drag to move", fg="#FFFF00")
+            self.coord_label.config(
+                text=f"Handle: {hit[1]}\nx={rx:.3f}  y={ry:.3f}\n← drag to move",
+                fg="#FFFF00",
+            )
             self.canvas.config(cursor="fleur")
         else:
-            self.coord_label.config(text=f"x={rx:.3f}  y={ry:.3f}", fg="#64748b")
+            self.coord_label.config(
+                text=f"x={rx:.3f}  y={ry:.3f}",
+                fg="#64748b",
+            )
             self.canvas.config(cursor="crosshair")
 
     def _bar_slider(self, key, var):
