@@ -119,7 +119,23 @@ BOUNDS_DEFAULTS = {
     "tag_review":        {"x1": 0.45, "y1": 0.53, "x2": 0.55, "y2": 0.57},
     "tag_dismiss":       {"x1": 0.45, "y1": 0.83, "x2": 0.55, "y2": 0.87},
 }
-
+# UNIQUE color for each bounds element — easy to distinguish
+BOUNDS_COLORS = {
+    "appraise_button":        "#FF0000",  # Red
+    "menu_button":            "#00FF00",  # Green
+    "back_button":            "#0000FF",  # Blue
+    "clear_search":           "#FFFF00",  # Yellow
+    "search_icon":            "#FF00FF",  # Magenta
+    "first_search_result":    "#00FFFF",  # Cyan
+    "nickname_edit_btn":      "#FFAA00",  # Orange
+    "nickname_save_btn":      "#AA00FF",  # Purple
+    "tag_menu_btn":           "#FF5555",  # Light Red
+    "tag_option_btn":         "#55FF55",  # Light Green
+    "tag_keep":               "#5555FF",  # Light Blue
+    "tag_transfer":           "#FFFF55",  # Light Yellow
+    "tag_review":             "#FF55FF",  # Light Magenta
+    "tag_dismiss":            "#55FFFF",  # Light Cyan
+}
 BOUNDS_KEYS = [
     ("appraise_button",        "Appraise Btn"),
     ("menu_button",            "Menu Btn"),
@@ -330,7 +346,8 @@ class CalibrationApp:
             elif cat == "Tags":
                 self._build_category_legend(f, self.current_tag_legend())
             elif cat == "Click Bounds":
-                self._build_bounds_panel(f)
+                # Show each bounds with its unique color
+                return [(BOUNDS_COLORS[key], label) for key, label in BOUNDS_KEYS]
             elif cat == "Legend":
                 legend = []
                 for subset in ["OCR Regions", "Buttons", "Slots"]:
@@ -508,18 +525,21 @@ class CalibrationApp:
             rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
             draw.rectangle([x1, y1, x2, y2], outline=(rc, gc, bc, outline_alpha), width=2)
 
-        def draw_bounds(key, color, fill_alpha=25, outline_alpha=200):
+        def draw_bounds(key, color, fill_alpha=0, outline_alpha=255):
+            """HOLLOW bounds — no fill, thick outline"""
             b = bounds.get(key)
             if not b:
                 return
             x1, y1 = int(b["x1"] * w), int(b["y1"] * h)
             x2, y2 = int(b["x2"] * w), int(b["y2"] * h)
             hc = color.lstrip("#")
-            rc, gc, bc = tuple(int(hc[i:i+2], 16) for i in (0, 2, 4))
-            draw.rectangle([x1, y1, x2, y2], outline=(rc, gc, bc, outline_alpha), width=3, fill=(rc, gc, bc, fill_alpha))
+            rc, gc, bc = tuple(int(hc[i:i + 2], 16) for i in (0, 2, 4))
+            # Hollow rectangle - only outline, no fill
+            draw.rectangle([x1, y1, x2, y2], outline=(rc, gc, bc, outline_alpha), width=3)
+            # Center crosshair
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-            draw.line([(cx-8, cy), (cx+8, cy)], fill=(rc, gc, bc, 255), width=2)
-            draw.line([(cx, cy-8), (cx, cy+8)], fill=(rc, gc, bc, 255), width=2)
+            draw.line([(cx - 8, cy), (cx + 8, cy)], fill=(rc, gc, bc, 255), width=2)
+            draw.line([(cx, cy - 8), (cx, cy + 8)], fill=(rc, gc, bc, 255), width=2)
 
         if cat in ("OCR Regions", "Legend"):
             for region_key, color, _ in RECT_REGIONS:
@@ -604,13 +624,16 @@ class CalibrationApp:
                 b = bounds.get(key, {})
                 if not b:
                     continue
+                color = BOUNDS_COLORS[key]  # Unique color per element
                 x1 = int(b.get("x1", 0) * self.img_w * s)
                 y1 = int(b.get("y1", 0) * self.img_h * s)
                 x2 = int(b.get("x2", 1) * self.img_w * s)
                 y2 = int(b.get("y2", 1) * self.img_h * s)
-                canvas_dot(b.get("x1", 0), b.get("y1", 0), "#FF88FF", f"bounds_tl_{key}", f"{label} ↖")
-                canvas_dot(b.get("x2", 1), b.get("y2", 1), "#FF88FF", f"bounds_br_{key}", f"{label} ↘")
-                self.canvas.create_rectangle(x1, y1, x2, y2, outline="#FF88FF", width=2, dash=(4, 2), tags=f"bounds_rect_{key}")
+                # Draggable corners with unique color
+                canvas_dot(b.get("x1", 0), b.get("y1", 0), color, f"bounds_tl_{key}", f"{label} ↖")
+                canvas_dot(b.get("x2", 1), b.get("y2", 1), color, f"bounds_br_{key}", f"{label} ↘")
+                # HOLLOW rectangle outline on canvas
+                self.canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=3, tags=f"bounds_rect_{key}")
 
     def _canvas_to_rel(self, cx, cy):
         s = self.display_scale
