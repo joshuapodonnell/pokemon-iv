@@ -137,10 +137,10 @@ class TapController:
         start_y = _jitter(start_y, self.rand["tap_jitter_px"] * 2)
         end_y = _jitter(end_y, self.rand["tap_jitter_px"] * 2)
 
-        start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
-        start_y = _clamp(start_y, self._mirror_top, self._mirror_bottom)
-        end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
-        end_y = _clamp(end_y, self._mirror_top, self._mirror_bottom)
+        # start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
+        # start_y = _clamp(start_y, self._mirror_top, self._mirror_bottom)
+        # end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
+        # end_y = _clamp(end_y, self._mirror_top, self._mirror_bottom)
 
         swipe_dur = random.uniform(0.18, 0.40)
         pyautogui.moveTo(start_x, start_y, duration=random.uniform(0.05, 0.15))
@@ -156,9 +156,9 @@ class TapController:
         end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
         y = _jitter(y, self.rand["tap_jitter_px"])
 
-        start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
-        end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
-        y = _clamp(y, self._mirror_top, self._mirror_bottom)
+        # start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
+        # end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
+        # y = _clamp(y, self._mirror_top, self._mirror_bottom)
 
         swipe_dur = random.uniform(0.18, 0.40)
         pyautogui.moveTo(start_x, y, duration=random.uniform(0.05, 0.15))
@@ -174,9 +174,9 @@ class TapController:
         end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
         y = _jitter(y, self.rand["tap_jitter_px"])
 
-        start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
-        end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
-        y = _clamp(y, self._mirror_top, self._mirror_bottom)
+        # start_x = _clamp(start_x, self._mirror_left, self._mirror_right)
+        # end_x = _clamp(end_x, self._mirror_left, self._mirror_right)
+        # y = _clamp(y, self._mirror_top, self._mirror_bottom)
 
         swipe_dur = random.uniform(0.18, 0.40)
         pyautogui.moveTo(start_x, y, duration=random.uniform(0.05, 0.15))
