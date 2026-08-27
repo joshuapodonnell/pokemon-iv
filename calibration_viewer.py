@@ -308,6 +308,13 @@ class CalibrationApp:
         self.canvas.bind("<Shift-Right>", lambda e: self._nudge(0.01, 0))
         self.canvas.bind("<Shift-Up>", lambda e: self._nudge(0, -0.01))
         self.canvas.bind("<Shift-Down>", lambda e: self._nudge(0, 0.01))
+
+
+
+        panel = tk.Frame(main, bg="#16213e", width=270)
+        panel.pack(side="right", fill="y", padx=(8, 0))
+        panel.pack_propagate(False)
+
         self.coord_label = tk.Label(
             panel,
             text="Hover or click on image\nto see coordinates",
@@ -317,12 +324,9 @@ class CalibrationApp:
             justify="center",
         )
         self.coord_label.pack(side="bottom", pady=6)
+
         self.canvas.bind("<Motion>", self.on_motion)
         self.canvas.focus_set()
-
-        panel = tk.Frame(main, bg="#16213e", width=270)
-        panel.pack(side="right", fill="y", padx=(8, 0))
-        panel.pack_propagate(False)
 
         ff_row = tk.Frame(panel, bg="#16213e")
         ff_row.pack(fill="x", padx=8, pady=(10, 2))
@@ -356,7 +360,7 @@ class CalibrationApp:
                 self._build_category_legend(f, self.current_tag_legend())
             elif cat == "Click Bounds":
                 # Show each bounds with its unique color
-                return [(BOUNDS_COLORS[key], label) for key, label in BOUNDS_KEYS]
+                self._build_bounds_panel(f)
             elif cat == "Legend":
                 legend = []
                 for subset in ["OCR Regions", "Buttons", "Slots"]:
@@ -407,7 +411,7 @@ class CalibrationApp:
         elif cat == "Slots":
             return [("#00FF88", "Pokémon slots")]
         elif cat == "Click Bounds":
-            return [(color, label) for _, label in BOUNDS_KEYS for color in ["#FF88FF"]]
+            return [(BOUNDS_COLORS[key], label) for key, label in BOUNDS_KEYS]
         return []
 
     def _build_category_legend(self, parent, subset):
@@ -466,7 +470,7 @@ class CalibrationApp:
         for key, label in BOUNDS_KEYS:
             row = tk.Frame(parent, bg="#16213e")
             row.pack(fill="x", pady=1, padx=4)
-            color = "#FF88FF"
+            color = BOUNDS_COLORS[key]
             tk.Label(row, bg=color, width=2).pack(side="left", padx=(0, 6))
             tk.Label(row, text=label, fg="#e2e8f0", bg="#16213e", font=("Helvetica", 8), width=12, anchor="w").pack(side="left")
             b = self.cfg.get("ui_bounds", {}).get(key, {})
@@ -556,7 +560,7 @@ class CalibrationApp:
 
         if cat in ("Click Bounds", "Legend"):
             for key, _ in BOUNDS_KEYS:
-                draw_bounds(key, "#FF88FF")
+                draw_bounds(key, BOUNDS_COLORS[key])
 
         if cat in ("IV Bars", "Legend"):
             for label, key, color, btype in self.get_active_bar_keys():
