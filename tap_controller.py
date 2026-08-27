@@ -193,3 +193,89 @@ class TapController:
             time.sleep(dur)
         if (time.time() - self._session_start) / 60 > random.uniform(*self.rand["session_max_min"]):
             raise RuntimeError("Session time limit reached")
+    def anti_bot_break(self):
+        """Inject realistic pauses to avoid bot detection."""
+        self._pokemon_count += 1
+        n = self._pokemon_count
+
+        lo, hi = self.rand["long_break_every"]
+        if n % random.randint(lo, hi) == 0:
+            dur = random.uniform(*self.rand["long_break_dur"])
+            print(f"  [anti-bot] Long break: {dur:.0f}s (~{dur/60:.1f} min)")
+            time.sleep(dur)
+            return
+
+        lo, hi = self.rand["short_break_every"]
+        if n % random.randint(lo, hi) == 0:
+            dur = random.uniform(*self.rand["short_break_dur"])
+            print(f"  [anti-bot] Short break: {dur:.0f}s")
+            time.sleep(dur)
+
+    def session_elapsed_min(self) -> float:
+        return (time.time() - self._session_start) / 60
+
+    def session_should_pause(self) -> bool:
+        max_min = random.randint(*self.rand["session_max_min"])
+        return self.session_elapsed_min() >= max_min
+
+    def swipe_list_up(self):
+        """Swipe the Pokémon storage LIST upward to scroll to next row."""
+        start_x = self.mirror["x"] + 0.50 * self.mirror["w"]
+        start_y = self.mirror["y"] + 0.70 * self.mirror["h"]
+        end_x = self.mirror["x"] + 0.50 * self.mirror["w"]
+        end_y = self.mirror["y"] + 0.30 * self.mirror["h"]
+
+        pyautogui.moveTo(start_x, start_y)
+        time.sleep(0.05)
+
+        dur = random.uniform(0.25, 0.45)
+        pyautogui.dragTo(end_x, end_y, duration=dur, button="left")
+
+        _human_delay(
+            self.timing.get("after_swipe", 0.8),
+            self.rand.get("timing_sigma", 0.1),
+        )
+
+    def type_text_applescript(self, text: str) -> None:
+        _activate_mirroring_window()
+        time.sleep(0.3)
+
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'tell application "System Events" to keystroke "{escaped}"'
+        subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            timeout=5,
+        )
+
+        _human_delay(
+            self.timing.get("after_tap", 0.3),
+            self.rand.get("timing_sigma", 0.1),
+        )
+
+    def select_all_and_delete(self):
+        _activate_mirroring_window()
+        time.sleep(0.15)
+
+        pyautogui.keyDown("command")
+        time.sleep(0.12)
+        pyautogui.press("a")
+        time.sleep(0.12)
+        pyautogui.keyUp("command")
+
+        time.sleep(0.15)
+        pyautogui.press("delete")
+        time.sleep(0.15)
+
+    def paste_text(self, text: str) -> None:
+        _activate_mirroring_window()
+        time.sleep(0.3)
+
+        subprocess.run("pbcopy", input=text.encode("utf-8"))
+        time.sleep(3.0)  # Universal Clipboard synchronization
+        pyautogui.hotkey("command", "v")
+
+        _human_delay(
+            self.timing.get("after_tap", 0.3),
+            self.rand.get("timing_sigma", 0.1),
+        )
