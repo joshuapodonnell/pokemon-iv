@@ -540,22 +540,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.warning(f"#{visit_num} Species ID failed (cp={cp})")
         name = "Unknown"
 
-    offset = (num_lines - 2) * 0.027
-    dynamic_bar_region = {
-        "x1": ui["bar_region"]["x1"],
-        "y1": ui["bar_region"]["y1"] - offset,
-        "x2": ui["bar_region"]["x2"],
-        "y2": ui["bar_region"]["y2"] - offset,
-    }
-    bar_strip = getrelativeregion(img, dynamic_bar_region)
-
     if args.debug:
-        bar_strip.save(f"screenshots/barstrip{visit_num:03d}.png")
-
-    if args.debug:
-        bars = parseivbarsdebug(bar_strip, debug_path=f"screenshots/ivbars_{visit_num:03d}.png")
+        bars = readappraisalbarsdebug(img, ui, cfg.get("bar_fill_brightness", 160), lines=num_lines)
     else:
-        bars = parseivbars(bar_strip)
+        bars = readappraisalbars(img, ui, cfg.get("bar_fill_brightness", 160), lines=num_lines)
 
     if not bars:
         log.warning(f"#{visit_num} Bar read failed for {name}")
