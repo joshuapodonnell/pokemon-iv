@@ -62,6 +62,8 @@
       "x2": 0.926,
       "y2": 0.967
     },
+    "iv_bar_search_top": 0.64,
+    "iv_bar_search_bottom": 0.90,
     "cp_region": {
       "x1": 0.319,
       "y1": 0.096,

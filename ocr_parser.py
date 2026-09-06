@@ -397,6 +397,125 @@ def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str) -> s
 # IV bar parsing  (FIXED)
 # ---------------------------------------------------------------------------
 
+def classify_appraisal_bar_pixel(r: int, g: int, b: int) -> str:
+    """
+    Return:
+      - 'filled' for orange ordinary fill or red/pink 15-IV fill
+      - 'empty' for gray unfilled track
+      - 'outside' for everything else
+    """
+    is_red = (
+        r >= 175
+        and g <= 190
+        and b <= 190
+        and r >= g + 30
+        and r >= b + 25
+    )
+
+    is_orange = (
+        r >= 180
+        and 75 <= g <= 225
+        and b <= 170
+        and r >= g + 20
+        and r >= b + 45
+    )
+
+    is_gray = (
+        130 <= r <= 235
+        and 130 <= g <= 235
+        and 130 <= b <= 235
+        and max(r, g, b) - min(r, g, b) <= 28
+    )
+
+    if is_red or is_orange:
+        return "filled"
+    if is_gray:
+        return "empty"
+    return "outside"
+
+def find_appraisal_bar_rows(img: Image.Image, ui: dict) -> tuple[float, float, float] | None:
+    W, H = img.size
+
+    x_start = ui.get("bar_x_start", 0.141)
+    x_end = ui.get("bar_x_end", 0.457)
+    y_start = ui.get("iv_bar_search_top", 0.64)
+    y_end = ui.get("iv_bar_search_bottom", 0.90)
+
+    x1 = int(x_start * W)
+    x2 = int(x_end * W)
+    y1 = int(y_start * H)
+    y2 = int(y_end * H)
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    row_scores = []
+    for y in range(y1, y2):
+        hits = 0
+        for x in range(x1, x2):
+            r, g, b = img.getpixel((x, y))[:3]
+            if classify_appraisal_bar_pixel(r, g, b) in ("filled", "empty"):
+                hits += 1
+        row_scores.append((y, hits / max(1, x2 - x1)))
+
+    # Keep rows that look substantially like a bar. Group neighboring
+    # qualifying pixels, because each visible bar is several pixels tall.
+    candidates = [y for y, score in row_scores if score >= 0.45]
+    if not candidates:
+        return None
+
+    groups = []
+    group = [candidates[0]]
+
+    for y in candidates[1:]:
+        if y <= group[-1] + 2:
+            group.append(y)
+        else:
+            groups.append(group)
+            group = [y]
+    groups.append(group)
+
+    # A group's score is its best horizontal coverage. Use its center y.
+    scored_groups = []
+    score_by_y = dict(row_scores)
+    for group in groups:
+        center = group[len(group) // 2]
+        score = max(score_by_y[y] for y in group)
+        scored_groups.append((center, score))
+
+    # Keep credible bar-height groups in visual top-to-bottom order.
+    # Three IV tracks should be regularly spaced and close together.
+    scored_groups.sort(key=lambda item: item[0])
+    centers = [center for center, score in scored_groups if score >= 0.50]
+
+    best = None
+    for i in range(len(centers) - 2):
+        a, d, s = centers[i:i + 3]
+        gap1 = d - a
+        gap2 = s - d
+
+        # Your calibrated layouts place adjacent tracks roughly 3–5% of
+        # screenshot height apart. This allows normal UI shifts but rejects
+        # unrelated text/graphics.
+        min_gap = int(H * 0.025)
+        max_gap = int(H * 0.065)
+
+        if min_gap <= gap1 <= max_gap and min_gap <= gap2 <= max_gap:
+            spacing_error = abs(gap1 - gap2)
+            candidate = (spacing_error, (a / H, d / H, s / H))
+            if best is None or candidate[0] < best[0]:
+                best = candidate
+
+    if best is None:
+        return None
+
+    atk_y, def_y, sta_y = best[1]
+    log.debug(
+        "Auto-detected IV bar rows: atk=%.4f def=%.4f sta=%.4f",
+        atk_y, def_y, sta_y,
+    )
+    return atk_y, def_y, sta_y
+
 def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, lines: int = 2) -> tuple | None:
     """Read ATK/DEF/STA IVs (0–15) from a full appraisal screenshot dynamically."""
     try:
@@ -406,14 +525,35 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, line
         x_end = ui.get("bar_x_end", 0.457)
 
         # Dynamic parameter retrieval based on line count
-        if lines == 2:
-            atk_y = ui.get("atk_bar_y", 0.774)
-            def_y = ui.get("def_bar_y", 0.815)
-            sta_y = ui.get("sta_bar_y", 0.857)
+        # Prefer direct visual detection. Fall back to the former calibrated
+        # line-count coordinates if the screenshot is ambiguous.
+        detected_rows = find_appraisal_bar_rows(img, ui)
+
+        if detected_rows is not None:
+            atk_y, def_y, sta_y = detected_rows
         else:
-            atk_y = ui.get(f"atk_bar_y_{lines}lines", ui.get("atk_bar_y", 0.774))
-            def_y = ui.get(f"def_bar_y_{lines}lines", ui.get("def_bar_y", 0.815))
-            sta_y = ui.get(f"sta_bar_y_{lines}lines", ui.get("sta_bar_y", 0.857))
+            log.warning(
+                "Could not auto-detect IV rows; falling back to %s-line calibration",
+                lines,
+            )
+
+            if lines == 2:
+                atk_y = ui.get("atk_bar_y", 0.774)
+                def_y = ui.get("def_bar_y", 0.815)
+                sta_y = ui.get("sta_bar_y", 0.857)
+            else:
+                atk_y = ui.get(
+                    f"atk_bar_y_{lines}lines",
+                    ui.get("atk_bar_y", 0.774),
+                )
+                def_y = ui.get(
+                    f"def_bar_y_{lines}lines",
+                    ui.get("def_bar_y", 0.815),
+                )
+                sta_y = ui.get(
+                    f"sta_bar_y_{lines}lines",
+                    ui.get("sta_bar_y", 0.857),
+                )
 
         bar_ys = {
             "atk": atk_y,
@@ -431,10 +571,8 @@ def readappraisalbars(img: Image.Image, ui: dict, barfillbrightness: float, line
                 votes = 0
                 for dy in (-3, 0, 3):
                     sample_y = max(0, min(py + dy, H - 1))
-                    pixel = img.getpixel((px, sample_y))
-                    r, g, b = pixel[0], pixel[1], pixel[2]
-                    brightness = (r + g + b) / 3
-                    if brightness >= barfillbrightness:
+                    r, g, b = img.getpixel((px, sample_y))[:3]
+                    if classify_appraisal_bar_pixel(r, g, b) == "filled":
                         votes += 1
                 if votes >= 2:
                     filled += 1
@@ -455,15 +593,28 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float,
         x_start = ui.get("bar_x_start", 0.141)
         x_end = ui.get("bar_x_end", 0.457)
 
-        # Dynamic parameter retrieval based on line count
-        if lines == 2:
-            atk_bar_y = ui.get("atk_bar_y", 0.773)
-            sta_bar_y = ui.get("sta_bar_y", 0.857)
-            def_bar_y = ui.get("def_bar_y", 0.816)
+        detected_rows = find_appraisal_bar_rows(img, ui)
+
+        if detected_rows is not None:
+            atk_bar_y, def_bar_y, sta_bar_y = detected_rows
         else:
-            atk_bar_y = ui.get(f"atk_bar_y_{lines}lines", ui.get("atk_bar_y", 0.773))
-            sta_bar_y = ui.get(f"sta_bar_y_{lines}lines", ui.get("sta_bar_y", 0.857))
-            def_bar_y = ui.get(f"def_bar_y_{lines}lines", ui.get("def_bar_y", 0.816))
+            if lines == 2:
+                atk_bar_y = ui.get("atk_bar_y", 0.773)
+                def_bar_y = ui.get("def_bar_y", 0.816)
+                sta_bar_y = ui.get("sta_bar_y", 0.857)
+            else:
+                atk_bar_y = ui.get(
+                    f"atk_bar_y_{lines}lines",
+                    ui.get("atk_bar_y", 0.773),
+                )
+                def_bar_y = ui.get(
+                    f"def_bar_y_{lines}lines",
+                    ui.get("def_bar_y", 0.816),
+                )
+                sta_bar_y = ui.get(
+                    f"sta_bar_y_{lines}lines",
+                    ui.get("sta_bar_y", 0.857),
+                )
 
         x1 = int(x_start * W)
         x2 = int(x_end * W)
@@ -508,17 +659,6 @@ def readappraisalbarsdebug(img: Image.Image, ui: dict, barfillbrightness: float,
         log.warning(f"readappraisalbarsdebug failed: {e}")
         return None
 
-def _classify_pixel(r, g, b):
-    if r > 195 and 100 < g < 215 and b < 145 and r > g + 15:
-        return 'filled'
-    if r > 170 and g < 165 and b < 165 and r > g + 30 and r > b + 30:
-        return 'filled'
-    if 190 < r < 250 and 190 < g < 250 and 190 < b < 250 \
-            and abs(r - g) < 18 and abs(g - b) < 18:
-        return 'empty'
-    return 'outside'
-
-
 def _classify_row(barimg, y_rel, W, H):
     y = int(y_rel * H)
     col = []
@@ -527,7 +667,7 @@ def _classify_row(barimg, y_rel, W, H):
         for dy in (-3, 0, 3):
             sy = max(0, min(y + dy, H - 1))
             r, g, b = barimg.getpixel((x, sy))[:3]
-            votes[_classify_pixel(r, g, b)] += 1
+            votes[classify_appraisal_bar_pixel(r, g, b)] += 1
         col.append(max(votes, key=votes.get))
     return y, col
 
