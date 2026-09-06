@@ -166,9 +166,14 @@ class TapController:
         _human_delay(self.timing["after_swipe"], self.rand["timing_sigma"])
 
     def swipe_left(self):
-        start_x = self.mirror["x"] + 0.75 * self.mirror["w"]
-        end_x = self.mirror["x"] + 0.25 * self.mirror["w"]
-        y = self.mirror["y"] + 0.50 * self.mirror["h"]
+        # Horizontal swipe to advance to the next Pokémon in the catalog
+        # flow. y is config-driven (ui["swipe_left"]["y"]) so the drag path can
+        # be lifted above the in-game "Power Up" button, which sits near the
+        # vertical center (y ~0.50) of the detail screen.
+        sw = self.ui.get("swipe_left", {})
+        start_x = self.mirror["x"] + sw.get("x_start", 0.75) * self.mirror["w"]
+        end_x = self.mirror["x"] + sw.get("x_end", 0.25) * self.mirror["w"]
+        y = self.mirror["y"] + sw.get("y", 0.40) * self.mirror["h"]
 
         start_x = _jitter(start_x, self.rand["tap_jitter_px"] * 2)
         end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
