@@ -66,54 +66,91 @@ def ocr_type_region(img):
     return raw
 
 VARIANT_TYPE_MAP = {
-    ("Slowpoke",    "Psychic"):          "Slowpoke (Galarian)",
-    ("Slowbro",     "Poison"):          "Slowbro (Galarian)",
-    ("Slowking",    "Poison"):          "Slowking (Galarian)",
-    ("Meowth",      "Steel"):           "Meowth (Galarian)",
-    ("Meowth",      "Dark"):            "Meowth (Alolan)",
-    ("Persian",     "Dark"):            "Persian (Alolan)",
-    ("Perrserker",  "Steel"):           "Perrserker",        # only exists as Galarian Meowth evo
-    ("Farfetch'd",  "Fighting"):        "Farfetch'd (Galarian)",
-    ("Sirfetch'd",  "Fighting"):        "Sirfetch'd",        # only Galarian evo, no ambiguity
-    ("Weezing",     "Fairy"):           "Weezing (Galarian)",
-    ("Ponyta",      "Psychic"):         "Ponyta (Galarian)",
-    ("Rapidash",    "Fairy"):           "Rapidash (Galarian)",
-    ("Voltorb",     "Grass"):           "Voltorb (Hisuian)",
-    ("Electrode",   "Grass"):           "Electrode (Hisuian)",
-    ("Growlithe",   "Rock"):            "Growlithe (Hisuian)",
-    ("Arcanine",    "Rock"):            "Arcanine (Hisuian)",
-    ("Typhlosion",  "Ghost"):           "Typhlosion (Hisuian)",
-    ("Samurott",    "Dark"):            "Samurott (Hisuian)",
-    ("Decidueye",   "Fighting"):        "Decidueye (Hisuian)",
-    ("Qwilfish",    "Dark"):            "Qwilfish (Hisuian)",
-    ("Overqwil",    "Dark"):            "Overqwil",
-    ("Sneasel",     "Fighting"):        "Sneasel (Hisuian)",
-    ("Sneasler",    "Fighting"):        "Sneasler",
-    ("Avalugg",     "Rock"):            "Avalugg (Hisuian)",
-    ("Zorua",       "Normal"):          "Zorua (Hisuian)",
-    ("Zoroark",     "Normal"):          "Zoroark (Hisuian)",
-    ("Braviary",    "Psychic"):         "Braviary (Hisuian)",
-    ("Lilligant",   "Fighting"):        "Lilligant (Hisuian)",
-    ("Goodra",      "Steel"):           "Goodra (Hisuian)",
-    ("Sliggoo",     "Steel"):           "Sliggoo (Hisuian)",
-    ("Basculin",    "Fighting"):        "Basculin (White-Striped)",
-    ("Basculegion", "Ghost"):           "Basculegion",
-    ("Diglett",     "Steel"):           "Diglett (Alolan)",
-    ("Dugtrio",     "Steel"):           "Dugtrio (Alolan)",
-    ("Geodude",     "Electric"):        "Geodude (Alolan)",
-    ("Graveler",    "Electric"):        "Graveler (Alolan)",
-    ("Golem",       "Electric"):        "Golem (Alolan)",
-    ("Grimer",      "Dark"):            "Grimer (Alolan)",
-    ("Muk",         "Dark"):            "Muk (Alolan)",
-    ("Exeggutor",   "Dragon"):          "Exeggutor (Alolan)",
-    ("Marowak",     "Ghost"):           "Marowak (Alolan)",
-    ("Raichu",      "Psychic"):         "Raichu (Alolan)",
-    ("Sandshrew",   "Ice"):             "Sandshrew (Alolan)",
-    ("Sandslash",   "Ice"):             "Sandslash (Alolan)",
-    ("Vulpix",      "Ice"):             "Vulpix (Alolan)",
-    ("Ninetales",   "Fairy"):           "Ninetales (Alolan)",
-    ("Zigzagoon",   "Dark"):            "Zigzagoon (Galarian)",
+    # =========================================================================
+    # Alolan forms (Gen 7)
+    # =========================================================================
+    ("Diglett",     "Steel"):     "Diglett (Alolan)",
+    ("Dugtrio",     "Steel"):     "Dugtrio (Alolan)",
+    ("Exeggutor",   "Dragon"):    "Exeggutor (Alolan)",
+    ("Geodude",     "Electric"):  "Geodude (Alolan)",
+    ("Golem",       "Electric"):  "Golem (Alolan)",
+    ("Graveler",    "Electric"):  "Graveler (Alolan)",
+    ("Grimer",      "Dark"):      "Grimer (Alolan)",
+    ("Marowak",     "Ghost"):     "Marowak (Alolan)",
+    ("Meowth",      "Dark"):      "Meowth (Alolan)",
+    ("Muk",         "Dark"):      "Muk (Alolan)",
+    ("Ninetales",   "Fairy"):     "Ninetales (Alolan)",
+    ("Persian",     "Dark"):      "Persian (Alolan)",
+    ("Raichu",      "Psychic"):   "Raichu (Alolan)",
+    ("Rattata",     "Dark"):      "Rattata (Alolan)",
+    ("Raticate",    "Dark"):      "Raticate (Alolan)",
+    ("Sandshrew",   "Ice"):       "Sandshrew (Alolan)",
+    ("Sandslash",   "Ice"):       "Sandslash (Alolan)",
+    ("Vulpix",      "Ice"):       "Vulpix (Alolan)",
+
+    # =========================================================================
+    # Galarian forms (Gen 8)
+    # =========================================================================
+    ("Corsola",     "Ghost"):     "Corsola (Galarian)",
+    ("Darmanitan",  "Ice"):       "Darmanitan (Galarian)",
+    ("Darumaka",    "Ice"):       "Darumaka (Galarian)",
+    ("Farfetch'd",  "Fighting"):  "Farfetch'd (Galarian)",
+    ("Linoone",     "Dark"):      "Linoone (Galarian)",
+    ("Meowth",      "Steel"):     "Meowth (Galarian)",
+    ("Mr. Mime",    "Ice"):       "Mr. Mime (Galarian)",
+    ("Ponyta",      "Psychic"):   "Ponyta (Galarian)",
+    ("Rapidash",    "Fairy"):     "Rapidash (Galarian)",
+    ("Slowbro",     "Poison"):    "Slowbro (Galarian)",
+    ("Slowking",    "Poison"):    "Slowking (Galarian)",
+    ("Slowpoke",    "Psychic"):   "Slowpoke (Galarian)",
+    ("Stunfisk",    "Steel"):     "Stunfisk (Galarian)",   # keyed on Steel, not Ground -- shared with regular form
+    ("Weezing",     "Fairy"):     "Weezing (Galarian)",
+    ("Yamask",      "Ground"):    "Yamask (Galarian)",
+    ("Zigzagoon",   "Dark"):      "Zigzagoon (Galarian)",
+
+    # Galarian-only evolutions (unambiguous names -- kept for consistency/validation)
+    ("Cursola",     "Ghost"):     "Cursola",       # only Galarian Corsola evo
+    ("Mr. Rime",    "Ice"):       "Mr. Rime",      # only Galarian Mr. Mime evo
+    ("Obstagoon",   "Dark"):      "Obstagoon",     # only Galarian Linoone evo
+    ("Perrserker",  "Steel"):     "Perrserker",    # only Galarian Meowth evo
+    ("Runerigus",   "Ground"):    "Runerigus",     # only Galarian Yamask evo
+    ("Sirfetch'd",  "Fighting"):  "Sirfetch'd",    # only Galarian Farfetch'd evo
+
+    # =========================================================================
+    # Hisuian forms (Legends: Arceus / Gen 8 region)
+    # =========================================================================
+    ("Arcanine",    "Rock"):      "Arcanine (Hisuian)",
+    ("Avalugg",     "Rock"):      "Avalugg (Hisuian)",
+    ("Basculin",    "Fighting"):  "Basculin (White-Striped)",
+    ("Braviary",    "Psychic"):   "Braviary (Hisuian)",
+    ("Decidueye",   "Fighting"):  "Decidueye (Hisuian)",
+    ("Electrode",   "Grass"):     "Electrode (Hisuian)",
+    ("Goodra",      "Steel"):     "Goodra (Hisuian)",
+    ("Growlithe",   "Rock"):      "Growlithe (Hisuian)",
+    ("Lilligant",   "Fighting"):  "Lilligant (Hisuian)",
+    ("Qwilfish",    "Dark"):      "Qwilfish (Hisuian)",
+    ("Samurott",    "Dark"):      "Samurott (Hisuian)",
+    ("Sliggoo",     "Steel"):     "Sliggoo (Hisuian)",
+    ("Sneasel",     "Fighting"):  "Sneasel (Hisuian)",
+    ("Typhlosion",  "Ghost"):     "Typhlosion (Hisuian)",
+    ("Voltorb",     "Grass"):     "Voltorb (Hisuian)",
+    ("Zorua",       "Normal"):    "Zorua (Hisuian)",
+    ("Zoroark",     "Normal"):    "Zoroark (Hisuian)",
+
+    # Hisuian-only evolutions (unambiguous names -- kept for consistency/validation)
+    ("Basculegion", "Ghost"):     "Basculegion",   # only Basculin (White-Striped) evo
+    ("Overqwil",    "Dark"):      "Overqwil",      # only Hisuian Qwilfish evo
+    ("Sneasler",    "Fighting"):  "Sneasler",      # only Hisuian Sneasel evo
+
+    # =========================================================================
+    # Paldean forms (Gen 9)
+    # =========================================================================
+    ("Wooper",      "Poison"):    "Wooper (Paldean)",   # keyed on Poison, not Ground -- shared with regular form
+
+    # Paldean-only evolutions (unambiguous names -- kept for consistency/validation)
+    ("Clodsire",    "Poison"):    "Clodsire",      # only Paldean Wooper evo
 }
+
 # ---------------------------------------------------------------------------
 # OCR helpers
 # ---------------------------------------------------------------------------

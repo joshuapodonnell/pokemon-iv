@@ -478,7 +478,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
     tap.tap(ui['appraise_button']['x'], ui['appraise_button']['y'],
             base_delay=random.uniform(0.2, 0.3), elem_key="appraise_button")
-
+    time.sleep(cfg['timing'].get('after_appraise', 1.0))
     img_initial = capture_window(cfg["mirror_region"])
     raw_crop    = getrelativeregion(img_initial, ui["name_region"])
 
