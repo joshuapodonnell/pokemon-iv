@@ -978,11 +978,28 @@ def rename_pokemon_ingame(tap, ui, cfg, nickname):
 # Fallback search + candidate walking
 # =============================================================================
 
+# Fixes the off-by-one error in iv_to_bucket(). Pokemon GO's own appraisal
+# search buckets are:
+#   0 = IV 0
+#   1 = IV 1-5
+#   2 = IV 6-10
+#   3 = IV 11-14
+#   4 = IV 15
+# The previous version used 1-4 / 5-9 / 10-14, which is shifted down by one
+# and causes fallback searches to return zero matches whenever a stat's IV
+# is exactly 5 or exactly 10 (or, more generally, whenever the true IV maps
+# to a different in-game bucket than the code assumed).
+# ---------------------------------------------------------------------------
+
 def iv_to_bucket(iv: int) -> int:
-    if iv == 0: return 0
-    if iv <= 4: return 1
-    if iv <= 9: return 2
-    if iv <= 14: return 3
+    if iv == 0:
+        return 0
+    if iv <= 5:
+        return 1
+    if iv <= 10:
+        return 2
+    if iv <= 14:
+        return 3
     return 4
 
 SEARCH_BASE_NAME_OVERRIDES = {
