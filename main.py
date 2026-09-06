@@ -1029,9 +1029,29 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
     tap.tap(first_slot["x"], first_slot["y"], base_delay=cfg["timing"].get("after_tap"))
 
     for attempt in range(max_candidates):
-        img = capture_window(cfg["mirror_region"])
-        cp_img = getrelativeregion(img, ui["cp_region"])
-        cp = parsecp(ocrregion(cp_img))
+        # Read the CP with one short retry (slow render), but never treat a
+        # blank/unparseable CP as "just the wrong Pokemon" — that means we
+        # are not looking at a detail screen at all (most commonly: the
+        # search returned zero results and the tap on pokemon_slots[0]
+        # landed on empty grid space instead of opening a card).
+        cp = None
+        for _retry in range(2):
+            img = capture_window(cfg["mirror_region"])
+            cp_img = getrelativeregion(img, ui["cp_region"])
+            cp = parsecp(ocrregion(cp_img))
+            if cp:
+                break
+            time.sleep(0.5)
+
+        if not cp:
+            log.warning(
+                f"  Candidate {attempt + 1}: no readable CP on screen — "
+                f"search likely returned zero matches (or we're not on a "
+                f"Pokémon detail screen). Aborting candidate walk instead "
+                f"of swiping — swiping here would flip the Eggs/Pokémon tab "
+                f"and strand the bot on the egg-hatch screen."
+            )
+            return False
 
         if cp != target["cp"]:
             log.debug(f"  Candidate {attempt + 1}: CP{cp} != target CP{target['cp']}, skipping")
@@ -1081,6 +1101,7 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
                   f"target {target['iv_atk']}/{target['iv_def']}/{target['iv_sta']}, trying next")
         tap.swipe_left()
 
+    log.warning(f"  No candidate matched CP{target['cp']} after {max_candidates} attempts.")
     return False
 
 
@@ -1252,6 +1273,29 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
         if using_nickname_search:
             tap.tap(ui["first_search_result"]["x"], ui["first_search_result"]["y"],
                     base_delay=cfg["timing"].get("after_tap"), elem_key="first_search_result")
+
+            # Verify a real Pokémon detail screen actually opened before we
+            # proceed to menu/appraise/tag taps. A zero-match nickname search
+            # leaves the tap hitting empty grid space, and blindly continuing
+            # would tag/rename whatever screen happens to be behind it.
+            verify_img = capture_window(cfg["mirror_region"])
+            verify_cp = parsecp(ocrregion(getrelativeregion(verify_img, ui["cp_region"])))
+            if not verify_cp:
+                log.warning(
+                    f"[{p['name']} id={p['id']}] nickname search '{search_str}' "
+                    f"returned no result — flagging for manual review"
+                )
+                conn.execute("""
+                    UPDATE pokemon SET needs_review = 1,
+                           review_reason = 'pass2_nickname_search_no_match'
+                    WHERE id = ?
+                """, (p["id"],))
+                conn.commit()
+                tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
+                        base_delay=cfg["timing"].get("after_tap"), elem_key="back_button")
+                tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
+                        base_delay=cfg["timing"].get("after_tap"), elem_key="clear_search")
+                continue
         else:
             target = {"cp": p["cp"], "iv_atk": p["iv_atk"], "iv_def": p["iv_def"], "iv_sta": p["iv_sta"]}
             found = locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars, target)
