@@ -757,8 +757,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     apply_ingame_tag(tap, tag_layout, cfg["mirror_region"], tag_value)
 
-    tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
-            base_delay=cfg['timing']['after_tap'], elem_key="appraisal_done")
+    # tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
+    #         base_delay=cfg['timing']['after_tap'], elem_key="appraisal_done")
 
     return poke_id, decision
 
