@@ -40,6 +40,14 @@ def _ease_in_out_cubic(t: float) -> float:
     return 1 - pow(-2 * t + 2, 3) / 2
 
 
+def _ease_out_cubic(t: float) -> float:
+    """Decelerating profile: fast start, slow end. Used for DRAGS/swipes so the
+    finger has immediate momentum when it touches down — iPhone Mirroring only
+    registers a drag (not a tap/long-press) if movement happens promptly after
+    mouseDown. A real flick also lands already moving and decelerates."""
+    return 1 - pow(1 - t, 3)
+
+
 def _duration_for_distance(distance: float) -> float:
     """Scale movement duration by distance — humans take longer for longer
     moves. Returns ~0.16s for a short tap, up to ~0.45s across the screen."""
@@ -135,8 +143,10 @@ def _human_drag(start_x, start_y, end_x, end_y, duration=None, bounds=None):
     dist = (dx * dx + dy * dy) ** 0.5
     if duration is None:
         duration = _duration_for_distance(dist)
-    # Keep the drag path shallow and mostly straight.
-    curve_amount = min(dist * 0.05, 20)
+    # Keep the drag path shallow and mostly straight — too much curve makes
+    # iPhone Mirroring misread the gesture. Ease-OUT (not in-out) so the drag
+    # starts with momentum and is recognized as a swipe, not a long-press.
+    curve_amount = min(dist * 0.03, 12)
     if dist > 0:
         nx, ny = -dy / dist, dx / dist
     else:
@@ -153,7 +163,7 @@ def _human_drag(start_x, start_y, end_x, end_y, duration=None, bounds=None):
     pyautogui.mouseDown(button="left")
     try:
         for i in range(1, n + 1):
-            e = _ease_in_out_cubic(i / n)
+            e = _ease_out_cubic(i / n)
             px, py = _cubic_bezier_point(e, (start_x, start_y), c1, c2, (end_x, end_y))
             if bounds:
                 px = _clamp(px, bounds["x"], bounds["x"] + bounds["w"])
