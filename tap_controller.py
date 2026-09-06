@@ -303,9 +303,9 @@ class TapController:
         end_x = _jitter(end_x, self.rand["tap_jitter_px"] * 2)
         y = _jitter(y, self.rand["tap_jitter_px"])
 
-        _human_drag(start_x, y, end_x, y,
-                    duration=random.uniform(0.18, 0.40),
-                    bounds=self._mirror_bounds)
+        swipe_dur = random.uniform(0.18, 0.40)
+        pyautogui.moveTo(start_x, y, duration=random.uniform(0.05, 0.15))
+        pyautogui.dragTo(end_x, y, duration=swipe_dur, button="left")
         _human_delay(self.timing["after_swipe"], self.rand["timing_sigma"])
 
     def swipe_list_up(self):
