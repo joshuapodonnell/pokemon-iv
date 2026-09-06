@@ -1308,8 +1308,6 @@ def micro_pass2_cleanup(args, conn, tap, ui, cfg, pause):
                     WHERE id = ?
                 """, (p["id"],))
                 conn.commit()
-                tap.tap(cfg["ui"]["back_button"]["x"], cfg["ui"]["back_button"]["y"],
-                        base_delay=cfg["timing"].get("after_tap"), elem_key="back_button")
                 tap.tap(cfg["ui"]["clear_search"]["x"], cfg["ui"]["clear_search"]["y"],
                         base_delay=cfg["timing"].get("after_tap"), elem_key="clear_search")
                 continue
