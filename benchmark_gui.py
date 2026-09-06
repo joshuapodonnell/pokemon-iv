@@ -328,5 +328,5 @@ def report():
 
 
 if __name__ == "__main__":
-    print("Starting review GUI at http://0.0.0.0:5051/?mode=pending")
-    app.run(host="0.0.0.0", port=5051, debug=False)
+    print("Starting review GUI at http://0.0.0.0:5050/?mode=pending")
+    app.run(host="0.0.0.0", port=5050, debug=False)
