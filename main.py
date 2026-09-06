@@ -534,7 +534,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
     except Exception as e:
         log.warning(f"VLM CP consensus failed: {e} — keeping OCR CP {cp}")
 
-    name        = resolvespeciesname(img, ui, cp, type_text)
+    name = resolvespeciesname(img, ui, cp, type_text, hp=hp)
     caught_date = parse_caught_date(raw_text)
     if not name or name == "Unknown":
         log.warning(f"#{visit_num} Species ID failed (cp={cp})")
@@ -561,7 +561,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             if _name_needs_vlm:
                 vlm_name = _avlm.get("name", {}).get("text", "")
                 if vlm_name:
-                    resolved = resolvespeciesname(img, ui, cp, type_text)
+                    resolved = resolvespeciesname(img, ui, cp, type_text, hp=hp)
                     if resolved and resolved != "Unknown":
                         log.info(f"VLM corrected name: {name!r} → {resolved!r}")
                         name = resolved
@@ -598,7 +598,7 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             if name in (None, "Unknown"):
                 vlm_name_r = _rvlm.get("name", {}).get("text", "")
                 if vlm_name_r:
-                    resolved_r = resolvespeciesname(img, ui, cp, type_text)
+                    resolved_r = resolvespeciesname(img, ui, cp, type_text, hp=hp)
                     if resolved_r and resolved_r != "Unknown":
                         name = resolved_r
             if not bars or None in (bars if isinstance(bars, list) else bars.values()):
@@ -994,6 +994,8 @@ SEARCH_BASE_NAME_OVERRIDES = {
     "oricorio": "oricorio", "giratina": "giratina", "deoxys": "deoxys",
     "shaymin": "shaymin", "wormadam": "wormadam", "castform": "castform",
     "basculin": "basculin", "darmanitan": "darmanitan",
+    "nidoran♀": "nidoran female",
+    "nidoran♂": "nidoran male",
 }
 
 def pokemon_go_search_species(name: str) -> str:

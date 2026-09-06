@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from PIL import Image, ImageEnhance, ImageOps, ImageDraw
+from iv_calculator import BASE_STATS, CPM, calc_cp, calc_hp
 import pytesseract
 
 log = logging.getLogger(__name__)
@@ -362,12 +363,19 @@ def ocrnameregion(img, ui):
     return ""
 
 
-def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str) -> str:
+def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str, hp: int | None = None) -> str:
     ocr_name = ocrnameregion(img, ui)
     if not ocr_name:
         return "Unknown"
 
     ocr_lower = ocr_name.lower()
+
+    if re.match(r"^nidoran\b", ocr_lower) and hp:
+        disambiguated = disambiguate_nidoran(cp, hp)
+        if disambiguated:
+            return disambiguated
+        log.warning(f"Nidoran OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
+
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
             canonical = known
@@ -789,3 +797,41 @@ def parseivbarsdebug(barimg: Image.Image, debug_path: str = "screenshots/debugiv
         log.warning(f"parseivbarsdebug failed: {e}")
 
     return results.get("ATK"), results.get("DEF"), results.get("STA")
+
+from iv_calculator import BASE_STATS, CPM, calc_cp, calc_hp
+
+def disambiguate_nidoran(cp: int, hp: int) -> str | None:
+    """
+    Nidoran♀ and Nidoran♂ are the only two Pokemon in GO with different
+    species names for male vs female. Tesseract has no glyph for ♀/♂ and
+    reliably mangles it (e.g. 'Nidoran 2'), so text matching against
+    SPECIESDB never succeeds. Disambiguate using CP+HP against each
+    species' full IV/level search space instead.
+    """
+    candidates = {}
+    for species in ("Nidoran♀", "Nidoran♂"):
+        stats = BASE_STATS.get(species)
+        if not stats:
+            continue
+        found = False
+        for level in CPM.keys():
+            for ia in range(16):
+                for idf in range(16):
+                    for ist in range(16):
+                        if calc_cp(stats["atk"], stats["def"], stats["sta"], ia, idf, ist, level) == cp:
+                            if calc_hp(stats["sta"], ist, level) == hp:
+                                found = True
+                                break
+                    if found:
+                        break
+                if found:
+                    break
+            if found:
+                break
+        candidates[species] = found
+
+    matches = [s for s, ok in candidates.items() if ok]
+    if len(matches) == 1:
+        return matches[0]
+    log.warning(f"Nidoran disambiguation inconclusive for CP={cp} HP={hp}: {candidates}")
+    return None
