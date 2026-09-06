@@ -757,8 +757,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     apply_ingame_tag(tap, tag_layout, cfg["mirror_region"], tag_value)
 
-    # tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
-    #         base_delay=cfg['timing']['after_tap'], elem_key="appraisal_done")
+    tap.tap(ui['appraisal_done']['x'], ui['appraisal_done']['y'],
+            base_delay=cfg['timing']['after_tap'], elem_key="appraisal_done")
 
     return poke_id, decision
 
@@ -1125,7 +1125,7 @@ def pass1_catalog(args, cfg, conn,
                 try:
                     bounds = get_mirror_window_bounds()
                     cfg["mirror_region"] = bounds
-                    tap.mirror = bounds
+                    tap.set_mirror_region(bounds)
                     log.info(f"[RESUME] Re-detected window bounds: {bounds}")
                 except Exception as e:
                     log.warning(f"[RESUME] Could not re-detect window bounds: {e}")
@@ -1326,7 +1326,7 @@ def run_bot(args):
     try:
         bounds = get_mirror_window_bounds()
         cfg["mirror_region"] = bounds
-        tap.mirror = bounds
+        tap.set_mirror_region(bounds)
         log.info(f"iPhone Mirroring window bounds: {bounds}")
     except Exception as e:
         log.warning(f"Could not auto-detect window: {e}")
