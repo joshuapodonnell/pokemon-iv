@@ -598,29 +598,21 @@ CANDY: <number>
 CANDY_XL: <number>
 CANDY_SPECIES: <species name>"""
 
-_RESOURCE_LAYOUT_PROMPT = """This is a Pokémon GO stats screen. Locate the Candy,
-Candy XL, and Mega Energy values shown below the WEIGHT/TYPE/HEIGHT section.
+_RESOURCE_LAYOUT_PROMPT = """This is a crop from a Pokémon GO stats card showing the resource row(s) below WEIGHT/TYPE/HEIGHT.
 
-Some species show Mega Energy as a single value; others (e.g. Charizard,
-Mewtwo) split it into Mega Energy X and Mega Energy Y. Ignore any circular
-badge shown above this block — it is not a resource value.
+Ignore STARDUST. Report the species Candy, Candy XL, and Mega Energy.
+Some species show Mega Energy as ONE number; others (e.g. Charizard, Mewtwo)
+split it into Mega Energy X and Mega Energy Y. Report only what is shown —
+use NONE for anything not present.
 
-Return ONLY this JSON, using -1 for any value that does not apply to this
-Pokémon and [0,0,0,0] for any bbox_rel that does not apply:
+Answer in this exact format with nothing else:
+CANDY: <number or NONE>
+CANDY_XL: <number or NONE>
+MEGA_ENERGY: <number or NONE>
+MEGA_ENERGY_X: <number or NONE>
+MEGA_ENERGY_Y: <number or NONE>
+"""
 
-{
-  "candy":         {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
-  "candy_xl":      {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
-  "mega_energy":   {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
-  "mega_energy_x": {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
-  "mega_energy_y": {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
-  "confidence": 0.0
-}
-
-Rules:
-- bbox_rel values are fractions of the image width/height (0.0-1.0).
-- Strip commas from numbers (e.g. "1,234" becomes 1234).
-- Return JSON only."""
 def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
@@ -693,31 +685,31 @@ def analyze_appraisal_screen(img: Image.Image, visit_num: Optional[int] = None) 
 
 def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) -> dict:
     """
-    One-time layout discovery for the candy/candy-XL/mega-energy resource
-    block. Unlike analyze_base_screen()'s fixed-crop candy reading, this
-    passes the full base screen and asks the VLM to locate the resource
-    row(s) wherever they actually are — since their position varies with
-    Lucky status, Gigantamax tag, tag-row count, and prior-Mega-Evolution
-    badge, none of which this function needs to know about in advance.
-
-    Callers should cache the returned bbox_rel values (keyed by mega-energy
-    family, see evolution_chains.get_mega_energy_family) so this only runs
-    once per unique resource-block shape, not on every catch.
+    Reads Candy / Candy XL / Mega Energy as plain text — same pattern as the
+    other base-screen fields, which have never failed. Uses a taller crop
+    than _crop_candy_region to also capture a possible Mega Energy row.
+    No bbox estimation: VLM spatial-coordinate reasoning proved unreliable
+    and unbounded (see 2026-09-15 diagnosis — model rambled indefinitely
+    trying to estimate pixel fractions and never converged before hitting
+    the token ceiling, regardless of size).
     """
     log.debug("VisionAgent.discover_resource_layout called")
+    w, h = img.size
+    crop = img.crop((0, int(h * 0.65), w, int(h * 0.85)))
     if visit_num is not None:
         try:
-            img.save(f"screenshots/vlm_resource_layout_{visit_num:03d}.png")
+            crop.save(f"screenshots/vlm_resource_layout_{visit_num:03d}.png")
         except Exception as e:
             log.warning(f"Could not save resource layout debug image: {e}")
 
-    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img), max_tokens=900, think=False)
-    print(f"DEBUG resource_layout_raw: {raw!r}")  # temporary — remove once diagnosed
+    raw = call_vlm(_RESOURCE_TEXT_PROMPT, [crop], max_tokens=MAX_TOKENS)
+    print(f"DEBUG resource_layout_raw: {raw!r}")
 
-    result = _parse_json_response(raw)
-    result.setdefault("source", "vlm")
-    result.setdefault("confidence", 0.0)
-    return result
+    values = _parse_resource_response(raw)
+    found = sum(1 for v in values.values() if v is not None)
+    values["source"] = "vlm"
+    values["confidence"] = 0.9 if found >= 1 else 0.0
+    return values
 
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
     log.debug("VisionAgent.correct_ocr called")
@@ -755,6 +747,23 @@ def extract_bar_values(agent_result: dict) -> Optional[tuple[int, int, int]]:
         pass
     return None
 
+def _parse_resource_response(raw: str) -> dict:
+    patterns = {
+        "candy":         r"CANDY:\s*([\d,]+|NONE)",
+        "candy_xl":      r"CANDY_XL:\s*([\d,]+|NONE)",
+        "mega_energy":   r"MEGA_ENERGY:\s*([\d,]+|NONE)",
+        "mega_energy_x": r"MEGA_ENERGY_X:\s*([\d,]+|NONE)",
+        "mega_energy_y": r"MEGA_ENERGY_Y:\s*([\d,]+|NONE)",
+    }
+    result = {}
+    for key, pattern in patterns.items():
+        m = re.search(pattern, raw, re.IGNORECASE)
+        if m and m.group(1).upper() != "NONE":
+            result[key] = int(m.group(1).replace(",", ""))
+        else:
+            result[key] = None
+    return result
+
 def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[dict]:
     bars = agent_result.get("bars", {})
     result = {}
@@ -770,24 +779,11 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
     return result
 
 def extract_resource_values(agent_result: dict) -> dict:
-    """
-    Pulls the plain numeric values out of a discover_resource_layout()
-    result. Uses -1 as the "not applicable" sentinel (matching the prompt)
-    rather than checking for None/null.
-    """
-    values = {}
-    for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
-        field = agent_result.get(key) or {}
-        raw = field.get("value")
-        if raw is None or raw == -1:
-            values[key] = None
-            continue
-        try:
-            parsed = int(str(raw).replace(",", ""))
-            values[key] = parsed if parsed >= 0 else None
-        except (TypeError, ValueError):
-            values[key] = None
-    return values
+    """Pulls candy/candy_xl/mega_energy values from a discover_resource_layout() result."""
+    return {
+        key: agent_result.get(key)
+        for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y")
+    }
 
 
 def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
