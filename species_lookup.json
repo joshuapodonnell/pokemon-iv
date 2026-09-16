@@ -23,7 +23,7 @@
     "height_m": 2.0,
     "weight_kg": 100.0
   },
-  "VenusaurMega Venusaur": {
+  "Venusaur Mega Venusaur": {
     "types": [
       "Grass",
       "Poison"
@@ -53,7 +53,7 @@
     "height_m": 1.7,
     "weight_kg": 90.5
   },
-  "CharizardMega Charizard X": {
+  "Charizard Mega Charizard X": {
     "types": [
       "Fire",
       "Dragon"
@@ -61,7 +61,7 @@
     "height_m": 1.7,
     "weight_kg": 110.5
   },
-  "CharizardMega Charizard Y": {
+  "Charizard Mega Charizard Y": {
     "types": [
       "Fire",
       "Flying"
@@ -90,7 +90,7 @@
     "height_m": 1.6,
     "weight_kg": 85.5
   },
-  "BlastoiseMega Blastoise": {
+  "Blastoise Mega Blastoise": {
     "types": [
       "Water"
     ],
@@ -143,7 +143,7 @@
     "height_m": 1.0,
     "weight_kg": 29.5
   },
-  "BeedrillMega Beedrill": {
+  "Beedrill Mega Beedrill": {
     "types": [
       "Bug",
       "Poison"
@@ -175,7 +175,7 @@
     "height_m": 1.5,
     "weight_kg": 39.5
   },
-  "PidgeotMega Pidgeot": {
+  "Pidgeot Mega Pidgeot": {
     "types": [
       "Normal",
       "Flying"
@@ -190,7 +190,7 @@
     "height_m": 0.3,
     "weight_kg": 3.5
   },
-  "RattataAlolan Rattata": {
+  "Rattata Alolan Rattata": {
     "types": [
       "Dark",
       "Normal"
@@ -205,7 +205,7 @@
     "height_m": 0.7,
     "weight_kg": 18.5
   },
-  "RaticateAlolan Raticate": {
+  "Raticate Alolan Raticate": {
     "types": [
       "Dark",
       "Normal"
@@ -250,7 +250,7 @@
     "height_m": 0.4,
     "weight_kg": 6.0
   },
-  "PikachuPartner Pikachu": {
+  "Pikachu Partner Pikachu": {
     "types": [
       "Electric"
     ],
@@ -264,7 +264,7 @@
     "height_m": 0.8,
     "weight_kg": 30.0
   },
-  "RaichuAlolan Raichu": {
+  "Raichu Alolan Raichu": {
     "types": [
       "Electric",
       "Psychic"
@@ -272,14 +272,14 @@
     "height_m": 0.7,
     "weight_kg": 21.0
   },
-  "RaichuMega Raichu X": {
+  "Raichu Mega Raichu X": {
     "types": [
       "Electric"
     ],
     "height_m": 1.2,
     "weight_kg": 38.0
   },
-  "RaichuMega Raichu Y": {
+  "Raichu Mega Raichu Y": {
     "types": [
       "Electric"
     ],
@@ -293,7 +293,7 @@
     "height_m": 0.6,
     "weight_kg": 12.0
   },
-  "SandshrewAlolan Sandshrew": {
+  "Sandshrew Alolan Sandshrew": {
     "types": [
       "Ice",
       "Steel"
@@ -308,7 +308,7 @@
     "height_m": 1.0,
     "weight_kg": 29.5
   },
-  "SandslashAlolan Sandslash": {
+  "Sandslash Alolan Sandslash": {
     "types": [
       "Ice",
       "Steel"
@@ -381,7 +381,7 @@
     "height_m": 0.6,
     "weight_kg": 9.9
   },
-  "VulpixAlolan Vulpix": {
+  "Vulpix Alolan Vulpix": {
     "types": [
       "Ice"
     ],
@@ -395,7 +395,7 @@
     "height_m": 1.1,
     "weight_kg": 19.9
   },
-  "NinetalesAlolan Ninetales": {
+  "Ninetales Alolan Ninetales": {
     "types": [
       "Ice",
       "Fairy"
@@ -498,7 +498,7 @@
     "height_m": 0.2,
     "weight_kg": 0.8
   },
-  "DiglettAlolan Diglett": {
+  "Diglett Alolan Diglett": {
     "types": [
       "Ground",
       "Steel"
@@ -513,7 +513,7 @@
     "height_m": 0.7,
     "weight_kg": 33.3
   },
-  "DugtrioAlolan Dugtrio": {
+  "Dugtrio Alolan Dugtrio": {
     "types": [
       "Ground",
       "Steel"
@@ -528,14 +528,14 @@
     "height_m": 0.4,
     "weight_kg": 4.2
   },
-  "MeowthAlolan Meowth": {
+  "Meowth Alolan Meowth": {
     "types": [
       "Dark"
     ],
     "height_m": 0.4,
     "weight_kg": 4.2
   },
-  "MeowthGalarian Meowth": {
+  "Meowth Galarian Meowth": {
     "types": [
       "Steel"
     ],
@@ -549,7 +549,7 @@
     "height_m": 1.0,
     "weight_kg": 32.0
   },
-  "PersianAlolan Persian": {
+  "Persian Alolan Persian": {
     "types": [
       "Dark"
     ],
@@ -591,7 +591,7 @@
     "height_m": 0.7,
     "weight_kg": 19.0
   },
-  "GrowlitheHisuian Growlithe": {
+  "Growlithe Hisuian Growlithe": {
     "types": [
       "Fire",
       "Rock"
@@ -606,7 +606,7 @@
     "height_m": 1.9,
     "weight_kg": 155.0
   },
-  "ArcanineHisuian Arcanine": {
+  "Arcanine Hisuian Arcanine": {
     "types": [
       "Fire",
       "Rock"
@@ -657,7 +657,7 @@
     "height_m": 1.5,
     "weight_kg": 48.0
   },
-  "AlakazamMega Alakazam": {
+  "Alakazam Mega Alakazam": {
     "types": [
       "Psychic"
     ],
@@ -709,7 +709,7 @@
     "height_m": 1.7,
     "weight_kg": 15.5
   },
-  "VictreebelMega Victreebel": {
+  "Victreebel Mega Victreebel": {
     "types": [
       "Grass",
       "Poison"
@@ -741,7 +741,7 @@
     "height_m": 0.4,
     "weight_kg": 20.0
   },
-  "GeodudeAlolan Geodude": {
+  "Geodude Alolan Geodude": {
     "types": [
       "Rock",
       "Electric"
@@ -757,7 +757,7 @@
     "height_m": 1.0,
     "weight_kg": 105.0
   },
-  "GravelerAlolan Graveler": {
+  "Graveler Alolan Graveler": {
     "types": [
       "Rock",
       "Electric"
@@ -773,7 +773,7 @@
     "height_m": 1.4,
     "weight_kg": 300.0
   },
-  "GolemAlolan Golem": {
+  "Golem Alolan Golem": {
     "types": [
       "Rock",
       "Electric"
@@ -788,7 +788,7 @@
     "height_m": 1.0,
     "weight_kg": 30.0
   },
-  "PonytaGalarian Ponyta": {
+  "Ponyta Galarian Ponyta": {
     "types": [
       "Psychic"
     ],
@@ -802,7 +802,7 @@
     "height_m": 1.7,
     "weight_kg": 95.0
   },
-  "RapidashGalarian Rapidash": {
+  "Rapidash Galarian Rapidash": {
     "types": [
       "Psychic",
       "Fairy"
@@ -818,7 +818,7 @@
     "height_m": 1.2,
     "weight_kg": 36.0
   },
-  "SlowpokeGalarian Slowpoke": {
+  "Slowpoke Galarian Slowpoke": {
     "types": [
       "Psychic"
     ],
@@ -833,7 +833,7 @@
     "height_m": 1.6,
     "weight_kg": 78.5
   },
-  "SlowbroMega Slowbro": {
+  "Slowbro Mega Slowbro": {
     "types": [
       "Water",
       "Psychic"
@@ -841,7 +841,7 @@
     "height_m": 2.0,
     "weight_kg": 120.0
   },
-  "SlowbroGalarian Slowbro": {
+  "Slowbro Galarian Slowbro": {
     "types": [
       "Poison",
       "Psychic"
@@ -873,7 +873,7 @@
     "height_m": 0.8,
     "weight_kg": 15.0
   },
-  "Farfetch'dGalarian Farfetch'd": {
+  "Farfetch'd Galarian Farfetch'd": {
     "types": [
       "Fighting"
     ],
@@ -918,7 +918,7 @@
     "height_m": 0.9,
     "weight_kg": 30.0
   },
-  "GrimerAlolan Grimer": {
+  "Grimer Alolan Grimer": {
     "types": [
       "Poison",
       "Dark"
@@ -933,7 +933,7 @@
     "height_m": 1.2,
     "weight_kg": 30.0
   },
-  "MukAlolan Muk": {
+  "Muk Alolan Muk": {
     "types": [
       "Poison",
       "Dark"
@@ -980,7 +980,7 @@
     "height_m": 1.5,
     "weight_kg": 40.5
   },
-  "GengarMega Gengar": {
+  "Gengar Mega Gengar": {
     "types": [
       "Ghost",
       "Poison"
@@ -1031,7 +1031,7 @@
     "height_m": 0.5,
     "weight_kg": 10.4
   },
-  "VoltorbHisuian Voltorb": {
+  "Voltorb Hisuian Voltorb": {
     "types": [
       "Electric",
       "Grass"
@@ -1046,7 +1046,7 @@
     "height_m": 1.2,
     "weight_kg": 66.6
   },
-  "ElectrodeHisuian Electrode": {
+  "Electrode Hisuian Electrode": {
     "types": [
       "Electric",
       "Grass"
@@ -1070,7 +1070,7 @@
     "height_m": 2.0,
     "weight_kg": 120.0
   },
-  "ExeggutorAlolan Exeggutor": {
+  "Exeggutor Alolan Exeggutor": {
     "types": [
       "Grass",
       "Dragon"
@@ -1092,7 +1092,7 @@
     "height_m": 1.0,
     "weight_kg": 45.0
   },
-  "MarowakAlolan Marowak": {
+  "Marowak Alolan Marowak": {
     "types": [
       "Fire",
       "Ghost"
@@ -1135,7 +1135,7 @@
     "height_m": 1.2,
     "weight_kg": 9.5
   },
-  "WeezingGalarian Weezing": {
+  "Weezing Galarian Weezing": {
     "types": [
       "Poison",
       "Fairy"
@@ -1180,7 +1180,7 @@
     "height_m": 2.2,
     "weight_kg": 80.0
   },
-  "KangaskhanMega Kangaskhan": {
+  "Kangaskhan Mega Kangaskhan": {
     "types": [
       "Normal"
     ],
@@ -1238,7 +1238,7 @@
     "height_m": 1.3,
     "weight_kg": 54.5
   },
-  "Mr. MimeGalarian Mr. Mime": {
+  "Mr. Mime Galarian Mr. Mime": {
     "types": [
       "Ice",
       "Psychic"
@@ -1283,7 +1283,7 @@
     "height_m": 1.5,
     "weight_kg": 55.0
   },
-  "PinsirMega Pinsir": {
+  "Pinsir Mega Pinsir": {
     "types": [
       "Bug",
       "Flying"
@@ -1298,14 +1298,14 @@
     "height_m": 1.4,
     "weight_kg": 88.4
   },
-  "TaurosCombat Breed": {
+  "Tauros Combat Breed": {
     "types": [
       "Fighting"
     ],
     "height_m": 1.4,
     "weight_kg": 115.0
   },
-  "TaurosBlaze Breed": {
+  "Tauros Blaze Breed": {
     "types": [
       "Fighting",
       "Fire"
@@ -1313,7 +1313,7 @@
     "height_m": 1.4,
     "weight_kg": 85.0
   },
-  "TaurosAqua Breed": {
+  "Tauros Aqua Breed": {
     "types": [
       "Fighting",
       "Water"
@@ -1336,7 +1336,7 @@
     "height_m": 6.5,
     "weight_kg": 235.0
   },
-  "GyaradosMega Gyarados": {
+  "Gyarados Mega Gyarados": {
     "types": [
       "Water",
       "Dark"
@@ -1366,7 +1366,7 @@
     "height_m": 0.3,
     "weight_kg": 6.5
   },
-  "EeveePartner Eevee": {
+  "Eevee Partner Eevee": {
     "types": [
       "Normal"
     ],
@@ -1441,7 +1441,7 @@
     "height_m": 1.8,
     "weight_kg": 59.0
   },
-  "AerodactylMega Aerodactyl": {
+  "Aerodactyl Mega Aerodactyl": {
     "types": [
       "Rock",
       "Flying"
@@ -1464,7 +1464,7 @@
     "height_m": 1.7,
     "weight_kg": 55.4
   },
-  "ArticunoGalarian Articuno": {
+  "Articuno Galarian Articuno": {
     "types": [
       "Psychic",
       "Flying"
@@ -1480,7 +1480,7 @@
     "height_m": 1.6,
     "weight_kg": 52.6
   },
-  "ZapdosGalarian Zapdos": {
+  "Zapdos Galarian Zapdos": {
     "types": [
       "Fighting",
       "Flying"
@@ -1496,7 +1496,7 @@
     "height_m": 2.0,
     "weight_kg": 60.0
   },
-  "MoltresGalarian Moltres": {
+  "Moltres Galarian Moltres": {
     "types": [
       "Dark",
       "Flying"
@@ -1526,7 +1526,7 @@
     "height_m": 2.2,
     "weight_kg": 210.0
   },
-  "DragoniteMega Dragonite": {
+  "Dragonite Mega Dragonite": {
     "types": [
       "Dragon",
       "Flying"
@@ -1541,7 +1541,7 @@
     "height_m": 2.0,
     "weight_kg": 122.0
   },
-  "MewtwoMega Mewtwo X": {
+  "Mewtwo Mega Mewtwo X": {
     "types": [
       "Psychic",
       "Fighting"
@@ -1549,7 +1549,7 @@
     "height_m": 2.3,
     "weight_kg": 127.0
   },
-  "MewtwoMega Mewtwo Y": {
+  "Mewtwo Mega Mewtwo Y": {
     "types": [
       "Psychic"
     ],
@@ -1605,7 +1605,7 @@
     "height_m": 1.7,
     "weight_kg": 79.5
   },
-  "TyphlosionHisuian Typhlosion": {
+  "Typhlosion Hisuian Typhlosion": {
     "types": [
       "Fire",
       "Ghost"
@@ -1794,7 +1794,7 @@
     "height_m": 1.4,
     "weight_kg": 61.5
   },
-  "AmpharosMega Ampharos": {
+  "Ampharos Mega Ampharos": {
     "types": [
       "Electric",
       "Dragon"
@@ -1900,7 +1900,7 @@
     "height_m": 0.4,
     "weight_kg": 8.5
   },
-  "WooperPaldean Wooper": {
+  "Wooper Paldean Wooper": {
     "types": [
       "Poison",
       "Ground"
@@ -1946,7 +1946,7 @@
     "height_m": 2.0,
     "weight_kg": 79.5
   },
-  "SlowkingGalarian Slowking": {
+  "Slowking Galarian Slowking": {
     "types": [
       "Poison",
       "Psychic"
@@ -2021,7 +2021,7 @@
     "height_m": 9.2,
     "weight_kg": 400.0
   },
-  "SteelixMega Steelix": {
+  "Steelix Mega Steelix": {
     "types": [
       "Steel",
       "Ground"
@@ -2051,7 +2051,7 @@
     "height_m": 0.5,
     "weight_kg": 3.9
   },
-  "QwilfishHisuian Qwilfish": {
+  "Qwilfish Hisuian Qwilfish": {
     "types": [
       "Dark",
       "Poison"
@@ -2067,7 +2067,7 @@
     "height_m": 1.8,
     "weight_kg": 118.0
   },
-  "ScizorMega Scizor": {
+  "Scizor Mega Scizor": {
     "types": [
       "Bug",
       "Steel"
@@ -2091,7 +2091,7 @@
     "height_m": 1.5,
     "weight_kg": 54.0
   },
-  "HeracrossMega Heracross": {
+  "Heracross Mega Heracross": {
     "types": [
       "Bug",
       "Fighting"
@@ -2107,7 +2107,7 @@
     "height_m": 0.9,
     "weight_kg": 28.0
   },
-  "SneaselHisuian Sneasel": {
+  "Sneasel Hisuian Sneasel": {
     "types": [
       "Fighting",
       "Poison"
@@ -2168,7 +2168,7 @@
     "height_m": 0.6,
     "weight_kg": 5.0
   },
-  "CorsolaGalarian Corsola": {
+  "Corsola Galarian Corsola": {
     "types": [
       "Ghost"
     ],
@@ -2229,7 +2229,7 @@
     "height_m": 1.4,
     "weight_kg": 35.0
   },
-  "HoundoomMega Houndoom": {
+  "Houndoom Mega Houndoom": {
     "types": [
       "Dark",
       "Fire"
@@ -2375,7 +2375,7 @@
     "height_m": 2.0,
     "weight_kg": 202.0
   },
-  "TyranitarMega Tyranitar": {
+  "Tyranitar Mega Tyranitar": {
     "types": [
       "Rock",
       "Dark"
@@ -2428,7 +2428,7 @@
     "height_m": 1.7,
     "weight_kg": 52.2
   },
-  "SceptileMega Sceptile": {
+  "Sceptile Mega Sceptile": {
     "types": [
       "Grass",
       "Dragon"
@@ -2459,7 +2459,7 @@
     "height_m": 1.9,
     "weight_kg": 52.0
   },
-  "BlazikenMega Blaziken": {
+  "Blaziken Mega Blaziken": {
     "types": [
       "Fire",
       "Fighting"
@@ -2490,7 +2490,7 @@
     "height_m": 1.5,
     "weight_kg": 81.9
   },
-  "SwampertMega Swampert": {
+  "Swampert Mega Swampert": {
     "types": [
       "Water",
       "Ground"
@@ -2519,7 +2519,7 @@
     "height_m": 0.4,
     "weight_kg": 17.5
   },
-  "ZigzagoonGalarian Zigzagoon": {
+  "Zigzagoon Galarian Zigzagoon": {
     "types": [
       "Dark",
       "Normal"
@@ -2534,7 +2534,7 @@
     "height_m": 0.5,
     "weight_kg": 32.5
   },
-  "LinooneGalarian Linoone": {
+  "Linoone Galarian Linoone": {
     "types": [
       "Dark",
       "Normal"
@@ -2682,7 +2682,7 @@
     "height_m": 1.6,
     "weight_kg": 48.4
   },
-  "GardevoirMega Gardevoir": {
+  "Gardevoir Mega Gardevoir": {
     "types": [
       "Psychic",
       "Fairy"
@@ -2838,7 +2838,7 @@
     "height_m": 0.5,
     "weight_kg": 11.0
   },
-  "SableyeMega Sableye": {
+  "Sableye Mega Sableye": {
     "types": [
       "Dark",
       "Ghost"
@@ -2854,7 +2854,7 @@
     "height_m": 0.6,
     "weight_kg": 11.5
   },
-  "MawileMega Mawile": {
+  "Mawile Mega Mawile": {
     "types": [
       "Steel",
       "Fairy"
@@ -2886,7 +2886,7 @@
     "height_m": 2.1,
     "weight_kg": 360.0
   },
-  "AggronMega Aggron": {
+  "Aggron Mega Aggron": {
     "types": [
       "Steel"
     ],
@@ -2909,7 +2909,7 @@
     "height_m": 1.3,
     "weight_kg": 31.5
   },
-  "MedichamMega Medicham": {
+  "Medicham Mega Medicham": {
     "types": [
       "Fighting",
       "Psychic"
@@ -2931,7 +2931,7 @@
     "height_m": 1.5,
     "weight_kg": 40.2
   },
-  "ManectricMega Manectric": {
+  "Manectric Mega Manectric": {
     "types": [
       "Electric"
     ],
@@ -3004,7 +3004,7 @@
     "height_m": 1.8,
     "weight_kg": 88.8
   },
-  "SharpedoMega Sharpedo": {
+  "Sharpedo Mega Sharpedo": {
     "types": [
       "Water",
       "Dark"
@@ -3042,7 +3042,7 @@
     "height_m": 1.9,
     "weight_kg": 220.0
   },
-  "CameruptMega Camerupt": {
+  "Camerupt Mega Camerupt": {
     "types": [
       "Fire",
       "Ground"
@@ -3132,7 +3132,7 @@
     "height_m": 1.1,
     "weight_kg": 20.6
   },
-  "AltariaMega Altaria": {
+  "Altaria Mega Altaria": {
     "types": [
       "Dragon",
       "Fairy"
@@ -3270,21 +3270,21 @@
     "height_m": 0.3,
     "weight_kg": 0.8
   },
-  "CastformSunny Form": {
+  "Castform Sunny Form": {
     "types": [
       "Fire"
     ],
     "height_m": 0.3,
     "weight_kg": 0.8
   },
-  "CastformRainy Form": {
+  "Castform Rainy Form": {
     "types": [
       "Water"
     ],
     "height_m": 0.3,
     "weight_kg": 0.8
   },
-  "CastformSnowy Form": {
+  "Castform Snowy Form": {
     "types": [
       "Ice"
     ],
@@ -3312,7 +3312,7 @@
     "height_m": 1.1,
     "weight_kg": 12.5
   },
-  "BanetteMega Banette": {
+  "Banette Mega Banette": {
     "types": [
       "Ghost"
     ],
@@ -3348,7 +3348,7 @@
     "height_m": 0.6,
     "weight_kg": 1.0
   },
-  "ChimechoMega Chimecho": {
+  "Chimecho Mega Chimecho": {
     "types": [
       "Psychic",
       "Steel"
@@ -3363,14 +3363,14 @@
     "height_m": 1.2,
     "weight_kg": 47.0
   },
-  "AbsolMega Absol": {
+  "Absol Mega Absol": {
     "types": [
       "Dark"
     ],
     "height_m": 1.2,
     "weight_kg": 49.0
   },
-  "AbsolMega Absol Z": {
+  "Absol Mega Absol Z": {
     "types": [
       "Dark",
       "Ghost"
@@ -3399,7 +3399,7 @@
     "height_m": 1.5,
     "weight_kg": 256.5
   },
-  "GlalieMega Glalie": {
+  "Glalie Mega Glalie": {
     "types": [
       "Ice"
     ],
@@ -3488,7 +3488,7 @@
     "height_m": 1.5,
     "weight_kg": 102.6
   },
-  "SalamenceMega Salamence": {
+  "Salamence Mega Salamence": {
     "types": [
       "Dragon",
       "Flying"
@@ -3520,7 +3520,7 @@
     "height_m": 1.6,
     "weight_kg": 550.0
   },
-  "MetagrossMega Metagross": {
+  "Metagross Mega Metagross": {
     "types": [
       "Steel",
       "Psychic"
@@ -3557,7 +3557,7 @@
     "height_m": 1.4,
     "weight_kg": 40.0
   },
-  "LatiasMega Latias": {
+  "Latias Mega Latias": {
     "types": [
       "Dragon",
       "Psychic"
@@ -3573,7 +3573,7 @@
     "height_m": 2.0,
     "weight_kg": 60.0
   },
-  "LatiosMega Latios": {
+  "Latios Mega Latios": {
     "types": [
       "Dragon",
       "Psychic"
@@ -3588,7 +3588,7 @@
     "height_m": 4.5,
     "weight_kg": 352.0
   },
-  "KyogrePrimal Kyogre": {
+  "Kyogre Primal Kyogre": {
     "types": [
       "Water"
     ],
@@ -3602,7 +3602,7 @@
     "height_m": 3.5,
     "weight_kg": 950.0
   },
-  "GroudonPrimal Groudon": {
+  "Groudon Primal Groudon": {
     "types": [
       "Ground",
       "Fire"
@@ -3618,7 +3618,7 @@
     "height_m": 7.0,
     "weight_kg": 206.5
   },
-  "RayquazaMega Rayquaza": {
+  "Rayquaza Mega Rayquaza": {
     "types": [
       "Dragon",
       "Flying"
@@ -3634,28 +3634,28 @@
     "height_m": 0.3,
     "weight_kg": 1.1
   },
-  "DeoxysNormal Forme": {
+  "Deoxys Normal Forme": {
     "types": [
       "Psychic"
     ],
     "height_m": 1.7,
     "weight_kg": 60.8
   },
-  "DeoxysAttack Forme": {
+  "Deoxys Attack Forme": {
     "types": [
       "Psychic"
     ],
     "height_m": 1.7,
     "weight_kg": 60.8
   },
-  "DeoxysDefense Forme": {
+  "Deoxys Defense Forme": {
     "types": [
       "Psychic"
     ],
     "height_m": 1.7,
     "weight_kg": 60.8
   },
-  "DeoxysSpeed Forme": {
+  "Deoxys Speed Forme": {
     "types": [
       "Psychic"
     ],
@@ -3753,7 +3753,7 @@
     "height_m": 1.2,
     "weight_kg": 24.9
   },
-  "StaraptorMega Staraptor": {
+  "Staraptor Mega Staraptor": {
     "types": [
       "Fighting",
       "Flying"
@@ -3857,28 +3857,28 @@
     "height_m": 1.3,
     "weight_kg": 149.5
   },
-  "BurmyPlant Cloak": {
+  "Burmy Plant Cloak": {
     "types": [
       "Bug"
     ],
     "height_m": 0.2,
     "weight_kg": 3.4
   },
-  "BurmySandy Cloak": {
+  "Burmy Sandy Cloak": {
     "types": [
       "Bug"
     ],
     "height_m": 0.2,
     "weight_kg": 3.4
   },
-  "BurmyTrash Cloak": {
+  "Burmy Trash Cloak": {
     "types": [
       "Bug"
     ],
     "height_m": 0.2,
     "weight_kg": 3.4
   },
-  "WormadamPlant Cloak": {
+  "Wormadam Plant Cloak": {
     "types": [
       "Bug",
       "Grass"
@@ -3886,7 +3886,7 @@
     "height_m": 0.5,
     "weight_kg": 6.5
   },
-  "WormadamSandy Cloak": {
+  "Wormadam Sandy Cloak": {
     "types": [
       "Bug",
       "Ground"
@@ -3894,7 +3894,7 @@
     "height_m": 0.5,
     "weight_kg": 6.5
   },
-  "WormadamTrash Cloak": {
+  "Wormadam Trash Cloak": {
     "types": [
       "Bug",
       "Steel"
@@ -4013,7 +4013,7 @@
     "height_m": 1.2,
     "weight_kg": 33.3
   },
-  "LopunnyMega Lopunny": {
+  "Lopunny Mega Lopunny": {
     "types": [
       "Normal",
       "Fighting"
@@ -4151,7 +4151,7 @@
     "height_m": 1.9,
     "weight_kg": 95.0
   },
-  "GarchompMega Garchomp": {
+  "Garchomp Mega Garchomp": {
     "types": [
       "Dragon",
       "Ground"
@@ -4159,7 +4159,7 @@
     "height_m": 1.9,
     "weight_kg": 95.0
   },
-  "GarchompMega Garchomp Z": {
+  "Garchomp Mega Garchomp Z": {
     "types": [
       "Dragon"
     ],
@@ -4188,7 +4188,7 @@
     "height_m": 1.2,
     "weight_kg": 54.0
   },
-  "LucarioMega Lucario": {
+  "Lucario Mega Lucario": {
     "types": [
       "Fighting",
       "Steel"
@@ -4196,7 +4196,7 @@
     "height_m": 1.3,
     "weight_kg": 57.5
   },
-  "LucarioMega Lucario Z": {
+  "Lucario Mega Lucario Z": {
     "types": [
       "Fighting",
       "Steel"
@@ -4295,7 +4295,7 @@
     "height_m": 2.2,
     "weight_kg": 135.5
   },
-  "AbomasnowMega Abomasnow": {
+  "Abomasnow Mega Abomasnow": {
     "types": [
       "Grass",
       "Ice"
@@ -4416,7 +4416,7 @@
     "height_m": 1.6,
     "weight_kg": 52.0
   },
-  "GalladeMega Gallade": {
+  "Gallade Mega Gallade": {
     "types": [
       "Psychic",
       "Fighting"
@@ -4455,7 +4455,7 @@
     "height_m": 0.3,
     "weight_kg": 0.3
   },
-  "RotomHeat Rotom": {
+  "Rotom Heat Rotom": {
     "types": [
       "Electric",
       "Fire"
@@ -4463,7 +4463,7 @@
     "height_m": 0.3,
     "weight_kg": 0.3
   },
-  "RotomWash Rotom": {
+  "Rotom Wash Rotom": {
     "types": [
       "Electric",
       "Water"
@@ -4471,7 +4471,7 @@
     "height_m": 0.3,
     "weight_kg": 0.3
   },
-  "RotomFrost Rotom": {
+  "Rotom Frost Rotom": {
     "types": [
       "Electric",
       "Ice"
@@ -4479,7 +4479,7 @@
     "height_m": 0.3,
     "weight_kg": 0.3
   },
-  "RotomFan Rotom": {
+  "Rotom Fan Rotom": {
     "types": [
       "Electric",
       "Flying"
@@ -4487,7 +4487,7 @@
     "height_m": 0.3,
     "weight_kg": 0.3
   },
-  "RotomMow Rotom": {
+  "Rotom Mow Rotom": {
     "types": [
       "Electric",
       "Grass"
@@ -4524,7 +4524,7 @@
     "height_m": 5.4,
     "weight_kg": 683.0
   },
-  "DialgaOrigin Forme": {
+  "Dialga Origin Forme": {
     "types": [
       "Steel",
       "Dragon"
@@ -4540,7 +4540,7 @@
     "height_m": 4.2,
     "weight_kg": 336.0
   },
-  "PalkiaOrigin Forme": {
+  "Palkia Origin Forme": {
     "types": [
       "Water",
       "Dragon"
@@ -4556,7 +4556,7 @@
     "height_m": 1.7,
     "weight_kg": 430.0
   },
-  "HeatranMega Heatran": {
+  "Heatran Mega Heatran": {
     "types": [
       "Fire",
       "Steel"
@@ -4571,7 +4571,7 @@
     "height_m": 3.7,
     "weight_kg": 420.0
   },
-  "GiratinaAltered Forme": {
+  "Giratina Altered Forme": {
     "types": [
       "Ghost",
       "Dragon"
@@ -4579,7 +4579,7 @@
     "height_m": 4.5,
     "weight_kg": 750.0
   },
-  "GiratinaOrigin Forme": {
+  "Giratina Origin Forme": {
     "types": [
       "Ghost",
       "Dragon"
@@ -4615,21 +4615,21 @@
     "height_m": 1.5,
     "weight_kg": 50.5
   },
-  "DarkraiMega Darkrai": {
+  "Darkrai Mega Darkrai": {
     "types": [
       "Dark"
     ],
     "height_m": 3.0,
     "weight_kg": 240.0
   },
-  "ShayminLand Forme": {
+  "Shaymin Land Forme": {
     "types": [
       "Grass"
     ],
     "height_m": 0.2,
     "weight_kg": 2.1
   },
-  "ShayminSky Forme": {
+  "Shaymin Sky Forme": {
     "types": [
       "Grass",
       "Flying"
@@ -4717,7 +4717,7 @@
     "height_m": 1.5,
     "weight_kg": 94.6
   },
-  "SamurottHisuian Samurott": {
+  "Samurott Hisuian Samurott": {
     "types": [
       "Water",
       "Dark"
@@ -4927,7 +4927,7 @@
     "height_m": 1.1,
     "weight_kg": 31.0
   },
-  "AudinoMega Audino": {
+  "Audino Mega Audino": {
     "types": [
       "Normal",
       "Fairy"
@@ -5071,7 +5071,7 @@
     "height_m": 1.1,
     "weight_kg": 16.3
   },
-  "LilligantHisuian Lilligant": {
+  "Lilligant Hisuian Lilligant": {
     "types": [
       "Grass",
       "Fighting"
@@ -5079,21 +5079,21 @@
     "height_m": 1.2,
     "weight_kg": 19.2
   },
-  "BasculinRed-Striped Form": {
+  "Basculin Red-Striped Form": {
     "types": [
       "Water"
     ],
     "height_m": 1.0,
     "weight_kg": 18.0
   },
-  "BasculinBlue-Striped Form": {
+  "Basculin Blue-Striped Form": {
     "types": [
       "Water"
     ],
     "height_m": 1.0,
     "weight_kg": 18.0
   },
-  "BasculinWhite-Striped Form": {
+  "Basculin White-Striped Form": {
     "types": [
       "Water"
     ],
@@ -5131,21 +5131,21 @@
     "height_m": 0.6,
     "weight_kg": 37.5
   },
-  "DarumakaGalarian Darumaka": {
+  "Darumaka Galarian Darumaka": {
     "types": [
       "Ice"
     ],
     "height_m": 0.7,
     "weight_kg": 40.0
   },
-  "DarmanitanStandard Mode": {
+  "Darmanitan Standard Mode": {
     "types": [
       "Fire"
     ],
     "height_m": 1.3,
     "weight_kg": 92.9
   },
-  "DarmanitanZen Mode": {
+  "Darmanitan Zen Mode": {
     "types": [
       "Fire",
       "Psychic"
@@ -5153,14 +5153,14 @@
     "height_m": 1.3,
     "weight_kg": 92.9
   },
-  "DarmanitanGalarian Standard Mode": {
+  "Darmanitan Galarian Standard Mode": {
     "types": [
       "Ice"
     ],
     "height_m": 1.7,
     "weight_kg": 120.0
   },
-  "DarmanitanGalarian Zen Mode": {
+  "Darmanitan Galarian Zen Mode": {
     "types": [
       "Ice",
       "Fire"
@@ -5222,7 +5222,7 @@
     "height_m": 0.5,
     "weight_kg": 1.5
   },
-  "YamaskGalarian Yamask": {
+  "Yamask Galarian Yamask": {
     "types": [
       "Ground",
       "Ghost"
@@ -5290,7 +5290,7 @@
     "height_m": 0.7,
     "weight_kg": 12.5
   },
-  "ZoruaHisuian Zorua": {
+  "Zorua Hisuian Zorua": {
     "types": [
       "Normal",
       "Ghost"
@@ -5305,7 +5305,7 @@
     "height_m": 1.6,
     "weight_kg": 81.1
   },
-  "ZoroarkHisuian Zoroark": {
+  "Zoroark Hisuian Zoroark": {
     "types": [
       "Normal",
       "Ghost"
@@ -5660,7 +5660,7 @@
     "height_m": 0.7,
     "weight_kg": 11.0
   },
-  "StunfiskGalarian Stunfisk": {
+  "Stunfisk Galarian Stunfisk": {
     "types": [
       "Ground",
       "Steel"
@@ -5705,7 +5705,7 @@
     "height_m": 2.8,
     "weight_kg": 330.0
   },
-  "GolurkMega Golurk": {
+  "Golurk Mega Golurk": {
     "types": [
       "Ground",
       "Ghost"
@@ -5752,7 +5752,7 @@
     "height_m": 1.5,
     "weight_kg": 41.0
   },
-  "BraviaryHisuian Braviary": {
+  "Braviary Hisuian Braviary": {
     "types": [
       "Psychic",
       "Flying"
@@ -5855,21 +5855,21 @@
     "height_m": 2.0,
     "weight_kg": 200.0
   },
-  "TornadusIncarnate Forme": {
+  "Tornadus Incarnate Forme": {
     "types": [
       "Flying"
     ],
     "height_m": 1.5,
     "weight_kg": 63.0
   },
-  "TornadusTherian Forme": {
+  "Tornadus Therian Forme": {
     "types": [
       "Flying"
     ],
     "height_m": 1.4,
     "weight_kg": 63.0
   },
-  "ThundurusIncarnate Forme": {
+  "Thundurus Incarnate Forme": {
     "types": [
       "Electric",
       "Flying"
@@ -5877,7 +5877,7 @@
     "height_m": 1.5,
     "weight_kg": 61.0
   },
-  "ThundurusTherian Forme": {
+  "Thundurus Therian Forme": {
     "types": [
       "Electric",
       "Flying"
@@ -5901,7 +5901,7 @@
     "height_m": 2.9,
     "weight_kg": 345.0
   },
-  "LandorusIncarnate Forme": {
+  "Landorus Incarnate Forme": {
     "types": [
       "Ground",
       "Flying"
@@ -5909,7 +5909,7 @@
     "height_m": 1.5,
     "weight_kg": 68.0
   },
-  "LandorusTherian Forme": {
+  "Landorus Therian Forme": {
     "types": [
       "Ground",
       "Flying"
@@ -5925,7 +5925,7 @@
     "height_m": 3.0,
     "weight_kg": 325.0
   },
-  "KyuremWhite Kyurem": {
+  "Kyurem White Kyurem": {
     "types": [
       "Dragon",
       "Ice"
@@ -5933,7 +5933,7 @@
     "height_m": 3.6,
     "weight_kg": 325.0
   },
-  "KyuremBlack Kyurem": {
+  "Kyurem Black Kyurem": {
     "types": [
       "Dragon",
       "Ice"
@@ -5941,7 +5941,7 @@
     "height_m": 3.3,
     "weight_kg": 325.0
   },
-  "KeldeoOrdinary Form": {
+  "Keldeo Ordinary Form": {
     "types": [
       "Water",
       "Fighting"
@@ -5949,7 +5949,7 @@
     "height_m": 1.4,
     "weight_kg": 48.5
   },
-  "KeldeoResolute Form": {
+  "Keldeo Resolute Form": {
     "types": [
       "Water",
       "Fighting"
@@ -5957,7 +5957,7 @@
     "height_m": 1.4,
     "weight_kg": 48.5
   },
-  "MeloettaAria Forme": {
+  "Meloetta Aria Forme": {
     "types": [
       "Normal",
       "Psychic"
@@ -5965,7 +5965,7 @@
     "height_m": 0.6,
     "weight_kg": 6.5
   },
-  "MeloettaPirouette Forme": {
+  "Meloetta Pirouette Forme": {
     "types": [
       "Normal",
       "Fighting"
@@ -6047,7 +6047,7 @@
     "height_m": 1.5,
     "weight_kg": 40.0
   },
-  "GreninjaAsh-Greninja": {
+  "Greninja Ash-Greninja": {
     "types": [
       "Water",
       "Dark"
@@ -6196,28 +6196,28 @@
     "height_m": 0.3,
     "weight_kg": 3.5
   },
-  "MeowsticMale": {
+  "Meowstic Male": {
     "types": [
       "Psychic"
     ],
     "height_m": 0.6,
     "weight_kg": 8.5
   },
-  "MeowsticFemale": {
+  "Meowstic Female": {
     "types": [
       "Psychic"
     ],
     "height_m": 0.6,
     "weight_kg": 8.5
   },
-  "MeowsticMega Meowstic (Male)": {
+  "Meowstic Mega Meowstic (Male)": {
     "types": [
       "Psychic"
     ],
     "height_m": 0.8,
     "weight_kg": 10.1
   },
-  "MeowsticMega Meowstic (Female)": {
+  "Meowstic Mega Meowstic (Female)": {
     "types": [
       "Psychic"
     ],
@@ -6240,7 +6240,7 @@
     "height_m": 0.8,
     "weight_kg": 4.5
   },
-  "AegislashShield Forme": {
+  "Aegislash Shield Forme": {
     "types": [
       "Steel",
       "Ghost"
@@ -6248,7 +6248,7 @@
     "height_m": 1.7,
     "weight_kg": 53.0
   },
-  "AegislashBlade Forme": {
+  "Aegislash Blade Forme": {
     "types": [
       "Steel",
       "Ghost"
@@ -6300,7 +6300,7 @@
     "height_m": 1.5,
     "weight_kg": 47.0
   },
-  "MalamarMega Malamar": {
+  "Malamar Mega Malamar": {
     "types": [
       "Dark",
       "Psychic"
@@ -6417,7 +6417,7 @@
     "height_m": 0.8,
     "weight_kg": 21.5
   },
-  "HawluchaMega Hawlucha": {
+  "Hawlucha Mega Hawlucha": {
     "types": [
       "Fighting",
       "Flying"
@@ -6455,7 +6455,7 @@
     "height_m": 0.8,
     "weight_kg": 17.5
   },
-  "SliggooHisuian Sliggoo": {
+  "Sliggoo Hisuian Sliggoo": {
     "types": [
       "Steel",
       "Dragon"
@@ -6470,7 +6470,7 @@
     "height_m": 2.0,
     "weight_kg": 150.5
   },
-  "GoodraHisuian Goodra": {
+  "Goodra Hisuian Goodra": {
     "types": [
       "Steel",
       "Dragon"
@@ -6502,7 +6502,7 @@
     "height_m": 1.5,
     "weight_kg": 71.0
   },
-  "PumpkabooAverage Size": {
+  "Pumpkaboo Average Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6510,7 +6510,7 @@
     "height_m": 0.4,
     "weight_kg": 5.0
   },
-  "PumpkabooSmall Size": {
+  "Pumpkaboo Small Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6518,7 +6518,7 @@
     "height_m": 0.3,
     "weight_kg": 3.5
   },
-  "PumpkabooLarge Size": {
+  "Pumpkaboo Large Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6526,7 +6526,7 @@
     "height_m": 0.5,
     "weight_kg": 7.5
   },
-  "PumpkabooSuper Size": {
+  "Pumpkaboo Super Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6534,7 +6534,7 @@
     "height_m": 0.8,
     "weight_kg": 15.0
   },
-  "GourgeistAverage Size": {
+  "Gourgeist Average Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6542,7 +6542,7 @@
     "height_m": 0.9,
     "weight_kg": 12.5
   },
-  "GourgeistSmall Size": {
+  "Gourgeist Small Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6550,7 +6550,7 @@
     "height_m": 0.7,
     "weight_kg": 9.5
   },
-  "GourgeistLarge Size": {
+  "Gourgeist Large Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6558,7 +6558,7 @@
     "height_m": 1.1,
     "weight_kg": 14.0
   },
-  "GourgeistSuper Size": {
+  "Gourgeist Super Size": {
     "types": [
       "Ghost",
       "Grass"
@@ -6580,7 +6580,7 @@
     "height_m": 2.0,
     "weight_kg": 505.0
   },
-  "AvaluggHisuian Avalugg": {
+  "Avalugg Hisuian Avalugg": {
     "types": [
       "Ice",
       "Rock"
@@ -6619,7 +6619,7 @@
     "height_m": 5.8,
     "weight_kg": 203.0
   },
-  "Zygarde50% Forme": {
+  "Zygarde 50% Forme": {
     "types": [
       "Dragon",
       "Ground"
@@ -6627,7 +6627,7 @@
     "height_m": 5.0,
     "weight_kg": 305.0
   },
-  "Zygarde10% Forme": {
+  "Zygarde 10% Forme": {
     "types": [
       "Dragon",
       "Ground"
@@ -6635,7 +6635,7 @@
     "height_m": 1.2,
     "weight_kg": 33.5
   },
-  "ZygardeComplete Forme": {
+  "Zygarde Complete Forme": {
     "types": [
       "Dragon",
       "Ground"
@@ -6651,7 +6651,7 @@
     "height_m": 0.7,
     "weight_kg": 8.8
   },
-  "DiancieMega Diancie": {
+  "Diancie Mega Diancie": {
     "types": [
       "Rock",
       "Fairy"
@@ -6659,7 +6659,7 @@
     "height_m": 1.1,
     "weight_kg": 27.8
   },
-  "HoopaHoopa Confined": {
+  "Hoopa Hoopa Confined": {
     "types": [
       "Psychic",
       "Ghost"
@@ -6667,7 +6667,7 @@
     "height_m": 0.5,
     "weight_kg": 9.0
   },
-  "HoopaHoopa Unbound": {
+  "Hoopa Hoopa Unbound": {
     "types": [
       "Psychic",
       "Dark"
@@ -6707,7 +6707,7 @@
     "height_m": 1.6,
     "weight_kg": 36.6
   },
-  "DecidueyeHisuian Decidueye": {
+  "Decidueye Hisuian Decidueye": {
     "types": [
       "Grass",
       "Fighting"
@@ -6835,7 +6835,7 @@
     "height_m": 1.7,
     "weight_kg": 180.0
   },
-  "CrabominableMega Crabominable": {
+  "Crabominable Mega Crabominable": {
     "types": [
       "Fighting",
       "Ice"
@@ -6843,7 +6843,7 @@
     "height_m": 2.6,
     "weight_kg": 252.8
   },
-  "OricorioBaile Style": {
+  "Oricorio Baile Style": {
     "types": [
       "Fire",
       "Flying"
@@ -6851,7 +6851,7 @@
     "height_m": 0.6,
     "weight_kg": 3.4
   },
-  "OricorioPom-Pom Style": {
+  "Oricorio Pom-Pom Style": {
     "types": [
       "Electric",
       "Flying"
@@ -6859,7 +6859,7 @@
     "height_m": 0.6,
     "weight_kg": 3.4
   },
-  "OricorioPa'u Style": {
+  "Oricorio Pa'u Style": {
     "types": [
       "Psychic",
       "Flying"
@@ -6867,7 +6867,7 @@
     "height_m": 0.6,
     "weight_kg": 3.4
   },
-  "OricorioSensu Style": {
+  "Oricorio Sensu Style": {
     "types": [
       "Ghost",
       "Flying"
@@ -6898,42 +6898,42 @@
     "height_m": 0.5,
     "weight_kg": 9.2
   },
-  "RockruffOwn Tempo Rockruff": {
+  "Rockruff Own Tempo Rockruff": {
     "types": [
       "Rock"
     ],
     "height_m": 0.5,
     "weight_kg": 9.2
   },
-  "LycanrocMidday Form": {
+  "Lycanroc Midday Form": {
     "types": [
       "Rock"
     ],
     "height_m": 0.8,
     "weight_kg": 25.0
   },
-  "LycanrocMidnight Form": {
+  "Lycanroc Midnight Form": {
     "types": [
       "Rock"
     ],
     "height_m": 1.1,
     "weight_kg": 25.0
   },
-  "LycanrocDusk Form": {
+  "Lycanroc Dusk Form": {
     "types": [
       "Rock"
     ],
     "height_m": 0.8,
     "weight_kg": 25.0
   },
-  "WishiwashiSolo Form": {
+  "Wishiwashi Solo Form": {
     "types": [
       "Water"
     ],
     "height_m": 0.2,
     "weight_kg": 0.3
   },
-  "WishiwashiSchool Form": {
+  "Wishiwashi School Form": {
     "types": [
       "Water"
     ],
@@ -7107,7 +7107,7 @@
     "height_m": 2.0,
     "weight_kg": 108.0
   },
-  "GolisopodMega Golisopod": {
+  "Golisopod Mega Golisopod": {
     "types": [
       "Bug",
       "Steel"
@@ -7152,7 +7152,7 @@
     "height_m": 2.3,
     "weight_kg": 100.5
   },
-  "MiniorMeteor Form": {
+  "Minior Meteor Form": {
     "types": [
       "Rock",
       "Flying"
@@ -7160,7 +7160,7 @@
     "height_m": 0.3,
     "weight_kg": 40.0
   },
-  "MiniorCore Form": {
+  "Minior Core Form": {
     "types": [
       "Rock",
       "Flying"
@@ -7370,7 +7370,7 @@
     "height_m": 2.4,
     "weight_kg": 230.0
   },
-  "NecrozmaDusk Mane Necrozma": {
+  "Necrozma Dusk Mane Necrozma": {
     "types": [
       "Psychic",
       "Steel"
@@ -7378,7 +7378,7 @@
     "height_m": 3.8,
     "weight_kg": 460.0
   },
-  "NecrozmaDawn Wings Necrozma": {
+  "Necrozma Dawn Wings Necrozma": {
     "types": [
       "Psychic",
       "Ghost"
@@ -7386,7 +7386,7 @@
     "height_m": 4.2,
     "weight_kg": 350.0
   },
-  "NecrozmaUltra Necrozma": {
+  "Necrozma Ultra Necrozma": {
     "types": [
       "Psychic",
       "Dragon"
@@ -7402,7 +7402,7 @@
     "height_m": 1.0,
     "weight_kg": 80.5
   },
-  "MagearnaMega Magearna": {
+  "Magearna Mega Magearna": {
     "types": [
       "Steel",
       "Fairy"
@@ -7456,7 +7456,7 @@
     "height_m": 1.5,
     "weight_kg": 44.5
   },
-  "ZeraoraMega Zeraora": {
+  "Zeraora Mega Zeraora": {
     "types": [
       "Electric"
     ],
@@ -7761,7 +7761,7 @@
     "height_m": 0.4,
     "weight_kg": 11.0
   },
-  "ToxtricityAmped Form": {
+  "Toxtricity Amped Form": {
     "types": [
       "Electric",
       "Poison"
@@ -7769,7 +7769,7 @@
     "height_m": 1.6,
     "weight_kg": 40.0
   },
-  "ToxtricityLow Key Form": {
+  "Toxtricity Low Key Form": {
     "types": [
       "Electric",
       "Poison"
@@ -7963,21 +7963,21 @@
     "height_m": 2.5,
     "weight_kg": 520.0
   },
-  "EiscueIce Face": {
+  "Eiscue Ice Face": {
     "types": [
       "Ice"
     ],
     "height_m": 1.4,
     "weight_kg": 89.0
   },
-  "EiscueNoice Face": {
+  "Eiscue Noice Face": {
     "types": [
       "Ice"
     ],
     "height_m": 1.4,
     "weight_kg": 89.0
   },
-  "IndeedeeMale": {
+  "Indeedee Male": {
     "types": [
       "Psychic",
       "Normal"
@@ -7985,7 +7985,7 @@
     "height_m": 0.9,
     "weight_kg": 28.0
   },
-  "IndeedeeFemale": {
+  "Indeedee Female": {
     "types": [
       "Psychic",
       "Normal"
@@ -7993,7 +7993,7 @@
     "height_m": 0.9,
     "weight_kg": 28.0
   },
-  "MorpekoFull Belly Mode": {
+  "Morpeko Full Belly Mode": {
     "types": [
       "Electric",
       "Dark"
@@ -8001,7 +8001,7 @@
     "height_m": 0.3,
     "weight_kg": 3.0
   },
-  "MorpekoHangry Mode": {
+  "Morpeko Hangry Mode": {
     "types": [
       "Electric",
       "Dark"
@@ -8087,14 +8087,14 @@
     "height_m": 3.0,
     "weight_kg": 50.0
   },
-  "ZacianHero of Many Battles": {
+  "Zacian Hero of Many Battles": {
     "types": [
       "Fairy"
     ],
     "height_m": 2.8,
     "weight_kg": 110.0
   },
-  "ZacianCrowned Sword": {
+  "Zacian Crowned Sword": {
     "types": [
       "Fairy",
       "Steel"
@@ -8102,14 +8102,14 @@
     "height_m": 2.8,
     "weight_kg": 355.0
   },
-  "ZamazentaHero of Many Battles": {
+  "Zamazenta Hero of Many Battles": {
     "types": [
       "Fighting"
     ],
     "height_m": 2.9,
     "weight_kg": 210.0
   },
-  "ZamazentaCrowned Shield": {
+  "Zamazenta Crowned Shield": {
     "types": [
       "Fighting",
       "Steel"
@@ -8132,7 +8132,7 @@
     "height_m": 0.6,
     "weight_kg": 12.0
   },
-  "UrshifuSingle Strike Style": {
+  "Urshifu Single Strike Style": {
     "types": [
       "Fighting",
       "Dark"
@@ -8140,7 +8140,7 @@
     "height_m": 1.9,
     "weight_kg": 105.0
   },
-  "UrshifuRapid Strike Style": {
+  "Urshifu Rapid Strike Style": {
     "types": [
       "Fighting",
       "Water"
@@ -8192,7 +8192,7 @@
     "height_m": 1.1,
     "weight_kg": 7.7
   },
-  "CalyrexIce Rider": {
+  "Calyrex Ice Rider": {
     "types": [
       "Psychic",
       "Ice"
@@ -8200,7 +8200,7 @@
     "height_m": 2.4,
     "weight_kg": 809.1
   },
-  "CalyrexShadow Rider": {
+  "Calyrex Shadow Rider": {
     "types": [
       "Psychic",
       "Ghost"
@@ -8232,7 +8232,7 @@
     "height_m": 2.4,
     "weight_kg": 290.0
   },
-  "UrsalunaBloodmoon": {
+  "Ursaluna Bloodmoon": {
     "types": [
       "Ground",
       "Normal"
@@ -8240,7 +8240,7 @@
     "height_m": 2.7,
     "weight_kg": 333.0
   },
-  "BasculegionMale": {
+  "Basculegion Male": {
     "types": [
       "Water",
       "Ghost"
@@ -8248,7 +8248,7 @@
     "height_m": 3.0,
     "weight_kg": 110.0
   },
-  "BasculegionFemale": {
+  "Basculegion Female": {
     "types": [
       "Water",
       "Ghost"
@@ -8272,7 +8272,7 @@
     "height_m": 2.5,
     "weight_kg": 60.5
   },
-  "EnamorusIncarnate Forme": {
+  "Enamorus Incarnate Forme": {
     "types": [
       "Fairy",
       "Flying"
@@ -8280,7 +8280,7 @@
     "height_m": 1.6,
     "weight_kg": 48.0
   },
-  "EnamorusTherian Forme": {
+  "Enamorus Therian Forme": {
     "types": [
       "Fairy",
       "Flying"
@@ -8361,14 +8361,14 @@
     "height_m": 0.5,
     "weight_kg": 10.2
   },
-  "OinkologneMale": {
+  "Oinkologne Male": {
     "types": [
       "Normal"
     ],
     "height_m": 1.0,
     "weight_kg": 120.0
   },
-  "OinkologneFemale": {
+  "Oinkologne Female": {
     "types": [
       "Normal"
     ],
@@ -8434,14 +8434,14 @@
     "height_m": 0.3,
     "weight_kg": 1.8
   },
-  "MausholdFamily of Four": {
+  "Maushold Family of Four": {
     "types": [
       "Normal"
     ],
     "height_m": 0.3,
     "weight_kg": 2.8
   },
-  "MausholdFamily of Three": {
+  "Maushold Family of Three": {
     "types": [
       "Normal"
     ],
@@ -8486,7 +8486,7 @@
     "height_m": 1.4,
     "weight_kg": 48.2
   },
-  "SquawkabillyGreen Plumage": {
+  "Squawkabilly Green Plumage": {
     "types": [
       "Normal",
       "Flying"
@@ -8494,7 +8494,7 @@
     "height_m": 0.6,
     "weight_kg": 2.4
   },
-  "SquawkabillyBlue Plumage": {
+  "Squawkabilly Blue Plumage": {
     "types": [
       "Normal",
       "Flying"
@@ -8502,7 +8502,7 @@
     "height_m": 0.6,
     "weight_kg": 2.4
   },
-  "SquawkabillyYellow Plumage": {
+  "Squawkabilly Yellow Plumage": {
     "types": [
       "Normal",
       "Flying"
@@ -8510,7 +8510,7 @@
     "height_m": 0.6,
     "weight_kg": 2.4
   },
-  "SquawkabillyWhite Plumage": {
+  "Squawkabilly White Plumage": {
     "types": [
       "Normal",
       "Flying"
@@ -8676,7 +8676,7 @@
     "height_m": 0.9,
     "weight_kg": 15.0
   },
-  "ScovillainMega Scovillain": {
+  "Scovillain Mega Scovillain": {
     "types": [
       "Grass",
       "Fire"
@@ -8766,14 +8766,14 @@
     "height_m": 1.3,
     "weight_kg": 60.2
   },
-  "PalafinZero Form": {
+  "Palafin Zero Form": {
     "types": [
       "Water"
     ],
     "height_m": 1.3,
     "weight_kg": 60.2
   },
-  "PalafinHero Form": {
+  "Palafin Hero Form": {
     "types": [
       "Water"
     ],
@@ -8827,7 +8827,7 @@
     "height_m": 1.5,
     "weight_kg": 45.0
   },
-  "GlimmoraMega Glimmora": {
+  "Glimmora Mega Glimmora": {
     "types": [
       "Rock",
       "Poison"
@@ -8886,7 +8886,7 @@
     "height_m": 12.0,
     "weight_kg": 220.0
   },
-  "TatsugiriCurly Form": {
+  "Tatsugiri Curly Form": {
     "types": [
       "Dragon",
       "Water"
@@ -8894,7 +8894,7 @@
     "height_m": 0.3,
     "weight_kg": 8.0
   },
-  "TatsugiriDroopy Form": {
+  "Tatsugiri Droopy Form": {
     "types": [
       "Dragon",
       "Water"
@@ -8902,7 +8902,7 @@
     "height_m": 0.3,
     "weight_kg": 8.0
   },
-  "TatsugiriStretchy Form": {
+  "Tatsugiri Stretchy Form": {
     "types": [
       "Dragon",
       "Water"
@@ -8910,7 +8910,7 @@
     "height_m": 0.3,
     "weight_kg": 8.0
   },
-  "TatsugiriMega Tatsugiri": {
+  "Tatsugiri Mega Tatsugiri": {
     "types": [
       "Dragon",
       "Water"
@@ -8942,14 +8942,14 @@
     "height_m": 3.2,
     "weight_kg": 160.0
   },
-  "DudunsparceTwo-Segment Form": {
+  "Dudunsparce Two-Segment Form": {
     "types": [
       "Normal"
     ],
     "height_m": 3.6,
     "weight_kg": 39.2
   },
-  "DudunsparceThree-Segment Form": {
+  "Dudunsparce Three-Segment Form": {
     "types": [
       "Normal"
     ],
@@ -9084,7 +9084,7 @@
     "height_m": 2.1,
     "weight_kg": 210.0
   },
-  "BaxcaliburMega Baxcalibur": {
+  "Baxcalibur Mega Baxcalibur": {
     "types": [
       "Dragon",
       "Ice"
@@ -9092,14 +9092,14 @@
     "height_m": 2.1,
     "weight_kg": 315.0
   },
-  "GimmighoulChest Form": {
+  "Gimmighoul Chest Form": {
     "types": [
       "Ghost"
     ],
     "height_m": 0.3,
     "weight_kg": 5.0
   },
-  "GimmighoulRoaming Form": {
+  "Gimmighoul Roaming Form": {
     "types": [
       "Ghost"
     ],
@@ -9242,14 +9242,14 @@
     "height_m": 1.4,
     "weight_kg": 30.1
   },
-  "OgerponTeal Mask": {
+  "Ogerpon Teal Mask": {
     "types": [
       "Grass"
     ],
     "height_m": 1.2,
     "weight_kg": 39.8
   },
-  "OgerponWellspring Mask": {
+  "Ogerpon Wellspring Mask": {
     "types": [
       "Grass",
       "Water"
@@ -9257,7 +9257,7 @@
     "height_m": 1.2,
     "weight_kg": 39.8
   },
-  "OgerponHearthflame Mask": {
+  "Ogerpon Hearthflame Mask": {
     "types": [
       "Grass",
       "Fire"
@@ -9265,7 +9265,7 @@
     "height_m": 1.2,
     "weight_kg": 39.8
   },
-  "OgerponCornerstone Mask": {
+  "Ogerpon Cornerstone Mask": {
     "types": [
       "Grass",
       "Rock"
@@ -9321,21 +9321,21 @@
     "height_m": 1.6,
     "weight_kg": 156.0
   },
-  "TerapagosNormal Form": {
+  "Terapagos Normal Form": {
     "types": [
       "Normal"
     ],
     "height_m": 0.2,
     "weight_kg": 6.5
   },
-  "TerapagosTerastal Form": {
+  "Terapagos Terastal Form": {
     "types": [
       "Normal"
     ],
     "height_m": 0.3,
     "weight_kg": 16.0
   },
-  "TerapagosStellar Form": {
+  "Terapagos Stellar Form": {
     "types": [
       "Normal"
     ],
