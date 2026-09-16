@@ -600,18 +600,36 @@ CANDY_SPECIES: <species name>"""
 
 _RESOURCE_LAYOUT_PROMPT = """This is a crop from a Pokémon GO stats card showing the resource row(s) below WEIGHT/TYPE/HEIGHT.
 
-Ignore STARDUST. Report the species Candy, Candy XL, and Mega Energy.
-Some species show Mega Energy as ONE number; others (e.g. Charizard, Mewtwo)
-split it into Mega Energy X and Mega Energy Y. Report only what is shown —
-use NONE for anything not present.
+Ignore STARDUST and ignore the green "POWER UP" / "EVOLVE" buttons further
+down the screen — those show costs, not owned totals.
+
+This screen normally shows two Candy values:
+- CANDY: the regular candy count, next to a round candy icon
+- CANDY_XL: the XL candy count, next to a square/hexagonal XL candy icon
+
+For Mega Energy, apply this rule mechanically — do not re-derive it, just
+match what you see to one of these three cases:
+
+Case A — you see ONE "MEGA ENERGY" label with one number:
+  → MEGA_ENERGY = that number, MEGA_ENERGY_X = NONE, MEGA_ENERGY_Y = NONE
+
+Case B — you see "MEGA ENERGY X" and "MEGA ENERGY Y" as two separate labels:
+  → MEGA_ENERGY = NONE, MEGA_ENERGY_X = that X number, MEGA_ENERGY_Y = that Y number
+
+Case C — you see no Mega Energy label at all:
+  → MEGA_ENERGY = NONE, MEGA_ENERGY_X = NONE, MEGA_ENERGY_Y = NONE
+
+Example: if the image shows "RAICHU MEGA ENERGY X: 0" and "RAICHU MEGA
+ENERGY Y: 0", that is Case B. The answer is MEGA_ENERGY: NONE,
+MEGA_ENERGY_X: 0, MEGA_ENERGY_Y: 0. Write this answer as soon as you match
+a case — do not re-check your match against these rules a second time.
 
 Answer in this exact format with nothing else:
 CANDY: <number or NONE>
 CANDY_XL: <number or NONE>
 MEGA_ENERGY: <number or NONE>
 MEGA_ENERGY_X: <number or NONE>
-MEGA_ENERGY_Y: <number or NONE>
-"""
+MEGA_ENERGY_Y: <number or NONE>"""
 
 def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
@@ -695,14 +713,14 @@ def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) 
     """
     log.debug("VisionAgent.discover_resource_layout called")
     w, h = img.size
-    crop = img.crop((0, int(h * 0.65), w, int(h * 0.85)))
+    crop = img.crop((0, int(h * 0.58), w, int(h * 0.92)))
     if visit_num is not None:
         try:
             crop.save(f"screenshots/vlm_resource_layout_{visit_num:03d}.png")
         except Exception as e:
             log.warning(f"Could not save resource layout debug image: {e}")
 
-    raw = call_vlm(_RESOURCE_TEXT_PROMPT, [crop], max_tokens=MAX_TOKENS)
+    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, [crop], max_tokens=MAX_TOKENS)
     print(f"DEBUG resource_layout_raw: {raw!r}")
 
     values = _parse_resource_response(raw)

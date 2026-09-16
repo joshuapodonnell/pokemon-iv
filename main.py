@@ -746,15 +746,10 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         layout_result = vision_agent.discover_resource_layout(base_img, visit_num)
         if vision_agent.is_reliable(layout_result):
             resource_values = vision_agent.extract_resource_values(layout_result)
-            W, H = base_img.size
-            bboxes = vision_agent.extract_resource_bboxes(layout_result, W, H)
-            if bboxes:
-                _resource_layout_cache[layout_cache_key] = bboxes
-                save_layout_cache(_resource_layout_cache)
-                log.info(f"Learned resource layout for {layout_cache_key!r} — future catches reuse this")
+            log.info(f"Resource values for {name!r}: {resource_values}")
         else:
-            log.warning(
-                f"Resource layout discovery unreliable for {layout_cache_key!r} — leaving unresolved this catch")
+            resource_values = {}
+            log.warning(f"Resource layout discovery unreliable for {name!r} — leaving unresolved this catch")
 
     if resource_values:
         candy_family = get_candy_family(name)
