@@ -790,8 +790,11 @@ def extract_resource_values(agent_result: dict) -> dict:
 def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
     """
     Converts bbox_rel fractions into absolute pixel coordinates for whichever
-    resource fields are present, for caching and later fast OCR reuse.
-    Fields with bbox_rel=None (not applicable to this species) are omitted.
+    resource fields are present. Rejects (rather than caches) any bbox whose
+    values aren't valid 0.0-1.0 fractions — weaker/local VLMs sometimes
+    hallucinate raw pixel coordinates or other malformed numbers instead of
+    following the fractional format, and caching a bad box would silently
+    corrupt every future catch of that family until manually cleared.
     """
     result = {}
     for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
@@ -800,6 +803,15 @@ def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
         if not bbox or len(bbox) != 4:
             continue
         x1, y1, x2, y2 = bbox
+        if not all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2)):
+            log.warning(f"Resource bbox for {key!r} has non-numeric values {bbox!r} — rejecting")
+            continue
+        if not all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2)):
+            log.warning(f"Resource bbox for {key!r} out of 0.0-1.0 range {bbox!r} — rejecting")
+            continue
+        if x2 <= x1 or y2 <= y1:
+            log.warning(f"Resource bbox for {key!r} has non-positive area {bbox!r} — rejecting")
+            continue
         result[key] = (
             int(x1 * img_w), int(y1 * img_h),
             int(x2 * img_w), int(y2 * img_h),
@@ -809,10 +821,18 @@ def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
     bbox = extra.get("bbox_rel")
     if bbox and len(bbox) == 4:
         x1, y1, x2, y2 = bbox
-        result["extra_row"] = (
-            int(x1 * img_w), int(y1 * img_h),
-            int(x2 * img_w), int(y2 * img_h),
+        valid = (
+            all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2))
+            and all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2))
+            and x2 > x1 and y2 > y1
         )
+        if valid:
+            result["extra_row"] = (
+                int(x1 * img_w), int(y1 * img_h),
+                int(x2 * img_w), int(y2 * img_h),
+            )
+        else:
+            log.warning(f"extra_row bbox invalid {bbox!r} — rejecting")
 
     return result
 def warmup_remote() -> bool:

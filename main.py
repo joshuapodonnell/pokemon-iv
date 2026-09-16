@@ -716,13 +716,27 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
 
     if cached_layout:
         resource_values = {}
+        W, H = base_img.size
+        layout_ok = True
+
         for field, (x1, y1, x2, y2) in cached_layout.items():
+            if not (0 <= x1 < x2 <= W and 0 <= y1 < y2 <= H):
+                log.warning(
+                    f"Cached resource bbox for {layout_cache_key!r} field {field!r} "
+                    f"is out of image bounds ({x1},{y1},{x2},{y2}) vs image {W}x{H} — invalidating"
+                )
+                layout_ok = False
+                break
             crop = base_img.crop((x1, y1, x2, y2))
             text = ocrregion(crop, upscale=True)
             digits = re.sub(r"[^\d]", "", text)
             resource_values[field] = int(digits) if digits else None
 
-        if not is_valid_resource_read(resource_values):
+        if not layout_ok:
+            invalidate(_resource_layout_cache, layout_cache_key)
+            cached_layout = None
+            resource_values = None
+        elif not is_valid_resource_read(resource_values):
             log.warning(f"Cached resource layout for {layout_cache_key!r} failed validation — invalidating")
             invalidate(_resource_layout_cache, layout_cache_key)
             cached_layout = None
