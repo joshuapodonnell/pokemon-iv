@@ -710,7 +710,14 @@ def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) 
             img.save(f"screenshots/vlm_resource_layout_{visit_num:03d}.png")
         except Exception as e:
             log.warning(f"Could not save resource layout debug image: {e}")
-    return _safe_call(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img), max_tokens=900)
+
+    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img), max_tokens=900)
+    print(f"DEBUG resource_layout_raw: {raw!r}")  # temporary — remove once diagnosed
+
+    result = _parse_json_response(raw)
+    result.setdefault("source", "vlm")
+    result.setdefault("confidence", 0.0)
+    return result
 
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
     log.debug("VisionAgent.correct_ocr called")
