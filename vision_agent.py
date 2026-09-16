@@ -214,7 +214,7 @@ REMOTE_WARMUP_TIMEOUT  = 180
 
 _remote_available: bool | None = None
 
-def _call_vlm_remote(prompt: str, images: list) -> str:
+def _call_vlm_remote(prompt: str, images: list, max_tokens: int = MAX_TOKENS, think: bool = True) -> str:
     """Send a vision request to the Windows PC Ollama endpoint."""
     img = images[0]
     buf = io.BytesIO()
@@ -231,9 +231,9 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
                  "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
             ]
         }],
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": max_tokens,
         "temperature": 0.0,
-        "think": False,
+        "think": think,
     }
 
     response = requests.post(
@@ -243,22 +243,21 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
     )
     response.raise_for_status()
     data = response.json()
-    print(f"DEBUG full_response: {json.dumps(data, indent=2)[:2000]!r}")
+    print(f"DEBUG full_response: {json.dumps(data, indent=2)[:2000]!r}")  # temporary — remove once diagnosed
     msg = data["choices"][0]["message"]
     return (msg.get("content") or "").strip()
-
 
 # ---------------------------------------------------------------------------
 # Unified VLM dispatcher with circuit breaker
 # ---------------------------------------------------------------------------
 
-def _dispatch_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> tuple[str, str]:
+def _dispatch_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS, think: bool = True) -> tuple[str, str]:
     """Core dispatcher. Returns (text, backend) where backend is 'remote' or 'local'."""
     global _remote_available, _local_broken
 
     if _remote_available is not False:
         try:
-            result = _call_vlm_remote(prompt, images)
+            result = _call_vlm_remote(prompt, images, max_tokens=max_tokens, think=think)
             if _remote_available is not True:
                 log.info("[VLM] Remote PC is reachable — using remote inference.")
             _remote_available = True
@@ -280,22 +279,24 @@ def _dispatch_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> tu
     if _load_local_model():
         try:
             log.debug("[VLM-local] Running local inference.")
-            return _call_vlm_local(prompt, images, max_tokens=max_tokens), "local"
+            return _call_vlm_local(prompt, images, max_tokens=max_tokens), "local"  # think ignored — no MLX equivalent
         except Exception as e:
             raise RuntimeError(f"Local VLM inference failed; disabled for this session: {e}") from e
 
     raise RuntimeError("VLM unavailable: remote down and local model failed to load.")
 
 
-def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> str:
-    """Unchanged public signature — existing callers (analyze_base_screen, _safe_call, etc.) keep working."""
-    text, _backend = _dispatch_vlm(prompt, images, max_tokens)
+def call_vlm(prompt: str, images: list, max_tokens: int = MAX_TOKENS, think: bool = True) -> str:
+    """Unchanged public signature default — existing callers (analyze_base_screen, _safe_call, etc.)
+    keep working since think defaults to True. Pass think=False to skip Qwen3's reasoning
+    trace for tasks where it was consuming the token budget before emitting content."""
+    text, _backend = _dispatch_vlm(prompt, images, max_tokens, think=think)
     return text
 
 
-def call_vlm_with_backend(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> tuple[str, str]:
+def call_vlm_with_backend(prompt: str, images: list, max_tokens: int = MAX_TOKENS, think: bool = True) -> tuple[str, str]:
     """Same as call_vlm but also returns 'remote' or 'local' — use this for anything you're benchmarking."""
-    return _dispatch_vlm(prompt, images, max_tokens)
+    return _dispatch_vlm(prompt, images, max_tokens, think=think)
 
 
 def reset_remote_status() -> None:
