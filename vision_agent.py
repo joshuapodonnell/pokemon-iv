@@ -593,32 +593,27 @@ CANDY: <number>
 CANDY_XL: <number>
 CANDY_SPECIES: <species name>"""
 
-_RESOURCE_LAYOUT_PROMPT = """This is a Pokémon GO stats screen. Locate the resource
-row(s) below the WEIGHT/TYPE/HEIGHT section: Stardust, Candy, Candy XL, and
-(if this species can Mega Evolve) Mega Energy.
+_RESOURCE_LAYOUT_PROMPT = """This is a Pokémon GO stats screen. Locate the Candy,
+Candy XL, and Mega Energy values shown below the WEIGHT/TYPE/HEIGHT section.
 
 Some species show Mega Energy as a single value; others (e.g. Charizard,
-Mewtwo) split it into Mega Energy X and Mega Energy Y. Some individual
-Pokémon may show an extra circular badge above this block if they have
-previously been Mega Evolved — ignore that badge, it is not a resource value.
-A few species (e.g. Rayquaza) show one additional bonus row (like Meteorite)
-below the normal resources — report it under "extra_row" if present.
+Mewtwo) split it into Mega Energy X and Mega Energy Y. Ignore any circular
+badge shown above this block — it is not a resource value.
 
-Return ONLY this JSON:
+Return ONLY this JSON, using -1 for any value that does not apply to this
+Pokémon and [0,0,0,0] for any bbox_rel that does not apply:
+
 {
-  "stardust":      {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
-  "candy":         {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
-  "candy_xl":      {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
-  "mega_energy":   {"value": null, "bbox_rel": null, "confidence": 0.0},
-  "mega_energy_x": {"value": null, "bbox_rel": null, "confidence": 0.0},
-  "mega_energy_y": {"value": null, "bbox_rel": null, "confidence": 0.0},
-  "extra_row":     {"label": null, "value": null, "bbox_rel": null},
+  "candy":         {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
+  "candy_xl":      {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
+  "mega_energy":   {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
+  "mega_energy_x": {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
+  "mega_energy_y": {"value": -1, "bbox_rel": [0,0,0,0], "confidence": 0.0},
   "confidence": 0.0
 }
 
 Rules:
 - bbox_rel values are fractions of the image width/height (0.0-1.0).
-- Use null for any field that does not apply to this Pokémon.
 - Strip commas from numbers (e.g. "1,234" becomes 1234).
 - Return JSON only."""
 def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
@@ -772,36 +767,32 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
 def extract_resource_values(agent_result: dict) -> dict:
     """
     Pulls the plain numeric values out of a discover_resource_layout()
-    result, for immediate use on the catch that triggered discovery
-    (no need to re-crop/re-OCR — the VLM already read the numbers).
+    result. Uses -1 as the "not applicable" sentinel (matching the prompt)
+    rather than checking for None/null.
     """
     values = {}
-    for key in ("stardust", "candy", "candy_xl", "mega_energy",
-                "mega_energy_x", "mega_energy_y"):
+    for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
         field = agent_result.get(key) or {}
         raw = field.get("value")
-        if raw is None:
+        if raw is None or raw == -1:
             values[key] = None
             continue
         try:
-            values[key] = int(str(raw).replace(",", ""))
+            parsed = int(str(raw).replace(",", ""))
+            values[key] = parsed if parsed >= 0 else None
         except (TypeError, ValueError):
             values[key] = None
-
-    extra = agent_result.get("extra_row") or {}
-    values["extra_row_label"] = extra.get("label")
-    values["extra_row_value"] = extra.get("value")
     return values
 
 
 def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
     """
     Converts bbox_rel fractions into absolute pixel coordinates for whichever
-    resource fields are present. Rejects (rather than caches) any bbox whose
-    values aren't valid 0.0-1.0 fractions — weaker/local VLMs sometimes
-    hallucinate raw pixel coordinates or other malformed numbers instead of
-    following the fractional format, and caching a bad box would silently
-    corrupt every future catch of that family until manually cleared.
+    resource fields are present. Rejects any bbox that isn't a valid
+    0.0-1.0 fraction, is the [0,0,0,0] "not applicable" sentinel, or has
+    non-positive area — weaker/local VLMs sometimes hallucinate raw pixel
+    coordinates instead of following the fractional format, and caching a
+    bad box would silently corrupt every future catch of that family.
     """
     result = {}
     for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
@@ -813,6 +804,8 @@ def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
         if not all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2)):
             log.warning(f"Resource bbox for {key!r} has non-numeric values {bbox!r} — rejecting")
             continue
+        if (x1, y1, x2, y2) == (0, 0, 0, 0):
+            continue  # sentinel for "not applicable" — not an error, just skip
         if not all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2)):
             log.warning(f"Resource bbox for {key!r} out of 0.0-1.0 range {bbox!r} — rejecting")
             continue
@@ -823,25 +816,8 @@ def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
             int(x1 * img_w), int(y1 * img_h),
             int(x2 * img_w), int(y2 * img_h),
         )
-
-    extra = agent_result.get("extra_row") or {}
-    bbox = extra.get("bbox_rel")
-    if bbox and len(bbox) == 4:
-        x1, y1, x2, y2 = bbox
-        valid = (
-            all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2))
-            and all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2))
-            and x2 > x1 and y2 > y1
-        )
-        if valid:
-            result["extra_row"] = (
-                int(x1 * img_w), int(y1 * img_h),
-                int(x2 * img_w), int(y2 * img_h),
-            )
-        else:
-            log.warning(f"extra_row bbox invalid {bbox!r} — rejecting")
-
     return result
+
 def warmup_remote() -> bool:
     global _remote_available
     log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 30B…")
