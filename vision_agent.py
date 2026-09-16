@@ -73,7 +73,7 @@ API_URL = f"http://{WINDOWS_PC_IP}:{API_PORT}/v1/chat/completions"
 VLM_MODEL = "qwen3-vl:30b"
 
 CONFIDENCE_THRESHOLD: float = 0.75
-MAX_TOKENS: int = 400
+MAX_TOKENS: int = 900
 
 # Set POGO_DISABLE_LOCAL_VLM=1 to skip local fallback entirely and degrade to
 # OCR/review when remote is unreachable. Local is ON by default.
@@ -233,6 +233,7 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
         }],
         "max_tokens": MAX_TOKENS,
         "temperature": 0.0,
+        "think": False,
     }
 
     response = requests.post(
@@ -709,7 +710,7 @@ def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) 
         except Exception as e:
             log.warning(f"Could not save resource layout debug image: {e}")
 
-    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img), max_tokens=900)
+    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img), max_tokens=900, think=False)
     print(f"DEBUG resource_layout_raw: {raw!r}")  # temporary — remove once diagnosed
 
     result = _parse_json_response(raw)
