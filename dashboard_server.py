@@ -294,6 +294,9 @@ DASHBOARD_HTML = """
   >
     Fix Review Records
   </button>
+  <a href="/resources" style="align-self:center; color:#93c5fd; font-weight:700; text-decoration:none;">
+    View Candy &amp; Mega Energy →
+  </a>
 </section>
 
   <section class="table-wrap">
@@ -718,7 +721,242 @@ async function deleteReviewRecord(pokemonId, name) {
 </body>
 </html>
 """
+RESOURCES_HTML = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Candy &amp; Mega Energy — Pokémon GO IV Catalog</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #172033;
+      --border: #2c3a55;
+      --text: #e6edf7;
+      --muted: #9bacbf;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px;
+      color: var(--text);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; }
+    a.back-link { color: #93c5fd; text-decoration: none; font-weight: 700; }
 
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(130px, 1fr));
+      gap: 14px;
+      margin: 20px 0 24px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+    .card-value { font-size: 30px; font-weight: 800; margin-top: 6px; }
+
+    .controls { margin-bottom: 16px; }
+    input {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 14px;
+      width: 320px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    table { border-collapse: collapse; width: 100%; min-width: 900px; }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    th .sort-arrow { display: inline-block; margin-left: 4px; opacity: 0.6; }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { background: #202d44; }
+    .dash { color: var(--muted); }
+    .updated { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <a class="back-link" href="/">← Back to catalog</a>
+  <h1>Candy &amp; Mega Energy</h1>
+  <p class="subtitle">
+    Candy/Candy XL are tracked per family root (e.g. Charizard's is labeled
+    "Charmander Candy" in-game); Mega Energy is tracked per Mega-capable
+    family member. Values are updated automatically every time any member
+    of that family is scanned.
+  </p>
+
+  <section class="stats">
+    <div class="card"><div class="card-label">FAMILIES TRACKED</div><div class="card-value" id="totalFamilies">—</div></div>
+    <div class="card"><div class="card-label">WITH MEGA ENERGY</div><div class="card-value" id="withMega">—</div></div>
+    <div class="card"><div class="card-label">TOTAL CANDY XL</div><div class="card-value" id="totalCandyXl">—</div></div>
+  </section>
+
+  <section class="controls">
+    <input id="search" placeholder="Search family name…">
+  </section>
+
+  <section class="table-wrap">
+    <table>
+      <thead>
+        <tr id="headerRow">
+          <th data-key="family">Family</th>
+          <th data-key="candy">Candy</th>
+          <th data-key="candy_xl">Candy XL</th>
+          <th data-key="mega_energy">Mega Energy</th>
+          <th data-key="mega_energy_x">Mega Energy X</th>
+          <th data-key="mega_energy_y">Mega Energy Y</th>
+          <th data-key="candy_updated">Candy Updated</th>
+          <th data-key="mega_updated">Mega Updated</th>
+        </tr>
+      </thead>
+      <tbody id="resourceRows"></tbody>
+    </table>
+  </section>
+
+  <script>
+    let resources = [];
+    let sortKey = "family";
+    let sortAscending = true;
+
+    const value = (item, key) => {
+      const val = item[key];
+      if (val === null || val === undefined || val === "") return null;
+      return val;
+    };
+
+    const dash = (v) => v === null || v === undefined ? '<span class="dash">—</span>' : v;
+
+    function mainArrow(key) {
+      if (key !== sortKey) return "";
+      return `<span class="sort-arrow">${sortAscending ? "▲" : "▼"}</span>`;
+    }
+
+    function renderHeader() {
+      document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
+        const key = header.dataset.key;
+        const label = header.dataset.label || header.textContent.replace(/[▲▼]/g, "").trim();
+        header.dataset.label = label;
+        header.innerHTML = `${label}${mainArrow(key)}`;
+      });
+    }
+
+    function render() {
+      const search = document.getElementById("search").value.toLowerCase();
+
+      const filtered = resources
+        .filter(r => r.family.toLowerCase().includes(search))
+        .sort((a, b) => {
+          const av = value(a, sortKey);
+          const bv = value(b, sortKey);
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+          const comparison = typeof av === "number" && typeof bv === "number"
+            ? av - bv
+            : String(av).localeCompare(String(bv));
+          return sortAscending ? comparison : -comparison;
+        });
+
+      document.getElementById("resourceRows").innerHTML = filtered.map(r => `
+        <tr>
+          <td><strong>${r.family}</strong></td>
+          <td>${dash(r.candy)}</td>
+          <td>${dash(r.candy_xl)}</td>
+          <td>${dash(r.mega_energy)}</td>
+          <td>${dash(r.mega_energy_x)}</td>
+          <td>${dash(r.mega_energy_y)}</td>
+          <td class="updated">${dash(r.candy_updated)}</td>
+          <td class="updated">${dash(r.mega_updated)}</td>
+        </tr>
+      `).join("");
+
+      renderHeader();
+    }
+
+    async function loadResources() {
+      const resp = await fetch("/api/resources");
+      resources = await resp.json();
+
+      document.getElementById("totalFamilies").textContent = resources.length;
+      document.getElementById("withMega").textContent =
+        resources.filter(r => r.mega_energy !== null || r.mega_energy_x !== null).length;
+      document.getElementById("totalCandyXl").textContent =
+        resources.reduce((sum, r) => sum + (r.candy_xl || 0), 0);
+
+      render();
+    }
+
+    document.getElementById("search").addEventListener("input", render);
+
+    document.querySelectorAll("#headerRow th[data-key]").forEach(header => {
+      header.addEventListener("click", () => {
+        const key = header.dataset.key;
+        sortAscending = key === sortKey ? !sortAscending : true;
+        sortKey = key;
+        render();
+      });
+    });
+
+    loadResources();
+  </script>
+</body>
+</html>
+"""
+
+
+@app.route("/resources")
+def resources_page():
+    return render_template_string(RESOURCES_HTML)
+
+
+@app.route("/api/resources")
+def api_resources():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT
+            c.family_root AS family,
+            c.candy, c.candy_xl, c.last_updated AS candy_updated,
+            m.mega_energy, m.mega_energy_x, m.mega_energy_y, m.last_updated AS mega_updated
+        FROM species_candy c
+        LEFT JOIN mega_energy m ON m.mega_family = c.family_root
+
+        UNION
+
+        SELECT
+            m.mega_family AS family,
+            c.candy, c.candy_xl, c.last_updated AS candy_updated,
+            m.mega_energy, m.mega_energy_x, m.mega_energy_y, m.last_updated AS mega_updated
+        FROM mega_energy m
+        LEFT JOIN species_candy c ON c.family_root = m.mega_family
+
+        ORDER BY family ASC
+    """).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 @app.route("/")
 def dashboard():
