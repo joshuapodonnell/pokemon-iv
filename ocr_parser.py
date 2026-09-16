@@ -376,17 +376,12 @@ def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str, hp: 
             return disambiguated
         log.warning(f"Nidoran OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
 
-    if re.match(r"^pumpkaboo\b", ocr_lower) and hp:
-        disambiguated = disambiguate_sized_species(cp, hp, PUMPKABOO_SIZES)
-        if disambiguated:
-            return disambiguated
-        log.warning(f"Pumpkaboo OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
+    if re.match(r"^pumpkaboo\b", ocr_lower):
+        return "Pumpkaboo"  # size resolved later in main.py using exact IVs
 
-    if re.match(r"^gourgeist\b", ocr_lower) and hp:
-        disambiguated = disambiguate_sized_species(cp, hp, GOURGEIST_SIZES)
-        if disambiguated:
-            return disambiguated
-        log.warning(f"Gourgeist OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
+    if re.match(r"^gourgeist\b", ocr_lower):
+        return "Gourgeist"  # size resolved later in main.py using exact IVs
+
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
             canonical = known
@@ -847,39 +842,31 @@ def disambiguate_nidoran(cp: int, hp: int) -> str | None:
     log.warning(f"Nidoran disambiguation inconclusive for CP={cp} HP={hp}: {candidates}")
     return None
 
-PUMPKABOO_SIZES  = ("Pumpkaboo Small", "Pumpkaboo Average", "Pumpkaboo Large", "Pumpkaboo Super")
-GOURGEIST_SIZES  = ("Gourgeist Small", "Gourgeist Average", "Gourgeist Large", "Gourgeist Super")
+PUMPKABOO_SIZES  = ("Pumpkaboo (Small)", "Pumpkaboo (Average)", "Pumpkaboo (Large)", "Pumpkaboo (Super)")
+GOURGEIST_SIZES  = ("Gourgeist (Small)", "Gourgeist (Average)", "Gourgeist (Large)", "Gourgeist (Super)")
 
-def disambiguate_sized_species(cp: int, hp: int, candidates_list: tuple[str, ...]) -> str | None:
+def disambiguate_sized_species(cp: int, hp: int, iv_atk: int, iv_def: int, iv_sta: int,
+                                candidates: tuple[str, ...]) -> str | None:
     """
-    Pumpkaboo/Gourgeist sizes have different base stats in GO but identical
-    appraisal description text — OCR never sees which size was caught.
-    Disambiguate using CP+HP against each size's full IV/level search space.
+    Uses the EXACT IVs already read from the appraisal bars (not a brute-force
+    search over all possible IVs) to find which candidate size reproduces the
+    observed CP and HP at some level.
     """
-    candidates = {}
-    for species in candidates_list:
+    matches = []
+    for species in candidates:
         stats = BASE_STATS.get(species)
         if not stats:
             continue
-        found = False
         for level in CPM.keys():
-            for ia in range(16):
-                for idf in range(16):
-                    for ist in range(16):
-                        if calc_cp(stats["atk"], stats["def"], stats["sta"], ia, idf, ist, level) == cp:
-                            if calc_hp(stats["sta"], ist, level) == hp:
-                                found = True
-                                break
-                    if found:
-                        break
-                if found:
+            if calc_cp(stats["atk"], stats["def"], stats["sta"], iv_atk, iv_def, iv_sta, level) == cp:
+                if calc_hp(stats["sta"], iv_sta, level) == hp:
+                    matches.append(species)
                     break
-            if found:
-                break
-        candidates[species] = found
 
-    matches = [s for s, ok in candidates.items() if ok]
     if len(matches) == 1:
         return matches[0]
-    log.warning(f"Size disambiguation inconclusive for CP={cp} HP={hp}: {candidates}")
+    log.warning(
+        f"Size disambiguation inconclusive for CP={cp} HP={hp} "
+        f"IVs=({iv_atk},{iv_def},{iv_sta}): candidates={matches}"
+    )
     return None

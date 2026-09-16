@@ -19,7 +19,8 @@ from ocr_parser import (
     resolvespeciesname,
     parsecp, parsehp,
     ocrregion, getrelativeregion, parseivbars, parseivbarsdebug, parse_caught_date,
-    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, ocr_hp_region
+    readappraisalbars, readappraisalbarsdebug, ocr_type_region, parse_types, ocr_hp_region,
+    PUMPKABOO_SIZES, GOURGEIST_SIZES, disambiguate_sized_species
 )
 from pvp_rankings import all_league_rankings_with_evos
 from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus, set_nickname
@@ -641,6 +642,19 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         f"ATK={atk_iv} DEF={def_iv} STA={sta_iv} | "
         f"IV%={round((atk_iv + def_iv + sta_iv) / 45 * 100, 1)}%"
     )
+
+    SIZED_SPECIES_CANDIDATES = {
+        "Pumpkaboo": PUMPKABOO_SIZES,
+        "Gourgeist": GOURGEIST_SIZES,
+    }
+
+    if name in SIZED_SPECIES_CANDIDATES:
+        resolved = disambiguate_sized_species(cp, hp, atk_iv, def_iv, sta_iv, SIZED_SPECIES_CANDIDATES[name])
+        if resolved:
+            name = resolved
+        else:
+            log.warning(f"Could not determine {name} size from exact IVs — flagging for review")
+            name = f"AMBIGUOUS_{name.upper()}_SIZE"
 
     iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
     iv_data['caught_date'] = caught_date
