@@ -376,6 +376,17 @@ def resolvespeciesname(img: Image.Image, ui: dict, cp: int, type_text: str, hp: 
             return disambiguated
         log.warning(f"Nidoran OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
 
+    if re.match(r"^pumpkaboo\b", ocr_lower) and hp:
+        disambiguated = disambiguate_sized_species(cp, hp, PUMPKABOO_SIZES)
+        if disambiguated:
+            return disambiguated
+        log.warning(f"Pumpkaboo OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
+
+    if re.match(r"^gourgeist\b", ocr_lower) and hp:
+        disambiguated = disambiguate_sized_species(cp, hp, GOURGEIST_SIZES)
+        if disambiguated:
+            return disambiguated
+        log.warning(f"Gourgeist OCR {ocr_name!r} could not be disambiguated — falling back to normal resolution")
     for known in SPECIESDB:
         if known.lower() == ocr_lower:
             canonical = known
@@ -834,4 +845,41 @@ def disambiguate_nidoran(cp: int, hp: int) -> str | None:
     if len(matches) == 1:
         return matches[0]
     log.warning(f"Nidoran disambiguation inconclusive for CP={cp} HP={hp}: {candidates}")
+    return None
+
+PUMPKABOO_SIZES  = ("Pumpkaboo Small", "Pumpkaboo Average", "Pumpkaboo Large", "Pumpkaboo Super")
+GOURGEIST_SIZES  = ("Gourgeist Small", "Gourgeist Average", "Gourgeist Large", "Gourgeist Super")
+
+def disambiguate_sized_species(cp: int, hp: int, candidates_list: tuple[str, ...]) -> str | None:
+    """
+    Pumpkaboo/Gourgeist sizes have different base stats in GO but identical
+    appraisal description text — OCR never sees which size was caught.
+    Disambiguate using CP+HP against each size's full IV/level search space.
+    """
+    candidates = {}
+    for species in candidates_list:
+        stats = BASE_STATS.get(species)
+        if not stats:
+            continue
+        found = False
+        for level in CPM.keys():
+            for ia in range(16):
+                for idf in range(16):
+                    for ist in range(16):
+                        if calc_cp(stats["atk"], stats["def"], stats["sta"], ia, idf, ist, level) == cp:
+                            if calc_hp(stats["sta"], ist, level) == hp:
+                                found = True
+                                break
+                    if found:
+                        break
+                if found:
+                    break
+            if found:
+                break
+        candidates[species] = found
+
+    matches = [s for s, ok in candidates.items() if ok]
+    if len(matches) == 1:
+        return matches[0]
+    log.warning(f"Size disambiguation inconclusive for CP={cp} HP={hp}: {candidates}")
     return None

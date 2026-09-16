@@ -11,7 +11,7 @@ for row in soup.select("table tbody tr"):
     if len(cols) < 7:
         continue
 
-    name       = cols[1].get_text(strip=True)
+    name       = cols[1].get_text(" ", strip=True)
     type_links = cols[2].find_all("a")
     types      = [a.get_text(strip=True) for a in type_links]
 

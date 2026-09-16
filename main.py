@@ -759,8 +759,9 @@ def read_list_entry(base_img, appraisal_img, ui):
 
     type_img = getrelativeregion(base_img, ui["type_region"])
     type_text = ocr_type_region(type_img)
+    hp, _, _ = ocr_hp_region(base_img, ui)
 
-    name = resolvespeciesname(appraisal_img, ui, cp, type_text)
+    name = resolvespeciesname(appraisal_img, ui, cp, type_text, hp = hp)
 
     desc_img = getrelativeregion(appraisal_img, ui["name_region"])
     _, raw_text, _ = detect_description_lines(desc_img)
@@ -1003,7 +1004,8 @@ def pokemon_go_search_species(name: str) -> str:
     for stored_prefix, search_name in SEARCH_BASE_NAME_OVERRIDES.items():
         if compact.startswith(stored_prefix):
             return search_name
-    for marker in (" Style", " Forme", " Form", " Mode", " Cloak", " Trim"):
+    for marker in (" Style", " Forme", " Form", " Mode", " Cloak", " Trim",
+                   " Small", " Average", " Large", " Super"):
         if marker in name:
             return name.split(marker, 1)[0].lower()
     return compact
