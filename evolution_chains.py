@@ -560,11 +560,37 @@ def _build_family_root_map() -> dict[str, str]:
 _FAMILY_ROOT_MAP = _build_family_root_map()
 
 
+_COSMETIC_FORM_MARKERS = (
+    " (Small)", " (Average)", " (Large)", " (Super)",
+    " (Alolan)", " (Galarian)", " (Hisuian)", " (Paldean)",
+    " (White-Striped)",
+    " Origin Forme", " Altered Forme",
+    " Style", " Forme", " Form", " Mode", " Cloak", " Trim",
+)
+
+
+def _strip_cosmetic_form(species: str) -> str:
+    """
+    Strips form/size qualifiers that don't affect Candy pooling in-game —
+    Pokémon GO shares one Candy currency across all sizes/forms of a
+    species (e.g. every Pumpkaboo size draws from the same "Pumpkaboo
+    Candy", and both Giratina Formes share "Giratina Candy"). Used only
+    for Candy-family grouping, NOT for BASE_STATS/PvP lookups, where the
+    exact form still matters.
+    """
+    for marker in _COSMETIC_FORM_MARKERS:
+        if marker in species:
+            return species.split(marker, 1)[0].strip()
+    return species
+
+
 def get_candy_family(species: str) -> str:
     """
     Returns the family-root species name that this Pokémon's Candy pool is
     tracked and labeled under in-game — shared across the whole
-    evolutionary line, not just the currently-scanned stage.
+    evolutionary line and across cosmetic size/form variants, not just the
+    currently-scanned stage or form.
     """
-    name = normalize_name(species)
+    stripped = _strip_cosmetic_form(species)
+    name = normalize_name(stripped)
     return _FAMILY_ROOT_MAP.get(name, name)

@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template_string, abort
 from database import get_db, promote_evolution
 from pvp_rankings import all_league_rankings_with_evos
+from evolution_chains import get_mega_energy_family
 
 app = Flask(__name__)
 
@@ -934,29 +935,53 @@ def resources_page():
     return render_template_string(RESOURCES_HTML)
 
 
+from evolution_chains import get_mega_energy_family
+
 @app.route("/api/resources")
 def api_resources():
     conn = get_db()
-    rows = conn.execute("""
-        SELECT
-            c.family_root AS family,
-            c.candy, c.candy_xl, c.last_updated AS candy_updated,
-            m.mega_energy, m.mega_energy_x, m.mega_energy_y, m.last_updated AS mega_updated
-        FROM species_candy c
-        LEFT JOIN mega_energy m ON m.mega_family = c.family_root
+    candy_rows = conn.execute("SELECT * FROM species_candy").fetchall()
+    mega_rows = conn.execute("SELECT * FROM mega_energy").fetchall()
 
-        UNION
+    mega_by_family = {r["mega_family"]: dict(r) for r in mega_rows}
+    merged = {}
 
-        SELECT
-            m.mega_family AS family,
-            c.candy, c.candy_xl, c.last_updated AS candy_updated,
-            m.mega_energy, m.mega_energy_x, m.mega_energy_y, m.last_updated AS mega_updated
-        FROM mega_energy m
-        LEFT JOIN species_candy c ON c.family_root = m.mega_family
+    for r in candy_rows:
+        family_root = r["family_root"]
+        # Compute the SAME mega_family key main.py used at catch time, so a
+        # candy row (e.g. "Gastly") correctly absorbs its family's Mega
+        # Energy row (e.g. "Gengar") instead of showing as two rows.
+        mega_family_name = get_mega_energy_family(family_root) or family_root
+        mega = mega_by_family.pop(mega_family_name, None)
 
-        ORDER BY family ASC
-    """).fetchall()
-    return jsonify([dict(r) for r in rows])
+        merged[family_root] = {
+            "family": family_root,
+            "candy": r["candy"],
+            "candy_xl": r["candy_xl"],
+            "candy_updated": r["last_updated"],
+            "mega_energy": mega["mega_energy"] if mega else None,
+            "mega_energy_x": mega["mega_energy_x"] if mega else None,
+            "mega_energy_y": mega["mega_energy_y"] if mega else None,
+            "mega_updated": mega["last_updated"] if mega else None,
+        }
+
+    # Any mega_energy rows left over have no matching candy row yet
+    # (e.g. you scanned a Mega-evolved individual before ever scanning a
+    # base-stage member of that line) — show them as their own row rather
+    # than silently dropping them.
+    for mega_family_name, mega in mega_by_family.items():
+        merged[mega_family_name] = {
+            "family": mega_family_name,
+            "candy": None,
+            "candy_xl": None,
+            "candy_updated": None,
+            "mega_energy": mega["mega_energy"],
+            "mega_energy_x": mega["mega_energy_x"],
+            "mega_energy_y": mega["mega_energy_y"],
+            "mega_updated": mega["last_updated"],
+        }
+
+    return jsonify(sorted(merged.values(), key=lambda r: r["family"]))
 
 @app.route("/")
 def dashboard():
