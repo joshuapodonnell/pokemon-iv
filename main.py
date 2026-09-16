@@ -44,6 +44,7 @@ _vlm_executor = concurrent.futures.ThreadPoolExecutor(
 
 capture_frames = 3
 _resource_layout_cache = {}
+_resource_values_cache = {}
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -710,43 +711,16 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info(f"[REPROCESS] Updated existing row id={poke_id}")
 
     # ── Candy / Candy XL / Mega Energy resource block ──────────────────────
-    layout_cache_key = get_mega_energy_family(name) or name
-    cached_layout = _resource_layout_cache.get(layout_cache_key)
-    resource_values = None
-
-    if cached_layout:
-        resource_values = {}
-        W, H = base_img.size
-        layout_ok = True
-
-        for field, (x1, y1, x2, y2) in cached_layout.items():
-            if not (0 <= x1 < x2 <= W and 0 <= y1 < y2 <= H):
-                log.warning(
-                    f"Cached resource bbox for {layout_cache_key!r} field {field!r} "
-                    f"is out of image bounds ({x1},{y1},{x2},{y2}) vs image {W}x{H} — invalidating"
-                )
-                layout_ok = False
-                break
-            crop = base_img.crop((x1, y1, x2, y2))
-            text = ocrregion(crop, upscale=True)
-            digits = re.sub(r"[^\d]", "", text)
-            resource_values[field] = int(digits) if digits else None
-
-        if not layout_ok:
-            invalidate(_resource_layout_cache, layout_cache_key)
-            cached_layout = None
-            resource_values = None
-        elif not is_valid_resource_read(resource_values):
-            log.warning(f"Cached resource layout for {layout_cache_key!r} failed validation — invalidating")
-            invalidate(_resource_layout_cache, layout_cache_key)
-            cached_layout = None
-            resource_values = None
-
-    if cached_layout is None:
+    cached_values = _resource_values_cache.get(name)
+    if cached_values is not None:
+        resource_values = cached_values
+        log.info(f"Reusing cached resource values for {name!r} (read earlier this session): {resource_values}")
+    else:
         layout_result = vision_agent.discover_resource_layout(base_img, visit_num)
         if vision_agent.is_reliable(layout_result):
             resource_values = vision_agent.extract_resource_values(layout_result)
-            log.info(f"Resource values for {name!r}: {resource_values}")
+            _resource_values_cache[name] = resource_values
+            log.info(f"Resource values for {name!r}: {resource_values} (cached for rest of session)")
         else:
             resource_values = {}
             log.warning(f"Resource layout discovery unreliable for {name!r} — leaving unresolved this catch")
