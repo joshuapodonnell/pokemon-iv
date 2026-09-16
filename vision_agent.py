@@ -241,7 +241,10 @@ def _call_vlm_remote(prompt: str, images: list) -> str:
         timeout=(REMOTE_CONNECT_TIMEOUT, REMOTE_READ_TIMEOUT),
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
+    data = response.json()
+    print(f"DEBUG full_response: {json.dumps(data, indent=2)[:2000]!r}")
+    msg = data["choices"][0]["message"]
+    return (msg.get("content") or "").strip()
 
 
 # ---------------------------------------------------------------------------
