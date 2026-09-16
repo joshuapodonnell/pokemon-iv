@@ -493,16 +493,16 @@ EVOLUTION_CHAINS = {
 # scanned. This is a small, finite, occasionally-updated list — extend it
 # whenever Niantic adds a new Mega species.
 MEGA_CAPABLE_SPECIES = {
-    "Venusaur", "Charizard", "Blastoise", "Beedrill", "Pidgeot",
-    "Alakazam", "Slowbro", "Gengar", "Kangaskhan", "Pinsir",
-    "Gyarados", "Aerodactyl", "Mewtwo", "Ampharos", "Steelix",
-    "Scizor", "Heracross", "Houndoom", "Tyranitar", "Blaziken",
-    "Gardevoir", "Mawile", "Aggron", "Medicham", "Manectric",
-    "Banette", "Absol", "Garchomp", "Lucario", "Abomasnow",
-    "Gallade", "Audino", "Diancie", "Sableye", "Sharpedo",
-    "Camerupt", "Altaria", "Glalie", "Salamence", "Metagross",
-    "Latias", "Latios", "Rayquaza", "Lopunny", "Swampert",
-    "Skarmory",
+    "Venusaur", "Charizard", "Blastoise", "Beedrill", "Pidgeot", "Raichu",
+    "Alakazam", "Victreebel", "Slowbro", "Gengar", "Kangaskhan", "Starmie",
+    "Pinsir", "Gyarados", "Aerodactyl", "Dragonite", "Mewtwo", "Ampharos",
+    "Steelix", "Scizor", "Heracross", "Skarmory", "Houndoom", "Tyranitar",
+    "Sceptile", "Blaziken", "Swampert", "Gardevoir", "Sableye", "Mawile",
+    "Aggron", "Medicham", "Manectric", "Sharpedo", "Camerupt", "Altaria",
+    "Banette", "Absol", "Glalie", "Salamence", "Metagross", "Latias",
+    "Latios", "Rayquaza", "Lopunny", "Garchomp", "Lucario", "Abomasnow",
+    "Gallade", "Audino", "Chesnaught", "Delphox", "Greninja", "Malamar",
+    "Diancie", "Falinks",
     # ... extend as Niantic adds more Mega species
 }
 
