@@ -482,6 +482,48 @@ EVOLUTION_CHAINS = {
     "Tauros (Paldean)": [],  # combat/blaze/aqua breeds — no evo
     "Clodsire": [],
 }
+# ---------------------------------------------------------------------------
+# Mega Energy family resolution
+# ---------------------------------------------------------------------------
+# Pokémon GO stores and displays Mega Energy per evolutionary line, not per
+# species — a Charmander's screen shows "Charizard Mega Energy X/Y" even
+# though Charmander itself cannot Mega Evolve. This means the resource-block
+# layout (single Mega Energy vs. X/Y split vs. none at all) is a property of
+# the family's Mega-capable member, not of whichever stage was actually
+# scanned. This is a small, finite, occasionally-updated list — extend it
+# whenever Niantic adds a new Mega species.
+MEGA_CAPABLE_SPECIES = {
+    "Venusaur", "Charizard", "Blastoise", "Beedrill", "Pidgeot",
+    "Alakazam", "Slowbro", "Gengar", "Kangaskhan", "Pinsir",
+    "Gyarados", "Aerodactyl", "Mewtwo", "Ampharos", "Steelix",
+    "Scizor", "Heracross", "Houndoom", "Tyranitar", "Blaziken",
+    "Gardevoir", "Mawile", "Aggron", "Medicham", "Manectric",
+    "Banette", "Absol", "Garchomp", "Lucario", "Abomasnow",
+    "Gallade", "Audino", "Diancie", "Sableye", "Sharpedo",
+    "Camerupt", "Altaria", "Glalie", "Salamence", "Metagross",
+    "Latias", "Latios", "Rayquaza", "Lopunny", "Swampert",
+    "Skarmory",
+    # ... extend as Niantic adds more Mega species
+}
+
+
+def get_mega_energy_family(species: str) -> str | None:
+    """
+    Returns the species name whose Mega Energy is tracked/displayed for this
+    Pokémon's evolutionary line — even on a pre-evolution's screen, since GO
+    shows the family's Mega Energy on every stage, not just the final form.
+    Returns None if no member of this line can Mega Evolve.
+    """
+    name = normalize_name(species)
+    if name in MEGA_CAPABLE_SPECIES:
+        return name
+    for evo in get_evolutions(name):
+        if evo in MEGA_CAPABLE_SPECIES:
+            return evo
+        deeper = get_mega_energy_family(evo)
+        if deeper:
+            return deeper
+    return None
 
 def normalize_name(name: str) -> str:
     result = name.strip().title()
@@ -491,3 +533,38 @@ def normalize_name(name: str) -> str:
 def get_evolutions(species: str) -> list[str]:
     """Return the list of evolved forms for a species. Empty list if none/unknown."""
     return EVOLUTION_CHAINS.get(normalize_name(species), [])
+
+def _build_family_root_map() -> dict[str, str]:
+    """
+    Maps every species to the root (first-stage) member of its evolutionary
+    line — the species whose name appears in the in-game Candy label (e.g.
+    Charizard's candy pool is displayed as "Charmander Candy").
+    """
+    all_evolutions = set()
+    for evos in EVOLUTION_CHAINS.values():
+        all_evolutions.update(evos)
+
+    roots = [s for s in EVOLUTION_CHAINS if s not in all_evolutions]
+
+    family_root = {}
+    for root in roots:
+        family_root[root] = root
+        stack = list(EVOLUTION_CHAINS.get(root, []))
+        while stack:
+            evo = stack.pop()
+            family_root[evo] = root
+            stack.extend(EVOLUTION_CHAINS.get(evo, []))
+    return family_root
+
+
+_FAMILY_ROOT_MAP = _build_family_root_map()
+
+
+def get_candy_family(species: str) -> str:
+    """
+    Returns the family-root species name that this Pokémon's Candy pool is
+    tracked and labeled under in-game — shared across the whole
+    evolutionary line, not just the currently-scanned stage.
+    """
+    name = normalize_name(species)
+    return _FAMILY_ROOT_MAP.get(name, name)

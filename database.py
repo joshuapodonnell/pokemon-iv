@@ -84,7 +84,9 @@ CREATE TABLE IF NOT EXISTS pokemon (
     nickname        TEXT DEFAULT NULL,
     nickname_applied INTEGER DEFAULT 0,
     is_shiny        INTEGER DEFAULT 0,
-    form_status     TEXT DEFAULT 'normal'
+    form_status     TEXT DEFAULT 'normal',
+    is_dynamax      INTEGER DEFAULT 0,
+    is_gigantamax   INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS evo_rankings (
@@ -103,6 +105,23 @@ CREATE TABLE IF NOT EXISTS evo_rankings (
     ul_sp_pct       REAL,
     ul_best_level   REAL,
     ul_best_cp      INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS species_candy (
+    family_root      TEXT PRIMARY KEY,
+    candy            INTEGER,
+    candy_xl         INTEGER,
+    last_updated     TEXT DEFAULT (datetime('now')),
+    last_pokemon_id  INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS mega_energy (
+    mega_family      TEXT PRIMARY KEY,
+    mega_energy      INTEGER,
+    mega_energy_x    INTEGER,
+    mega_energy_y    INTEGER,
+    last_updated     TEXT DEFAULT (datetime('now')),
+    last_pokemon_id  INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_name        ON pokemon(name);
@@ -144,6 +163,10 @@ def get_db(db_file: str = DB_FILE) -> sqlite3.Connection:
         conn.execute(
             "ALTER TABLE pokemon ADD COLUMN nickname_applied INTEGER DEFAULT 0"
         )
+    if "is_dynamax" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN is_dynamax INTEGER DEFAULT 0")
+    if "is_gigantamax" not in existing:
+        conn.execute("ALTER TABLE pokemon ADD COLUMN is_gigantamax INTEGER DEFAULT 0")
     conn.commit()
     return conn
 
@@ -268,6 +291,47 @@ def get_evo_rankings(conn, pokemon_id: int) -> dict:
         }
     return result
 
+def upsert_species_candy(conn: sqlite3.Connection, family_root: str,
+                          candy: int | None, candy_xl: int | None,
+                          pokemon_id: int) -> None:
+    """
+    Candy and Candy XL are tracked per family root in-game (e.g. Charizard's
+    candy pool is labeled "Charmander Candy"), shared across the whole
+    evolutionary line — so this upserts a single row per family_root rather
+    than storing a value per individual catch.
+    """
+    conn.execute("""
+        INSERT INTO species_candy (family_root, candy, candy_xl, last_pokemon_id)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(family_root) DO UPDATE SET
+            candy = excluded.candy,
+            candy_xl = excluded.candy_xl,
+            last_updated = datetime('now'),
+            last_pokemon_id = excluded.last_pokemon_id
+    """, (family_root, candy, candy_xl, pokemon_id))
+    conn.commit()
+
+
+def upsert_mega_energy(conn: sqlite3.Connection, mega_family: str,
+                        mega_energy: int | None, mega_energy_x: int | None,
+                        mega_energy_y: int | None, pokemon_id: int) -> None:
+    """
+    Mega Energy is tracked per Mega-capable family member (e.g. a Charmander's
+    screen still shows "Charizard Mega Energy X/Y"), shared across the whole
+    line — this upserts a single row per mega_family, same pattern as
+    upsert_species_candy().
+    """
+    conn.execute("""
+        INSERT INTO mega_energy (mega_family, mega_energy, mega_energy_x, mega_energy_y, last_pokemon_id)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(mega_family) DO UPDATE SET
+            mega_energy = excluded.mega_energy,
+            mega_energy_x = excluded.mega_energy_x,
+            mega_energy_y = excluded.mega_energy_y,
+            last_updated = datetime('now'),
+            last_pokemon_id = excluded.last_pokemon_id
+    """, (mega_family, mega_energy, mega_energy_x, mega_energy_y, pokemon_id))
+    conn.commit()
 
 def log_cp_consensus(visit_num: int, ocr_cp, ocr_raw: str,
                      vlm_votes: list, vlm_consensus, reconciled_cp,

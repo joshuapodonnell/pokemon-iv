@@ -23,9 +23,11 @@ from ocr_parser import (
     PUMPKABOO_SIZES, GOURGEIST_SIZES, disambiguate_sized_species
 )
 from pvp_rankings import all_league_rankings_with_evos
-from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus, set_nickname
+from database import get_db, get_stats, insert_pokemon, insert_evo_rankings, find_duplicate, get_evo_rankings, log_cp_consensus, set_nickname, upsert_species_candy, upsert_mega_energy
 from evaluator import evaluate_catch, get_best_in_db, enforce_top_n, promote_newly_immune
 from tagger import apply_ingame_tag, tags_are_calibrated
+from evolution_chains import get_mega_energy_family, get_candy_family
+from resource_cache import load_layout_cache, save_layout_cache, invalidate, is_valid_resource_read
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +43,7 @@ _vlm_executor = concurrent.futures.ThreadPoolExecutor(
 )
 
 capture_frames = 3
+_resource_layout_cache = {}
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -413,6 +416,7 @@ def _vlm_cp_consensus(frames: list, ocr_cp: int | None = None) -> tuple:
 def scan_one_pokemon(visit_num, args, cfg, conn,
                      tap, capture_window, readappraisalbars, compute_ivs,
                      existing_id=None, base_img=None):
+    global _resource_layout_cache
     ui = cfg["ui"]
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 
@@ -656,6 +660,8 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             log.warning(f"Could not determine {name} size from exact IVs — flagging for review")
             name = f"AMBIGUOUS_{name.upper()}_SIZE"
 
+
+
     iv_data = compute_ivs(name, cp, hp, atk_iv, def_iv, sta_iv, 0)
     iv_data['caught_date'] = caught_date
     all_rankings = all_league_rankings_with_evos(name, atk_iv, def_iv, sta_iv, iv_data['level'])
@@ -702,6 +708,58 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
             poke_id,
         ))
         log.info(f"[REPROCESS] Updated existing row id={poke_id}")
+
+    # ── Candy / Candy XL / Mega Energy resource block ──────────────────────
+    layout_cache_key = get_mega_energy_family(name) or name
+    cached_layout = _resource_layout_cache.get(layout_cache_key)
+    resource_values = None
+
+    if cached_layout:
+        resource_values = {}
+        for field, (x1, y1, x2, y2) in cached_layout.items():
+            crop = base_img.crop((x1, y1, x2, y2))
+            text = ocrregion(crop, upscale=True)
+            digits = re.sub(r"[^\d]", "", text)
+            resource_values[field] = int(digits) if digits else None
+
+        if not is_valid_resource_read(resource_values):
+            log.warning(f"Cached resource layout for {layout_cache_key!r} failed validation — invalidating")
+            invalidate(_resource_layout_cache, layout_cache_key)
+            cached_layout = None
+            resource_values = None
+
+    if cached_layout is None:
+        layout_result = vision_agent.discover_resource_layout(base_img, visit_num)
+        if vision_agent.is_reliable(layout_result):
+            resource_values = vision_agent.extract_resource_values(layout_result)
+            W, H = base_img.size
+            bboxes = vision_agent.extract_resource_bboxes(layout_result, W, H)
+            if bboxes:
+                _resource_layout_cache[layout_cache_key] = bboxes
+                save_layout_cache(_resource_layout_cache)
+                log.info(f"Learned resource layout for {layout_cache_key!r} — future catches reuse this")
+        else:
+            log.warning(
+                f"Resource layout discovery unreliable for {layout_cache_key!r} — leaving unresolved this catch")
+
+    if resource_values:
+        candy_family = get_candy_family(name)
+        upsert_species_candy(
+            conn, candy_family,
+            resource_values.get("candy"), resource_values.get("candy_xl"),
+            poke_id,
+        )
+
+        mega_family = get_mega_energy_family(name)
+        if mega_family:
+            upsert_mega_energy(
+                conn, mega_family,
+                resource_values.get("mega_energy"),
+                resource_values.get("mega_energy_x"),
+                resource_values.get("mega_energy_y"),
+                poke_id,
+            )
+
 
     insert_evo_rankings(conn, poke_id, evo_rankings)
     set_nickname(conn, poke_id)
@@ -792,6 +850,8 @@ def sync_special_flags(args, cfg, conn, tap, capture_window, pause):
         ("Shiny",    "is_shiny",    1),
         ("Shadow",   "form_status", "shadow"),
         ("Purified", "form_status", "purified"),
+        ("Dynamax", "is_dynamax", 1),
+        ("Gigantamax", "is_gigantamax", 1),
     ]
 
     for keyword, column, value in passes:
@@ -1052,11 +1112,6 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
     tap.tap(first_slot["x"], first_slot["y"], base_delay=cfg["timing"].get("after_tap"))
 
     for attempt in range(max_candidates):
-        # Read the CP with one short retry (slow render), but never treat a
-        # blank/unparseable CP as "just the wrong Pokemon" — that means we
-        # are not looking at a detail screen at all (most commonly: the
-        # search returned zero results and the tap on pokemon_slots[0]
-        # landed on empty grid space instead of opening a card).
         cp = None
         for _retry in range(2):
             img = capture_window(cfg["mirror_region"])
@@ -1104,14 +1159,10 @@ def locate_exact_candidate(tap, ui, cfg, capture_window, readappraisalbars,
             tap.swipe_left()
             continue
 
-        offset = (num_lines - 2) * 0.027
-        dynamic_bar_region = {
-            "x1": ui["bar_region"]["x1"], "y1": ui["bar_region"]["y1"] - offset,
-            "x2": ui["bar_region"]["x2"], "y2": ui["bar_region"]["y2"] - offset,
-        }
-        bar_strip = getrelativeregion(stable_img, dynamic_bar_region)
-        bars = parseivbars(bar_strip)
-        atk, def_, sta = (bars if bars else (None, None, None))
+        bars_result = readappraisalbars(
+            stable_img, ui, cfg.get("bar_fill_brightness", 160), lines=num_lines
+        )
+        atk, def_, sta = (bars_result if bars_result else (None, None, None))
 
         tap.tap(ui["appraise_button"]["x"], ui["appraise_button"]["y"],
                 base_delay=random.uniform(0.1, 0.2), elem_key="appraise_button")
@@ -1379,6 +1430,8 @@ def run_bot(args):
     import vision_agent
     cfg  = load_config()
     conn = get_db()
+    global _resource_layout_cache
+    _resource_layout_cache = load_layout_cache()
     tap  = TapController(cfg)
     tag_layout = cfg.get("tag_layouts", {}).get(args.tag_layout, {})
 

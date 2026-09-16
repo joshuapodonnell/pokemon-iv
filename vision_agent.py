@@ -593,6 +593,34 @@ CANDY: <number>
 CANDY_XL: <number>
 CANDY_SPECIES: <species name>"""
 
+_RESOURCE_LAYOUT_PROMPT = """This is a Pokémon GO stats screen. Locate the resource
+row(s) below the WEIGHT/TYPE/HEIGHT section: Stardust, Candy, Candy XL, and
+(if this species can Mega Evolve) Mega Energy.
+
+Some species show Mega Energy as a single value; others (e.g. Charizard,
+Mewtwo) split it into Mega Energy X and Mega Energy Y. Some individual
+Pokémon may show an extra circular badge above this block if they have
+previously been Mega Evolved — ignore that badge, it is not a resource value.
+A few species (e.g. Rayquaza) show one additional bonus row (like Meteorite)
+below the normal resources — report it under "extra_row" if present.
+
+Return ONLY this JSON:
+{
+  "stardust":      {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
+  "candy":         {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
+  "candy_xl":      {"value": 0,    "bbox_rel": [x1, y1, x2, y2], "confidence": 0.0},
+  "mega_energy":   {"value": null, "bbox_rel": null, "confidence": 0.0},
+  "mega_energy_x": {"value": null, "bbox_rel": null, "confidence": 0.0},
+  "mega_energy_y": {"value": null, "bbox_rel": null, "confidence": 0.0},
+  "extra_row":     {"label": null, "value": null, "bbox_rel": null},
+  "confidence": 0.0
+}
+
+Rules:
+- bbox_rel values are fractions of the image width/height (0.0-1.0).
+- Use null for any field that does not apply to this Pokémon.
+- Strip commas from numbers (e.g. "1,234" becomes 1234).
+- Return JSON only."""
 def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
@@ -662,6 +690,28 @@ def analyze_appraisal_screen(img: Image.Image, visit_num: Optional[int] = None) 
             log.warning(f"Could not save appraisal debug image: {e}")
     return _safe_call(_APPRAISAL_SCREEN_PROMPT, _pil_to_list(img))
 
+
+def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) -> dict:
+    """
+    One-time layout discovery for the candy/candy-XL/mega-energy resource
+    block. Unlike analyze_base_screen()'s fixed-crop candy reading, this
+    passes the full base screen and asks the VLM to locate the resource
+    row(s) wherever they actually are — since their position varies with
+    Lucky status, Gigantamax tag, tag-row count, and prior-Mega-Evolution
+    badge, none of which this function needs to know about in advance.
+
+    Callers should cache the returned bbox_rel values (keyed by mega-energy
+    family, see evolution_chains.get_mega_energy_family) so this only runs
+    once per unique resource-block shape, not on every catch.
+    """
+    log.debug("VisionAgent.discover_resource_layout called")
+    if visit_num is not None:
+        try:
+            img.save(f"screenshots/vlm_resource_layout_{visit_num:03d}.png")
+        except Exception as e:
+            log.warning(f"Could not save resource layout debug image: {e}")
+    return _safe_call(_RESOURCE_LAYOUT_PROMPT, _pil_to_list(img))
+
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
     log.debug("VisionAgent.correct_ocr called")
     prompt = _OCR_CORRECTION_PROMPT.format(fields_json=json.dumps(fields, indent=2))
@@ -712,6 +762,59 @@ def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[d
         )
     return result
 
+def extract_resource_values(agent_result: dict) -> dict:
+    """
+    Pulls the plain numeric values out of a discover_resource_layout()
+    result, for immediate use on the catch that triggered discovery
+    (no need to re-crop/re-OCR — the VLM already read the numbers).
+    """
+    values = {}
+    for key in ("stardust", "candy", "candy_xl", "mega_energy",
+                "mega_energy_x", "mega_energy_y"):
+        field = agent_result.get(key) or {}
+        raw = field.get("value")
+        if raw is None:
+            values[key] = None
+            continue
+        try:
+            values[key] = int(str(raw).replace(",", ""))
+        except (TypeError, ValueError):
+            values[key] = None
+
+    extra = agent_result.get("extra_row") or {}
+    values["extra_row_label"] = extra.get("label")
+    values["extra_row_value"] = extra.get("value")
+    return values
+
+
+def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
+    """
+    Converts bbox_rel fractions into absolute pixel coordinates for whichever
+    resource fields are present, for caching and later fast OCR reuse.
+    Fields with bbox_rel=None (not applicable to this species) are omitted.
+    """
+    result = {}
+    for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
+        field = agent_result.get(key) or {}
+        bbox = field.get("bbox_rel")
+        if not bbox or len(bbox) != 4:
+            continue
+        x1, y1, x2, y2 = bbox
+        result[key] = (
+            int(x1 * img_w), int(y1 * img_h),
+            int(x2 * img_w), int(y2 * img_h),
+        )
+
+    extra = agent_result.get("extra_row") or {}
+    bbox = extra.get("bbox_rel")
+    if bbox and len(bbox) == 4:
+        x1, y1, x2, y2 = bbox
+        result["extra_row"] = (
+            int(x1 * img_w), int(y1 * img_h),
+            int(x2 * img_w), int(y2 * img_h),
+        )
+
+    return result
 def warmup_remote() -> bool:
     global _remote_available
     log.info(f"[VLM] Warming up remote model ({VLM_MODEL}) — this may take 60-90s for 30B…")
