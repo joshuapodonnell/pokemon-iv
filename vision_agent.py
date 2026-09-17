@@ -10,10 +10,15 @@ Responsibilities
 2. analyze_appraisal_screen(img) → locate the Pokémon name label and the three
                                    IV bars; return bar bounding boxes + estimated
                                    fill values (0-15).
-3. correct_ocr(fields, img)      → given a dict of already-extracted text fields
+3. discover_resource_layout(img) → read Candy / Candy XL / Mega Energy as plain
+                                   text. Only asks about whichever fields the
+                                   caller still needs this session (need_candy /
+                                   need_mega), and skips Mega Energy entirely for
+                                   species that structurally can't have it.
+4. correct_ocr(fields, img)      → given a dict of already-extracted text fields
                                    that contain suspicious values, ask the VLM to
                                    correct only the flagged ones.
-4. recover_failed_parse(base_img, appraisal_img, partial)
+5. recover_failed_parse(base_img, appraisal_img, partial)
                                  → last-resort structured recovery when the normal
                                    pipeline could not produce a valid result.
 
@@ -26,6 +31,22 @@ Design contract
 * The agent NEVER decides KEEP / TRANSFER / REVIEW – that stays in evaluator.py.
 * All VLM calls are guarded by a try/except so a model failure never crashes
   the bot; methods return an empty dict with confidence=0.0 on failure.
+
+Resource-block extraction notes (2026-09-15/16 diagnosis)
+-----------------------------------------------------------
+Candy/Candy XL/Mega Energy used to be read via a JSON+bbox_rel prompt asking
+the VLM to also localize each value's bounding box for caching. That approach
+was abandoned: the model's spatial-coordinate reasoning was unreliable and
+unbounded — it would ramble indefinitely trying to estimate pixel fractions
+and never converge before hitting the token ceiling, regardless of how large
+that ceiling was. Plain-text extraction (same style as _CP_PROMPT/_HP_PROMPT/
+_TYPE_PROMPT, which have never failed) replaced it entirely.
+
+Mega Energy is additionally only ever asked about for species that are
+Mega-capable (see evolution_chains.MEGA_CAPABLE_SPECIES / get_mega_energy_family),
+since asking about a field that structurally cannot exist on screen was a
+recurring source of the model second-guessing itself and burning its token
+budget.
 
 Local model (M1 MacBook Air)
 ----------------------------
@@ -243,7 +264,6 @@ def _call_vlm_remote(prompt: str, images: list, max_tokens: int = MAX_TOKENS, th
     )
     response.raise_for_status()
     data = response.json()
-    print(f"DEBUG full_response: {json.dumps(data, indent=2)[:2000]!r}")  # temporary — remove once diagnosed
     msg = data["choices"][0]["message"]
     return (msg.get("content") or "").strip()
 
@@ -346,7 +366,7 @@ def _safe_call(prompt: str, images: list, max_tokens: int = MAX_TOKENS) -> dict:
         return {"source": "vlm", "confidence": 0.0, "error": str(e)}
 
 # ---------------------------------------------------------------------------
-# Image crop helpers (Unchanged below)
+# Image crop helpers
 # ---------------------------------------------------------------------------
 def crop_for_vlm(img: Image.Image) -> Image.Image:
     w, h = img.size
@@ -416,6 +436,36 @@ def _parse_candy_response(raw: str) -> dict:
         else:
             result[key] = {"text": "", "confidence": 0.0}
     return result
+
+def _parse_resource_response(raw: str) -> dict:
+    patterns = {
+        "candy":         r"CANDY:\s*([\d,]+|NONE)",
+        "candy_xl":      r"CANDY_XL:\s*([\d,]+|NONE)",
+        "mega_energy":   r"MEGA_ENERGY:\s*([\d,]+|NONE)",
+        "mega_energy_x": r"MEGA_ENERGY_X:\s*([\d,]+|NONE)",
+        "mega_energy_y": r"MEGA_ENERGY_Y:\s*([\d,]+|NONE)",
+    }
+    result = {}
+    for key, pattern in patterns.items():
+        m = re.search(pattern, raw, re.IGNORECASE)
+        if m and m.group(1).upper() != "NONE":
+            result[key] = int(m.group(1).replace(",", ""))
+        else:
+            result[key] = None
+    return result
+
+def _to_int_or_none(text) -> int | None:
+    if not text:
+        return None
+    try:
+        parsed = int(str(text).replace(",", ""))
+        return parsed if parsed >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
 
 _BASE_SCREEN_PROMPT = """Look at this Pokémon GO screenshot and answer these questions.
 Read the EXACT text visible on screen for each answer.
@@ -631,6 +681,37 @@ MEGA_ENERGY: <number or NONE>
 MEGA_ENERGY_X: <number or NONE>
 MEGA_ENERGY_Y: <number or NONE>"""
 
+_MEGA_ONLY_PROMPT = """This is a crop from a Pokémon GO stats card showing the resource row(s) below WEIGHT/TYPE/HEIGHT.
+
+Ignore STARDUST, ignore Candy/Candy XL, and ignore the green "POWER UP" /
+"EVOLVE" buttons further down the screen — those show costs, not owned totals.
+
+For Mega Energy, apply this rule mechanically — do not re-derive it, just
+match what you see to one of these three cases:
+
+Case A — you see ONE "MEGA ENERGY" label with one number:
+  → MEGA_ENERGY = that number, MEGA_ENERGY_X = NONE, MEGA_ENERGY_Y = NONE
+
+Case B — you see "MEGA ENERGY X" and "MEGA ENERGY Y" as two separate labels:
+  → MEGA_ENERGY = NONE, MEGA_ENERGY_X = that X number, MEGA_ENERGY_Y = that Y number
+
+Case C — you see no Mega Energy label at all:
+  → MEGA_ENERGY = NONE, MEGA_ENERGY_X = NONE, MEGA_ENERGY_Y = NONE
+
+Example: if the image shows "RAICHU MEGA ENERGY X: 0" and "RAICHU MEGA
+ENERGY Y: 0", that is Case B. The answer is MEGA_ENERGY: NONE,
+MEGA_ENERGY_X: 0, MEGA_ENERGY_Y: 0. Write this answer as soon as you match
+a case — do not re-check your match against these rules a second time.
+
+Answer in this exact format with nothing else:
+MEGA_ENERGY: <number or NONE>
+MEGA_ENERGY_X: <number or NONE>
+MEGA_ENERGY_Y: <number or NONE>"""
+
+# ---------------------------------------------------------------------------
+# Public methods
+# ---------------------------------------------------------------------------
+
 def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
     log.debug("VisionAgent.analyze_base_screen called")
     try:
@@ -648,11 +729,6 @@ def analyze_base_screen(img: Image.Image, visit_num=None) -> dict:
         hp_raw    = call_vlm(_HP_PROMPT,    [hp_img])
         type_raw  = call_vlm(_TYPE_PROMPT,  [type_img])
         candy_raw = call_vlm(_CANDY_PROMPT, [candy_img])
-
-        print(f"DEBUG cp_raw:    {cp_raw!r}")
-        print(f"DEBUG hp_raw:    {hp_raw!r}")
-        print(f"DEBUG type_raw:  {type_raw!r}")
-        print(f"DEBUG candy_raw: {candy_raw!r}")
 
         cp_result    = _parse_qa_response(cp_raw)
         hp_result    = _parse_qa_response(hp_raw)
@@ -701,17 +777,30 @@ def analyze_appraisal_screen(img: Image.Image, visit_num: Optional[int] = None) 
     return _safe_call(_APPRAISAL_SCREEN_PROMPT, _pil_to_list(img))
 
 
-def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) -> dict:
+def discover_resource_layout(
+    img: Image.Image,
+    visit_num: Optional[int] = None,
+    need_candy: bool = True,
+    need_mega: bool = True,
+) -> dict:
     """
-    Reads Candy / Candy XL / Mega Energy as plain text — same pattern as the
-    other base-screen fields, which have never failed. Uses a taller crop
-    than _crop_candy_region to also capture a possible Mega Energy row.
-    No bbox estimation: VLM spatial-coordinate reasoning proved unreliable
-    and unbounded (see 2026-09-15 diagnosis — model rambled indefinitely
-    trying to estimate pixel fractions and never converged before hitting
-    the token ceiling, regardless of size).
+    Reads Candy / Candy XL / Mega Energy as plain text, only asking about
+    whichever fields the caller still needs this session. Picks the
+    narrowest existing prompt for the fields actually needed rather than
+    always asking about everything:
+
+      need_candy=True,  need_mega=True   → _RESOURCE_LAYOUT_PROMPT (both)
+      need_candy=False, need_mega=True   → _MEGA_ONLY_PROMPT
+      need_candy=True,  need_mega=False  → _CANDY_PROMPT (original, reused)
+
+    Callers should not invoke this at all when both flags are False — there
+    is nothing left to learn (caching is handled by main.py's per-family
+    caches, keyed by get_candy_family()/get_mega_energy_family()).
     """
-    log.debug("VisionAgent.discover_resource_layout called")
+    log.debug(f"VisionAgent.discover_resource_layout called (need_candy={need_candy}, need_mega={need_mega})")
+    if not need_candy and not need_mega:
+        return {"source": "vlm", "confidence": 0.0}
+
     w, h = img.size
     crop = img.crop((0, int(h * 0.58), w, int(h * 0.92)))
     if visit_num is not None:
@@ -720,14 +809,38 @@ def discover_resource_layout(img: Image.Image, visit_num: Optional[int] = None) 
         except Exception as e:
             log.warning(f"Could not save resource layout debug image: {e}")
 
-    raw = call_vlm(_RESOURCE_LAYOUT_PROMPT, [crop], max_tokens=MAX_TOKENS)
-    print(f"DEBUG resource_layout_raw: {raw!r}")
+    if need_candy and need_mega:
+        prompt = _RESOURCE_LAYOUT_PROMPT
+    elif need_mega:
+        prompt = _MEGA_ONLY_PROMPT
+    else:
+        prompt = _CANDY_PROMPT
 
-    values = _parse_resource_response(raw)
+    raw = call_vlm(prompt, [crop], max_tokens=900, think=False)
+
+    if need_candy and not need_mega:
+        # _CANDY_PROMPT's response format/parser predates the NONE-based
+        # scheme — bridge its nested {"text": ...} shape into the same flat
+        # int-or-None shape the other two prompts produce.
+        candy_result = _parse_candy_response(raw)
+        values = {
+            "candy": _to_int_or_none(candy_result.get("candy", {}).get("text")),
+            "candy_xl": _to_int_or_none(candy_result.get("candy_xl", {}).get("text")),
+            "mega_energy": None,
+            "mega_energy_x": None,
+            "mega_energy_y": None,
+        }
+    else:
+        # Both _RESOURCE_LAYOUT_PROMPT and _MEGA_ONLY_PROMPT already use the
+        # NONE-based format — _parse_resource_response's regexes simply find
+        # nothing for fields that weren't asked about, leaving them None.
+        values = _parse_resource_response(raw)
+
     found = sum(1 for v in values.values() if v is not None)
     values["source"] = "vlm"
     values["confidence"] = 0.9 if found >= 1 else 0.0
     return values
+
 
 def correct_ocr(fields: dict, img: Optional[Image.Image] = None) -> dict:
     log.debug("VisionAgent.correct_ocr called")
@@ -765,23 +878,6 @@ def extract_bar_values(agent_result: dict) -> Optional[tuple[int, int, int]]:
         pass
     return None
 
-def _parse_resource_response(raw: str) -> dict:
-    patterns = {
-        "candy":         r"CANDY:\s*([\d,]+|NONE)",
-        "candy_xl":      r"CANDY_XL:\s*([\d,]+|NONE)",
-        "mega_energy":   r"MEGA_ENERGY:\s*([\d,]+|NONE)",
-        "mega_energy_x": r"MEGA_ENERGY_X:\s*([\d,]+|NONE)",
-        "mega_energy_y": r"MEGA_ENERGY_Y:\s*([\d,]+|NONE)",
-    }
-    result = {}
-    for key, pattern in patterns.items():
-        m = re.search(pattern, raw, re.IGNORECASE)
-        if m and m.group(1).upper() != "NONE":
-            result[key] = int(m.group(1).replace(",", ""))
-        else:
-            result[key] = None
-    return result
-
 def extract_bar_bboxes(agent_result: dict, img_w: int, img_h: int) -> Optional[dict]:
     bars = agent_result.get("bars", {})
     result = {}
@@ -803,39 +899,6 @@ def extract_resource_values(agent_result: dict) -> dict:
         for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y")
     }
 
-
-def extract_resource_bboxes(agent_result: dict, img_w: int, img_h: int) -> dict:
-    """
-    Converts bbox_rel fractions into absolute pixel coordinates for whichever
-    resource fields are present. Rejects any bbox that isn't a valid
-    0.0-1.0 fraction, is the [0,0,0,0] "not applicable" sentinel, or has
-    non-positive area — weaker/local VLMs sometimes hallucinate raw pixel
-    coordinates instead of following the fractional format, and caching a
-    bad box would silently corrupt every future catch of that family.
-    """
-    result = {}
-    for key in ("candy", "candy_xl", "mega_energy", "mega_energy_x", "mega_energy_y"):
-        field = agent_result.get(key) or {}
-        bbox = field.get("bbox_rel")
-        if not bbox or len(bbox) != 4:
-            continue
-        x1, y1, x2, y2 = bbox
-        if not all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2)):
-            log.warning(f"Resource bbox for {key!r} has non-numeric values {bbox!r} — rejecting")
-            continue
-        if (x1, y1, x2, y2) == (0, 0, 0, 0):
-            continue  # sentinel for "not applicable" — not an error, just skip
-        if not all(0.0 <= v <= 1.0 for v in (x1, y1, x2, y2)):
-            log.warning(f"Resource bbox for {key!r} out of 0.0-1.0 range {bbox!r} — rejecting")
-            continue
-        if x2 <= x1 or y2 <= y1:
-            log.warning(f"Resource bbox for {key!r} has non-positive area {bbox!r} — rejecting")
-            continue
-        result[key] = (
-            int(x1 * img_w), int(y1 * img_h),
-            int(x2 * img_w), int(y2 * img_h),
-        )
-    return result
 
 def warmup_remote() -> bool:
     global _remote_available

@@ -46,6 +46,15 @@ capture_frames = 3
 _resource_layout_cache = {}
 _resource_values_cache = {}
 
+# ── Resource caches (candy/mega energy) ─────────────────────────────────────
+# Keyed by family, not by individual Pokémon — Candy/Candy XL/Mega Energy are
+# shared across an entire evolutionary line in-game, so once one member of a
+# family has been read this session, every other member reuses the same
+# values instead of triggering another VLM call. Reset naturally on each
+# process restart (--limit runs are typically one process per session).
+_candy_cache = {}  # candy family_root → {"candy": int|None, "candy_xl": int|None}
+_mega_cache = {}   # mega family → {"mega_energy": ..., "mega_energy_x": ..., "mega_energy_y": ...}
+
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--limit", type=int, default=0)
@@ -711,37 +720,54 @@ def scan_one_pokemon(visit_num, args, cfg, conn,
         log.info(f"[REPROCESS] Updated existing row id={poke_id}")
 
     # ── Candy / Candy XL / Mega Energy resource block ──────────────────────
-    cached_values = _resource_values_cache.get(name)
-    if cached_values is not None:
-        resource_values = cached_values
-        log.info(f"Reusing cached resource values for {name!r} (read earlier this session): {resource_values}")
-    else:
-        layout_result = vision_agent.discover_resource_layout(base_img, visit_num)
-        if vision_agent.is_reliable(layout_result):
-            resource_values = vision_agent.extract_resource_values(layout_result)
-            _resource_values_cache[name] = resource_values
-            log.info(f"Resource values for {name!r}: {resource_values} (cached for rest of session)")
-        else:
-            resource_values = {}
-            log.warning(f"Resource layout discovery unreliable for {name!r} — leaving unresolved this catch")
+    candy_family = get_candy_family(name)
+    mega_family = get_mega_energy_family(name)  # None if species isn't Mega-capable
 
-    if resource_values:
-        candy_family = get_candy_family(name)
-        upsert_species_candy(
-            conn, candy_family,
-            resource_values.get("candy"), resource_values.get("candy_xl"),
+    need_candy = candy_family not in _candy_cache
+    need_mega = mega_family is not None and mega_family not in _mega_cache
+
+    if need_candy or need_mega:
+        layout_result = vision_agent.discover_resource_layout(
+            base_img, visit_num, need_candy=need_candy, need_mega=need_mega
+        )
+        if vision_agent.is_reliable(layout_result):
+            values = vision_agent.extract_resource_values(layout_result)
+
+            if need_candy:
+                _candy_cache[candy_family] = {
+                    "candy": values.get("candy"),
+                    "candy_xl": values.get("candy_xl"),
+                }
+                log.info(f"Candy values for {candy_family!r}: {_candy_cache[candy_family]} (cached for rest of session)")
+
+            if need_mega:
+                _mega_cache[mega_family] = {
+                    "mega_energy": values.get("mega_energy"),
+                    "mega_energy_x": values.get("mega_energy_x"),
+                    "mega_energy_y": values.get("mega_energy_y"),
+                }
+                log.info(f"Mega Energy values for {mega_family!r}: {_mega_cache[mega_family]} (cached for rest of session)")
+        else:
+            log.warning(f"Resource layout discovery unreliable for {name!r} — leaving unresolved this catch")
+    else:
+        log.info(f"Skipping VLM — candy ({candy_family!r}) and mega energy already known this session")
+
+    candy_values = _candy_cache.get(candy_family, {})
+    upsert_species_candy(
+        conn, candy_family,
+        candy_values.get("candy"), candy_values.get("candy_xl"),
+        poke_id,
+    )
+
+    if mega_family:
+        mega_values = _mega_cache.get(mega_family, {})
+        upsert_mega_energy(
+            conn, mega_family,
+            mega_values.get("mega_energy"),
+            mega_values.get("mega_energy_x"),
+            mega_values.get("mega_energy_y"),
             poke_id,
         )
-
-        mega_family = get_mega_energy_family(name)
-        if mega_family:
-            upsert_mega_energy(
-                conn, mega_family,
-                resource_values.get("mega_energy"),
-                resource_values.get("mega_energy_x"),
-                resource_values.get("mega_energy_y"),
-                poke_id,
-            )
 
 
     insert_evo_rankings(conn, poke_id, evo_rankings)
